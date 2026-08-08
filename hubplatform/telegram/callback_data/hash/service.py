@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+
+__all__ = [
+    'HashService',
+    'global_hash_service',
+]
+
+
 import hashlib
 from types import MappingProxyType
 from collections.abc import Mapping
 
 from hubplatform.exceptions import BadHashError
 
-from . import QueryHash
+from .types import QueryHash
 from .storage import HashStorage, Sqlite3HashStorage
 
 
@@ -15,11 +22,12 @@ class HashService:
 
     def __init__(self, storage: HashStorage | None = None) -> None:
         self._cache: dict[str, QueryHash] = {}
+        self._cache_proxy = MappingProxyType(self._cache)
         self._storage = storage or Sqlite3HashStorage()
 
     @property
     def cache(self) -> Mapping[str, QueryHash]:
-        return MappingProxyType(self._cache)
+        return self._cache_proxy
 
     @property
     def storage(self) -> HashStorage:
@@ -87,3 +95,13 @@ class HashService:
             raise BadHashError(value)
 
         return value[2:-2]
+
+
+_global_hash_service: HashService | None = None
+
+
+def global_hash_service() -> HashService:
+    global _global_hash_service
+    if _global_hash_service is None:
+        _global_hash_service = HashService()
+    return _global_hash_service

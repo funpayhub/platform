@@ -2,7 +2,10 @@
 name = "hub-platform"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "aiogram>=3.30.0",
+    "pydantic>=2.13.4",
+]
 
 [dependency-groups]
 dev = [
