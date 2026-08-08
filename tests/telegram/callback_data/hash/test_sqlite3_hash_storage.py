@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from collections.abc import AsyncGenerator
+from collections.abc import Generator
 
 import pytest
-import pytest_asyncio
 
 from hubplatform.telegram.callback_data.hash import QueryHash, Sqlite3HashStorage
 
@@ -15,24 +14,23 @@ def db_path(tmp_path: Path) -> Path:
     return tmp_path / 'tmp_path'
 
 
-@pytest_asyncio.fixture
-async def storage(db_path: Path) -> AsyncGenerator[Sqlite3HashStorage, None]:
+@pytest.fixture
+def storage(db_path: Path) -> Generator[Sqlite3HashStorage, None, None]:
     storage = Sqlite3HashStorage(db_path)
-    await storage.setup()
+    storage.setup()
     yield storage
-    storage._conn.close()
+    storage.close()
 
 
-@pytest_asyncio.fixture
-async def limited_storage(db_path: Path) -> AsyncGenerator[Sqlite3HashStorage, None]:
+@pytest.fixture
+def limited_storage(db_path: Path) -> Generator[Sqlite3HashStorage, None, None]:
     storage = Sqlite3HashStorage(db_path, max_entries=2)
-    await storage.setup()
+    storage.setup()
     yield storage
-    storage._conn.close()
+    storage.close()
 
 
-@pytest.mark.asyncio
-async def test_db_creation(storage: Sqlite3HashStorage, db_path: Path) -> None:
+def test_db_creation(storage: Sqlite3HashStorage, db_path: Path) -> None:
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute(
@@ -50,79 +48,73 @@ async def test_db_creation(storage: Sqlite3HashStorage, db_path: Path) -> None:
     conn.close()
 
 
-@pytest.mark.asyncio
-async def test_db_saves(storage: Sqlite3HashStorage) -> None:
+def test_db_saves(storage: Sqlite3HashStorage) -> None:
     hash_obj = QueryHash(hash='hash', query='query')
-    await storage.save_queries(hash_obj)
+    storage.save_queries(hash_obj)
 
-    hash_from_db = await storage.get_query(hash_obj.hash)
+    hash_from_db = storage.get_query(hash_obj.hash)
 
     assert hash_from_db == hash_obj
 
 
-@pytest.mark.asyncio
-async def test_db_overrides_ts(storage: Sqlite3HashStorage) -> None:
+def test_db_overrides_ts(storage: Sqlite3HashStorage) -> None:
     hash_obj = QueryHash(hash='hash', query='query')
-    await storage.save_queries(hash_obj)
+    storage.save_queries(hash_obj)
 
     hash_obj._ts += 30
-    await storage.save_queries(hash_obj)
+    storage.save_queries(hash_obj)
 
-    hash_from_db = await storage.get_query(hash_obj.hash, update_ts=False)
+    hash_from_db = storage.get_query(hash_obj.hash, update_ts=False)
     assert hash_from_db.ts == hash_obj.ts
 
 
-@pytest.mark.asyncio
-async def test_truncate_removes_stale_entries(storage: Sqlite3HashStorage) -> None:
+def test_truncate_removes_stale_entries(storage: Sqlite3HashStorage) -> None:
     stale_hash = QueryHash(hash='stale', query='stale query', ts=1)
     fresh_hash = QueryHash(hash='fresh', query='fresh query')
-    await storage.save_queries(
+    storage.save_queries(
         stale_hash,
         fresh_hash,
         truncate_stale=False,
         truncate_excess=False,
     )
 
-    await storage.truncate(stale=True, excess=False)
+    storage.truncate(stale=True, excess=False)
 
-    assert await storage.get_query(stale_hash.hash, update_ts=False) is None
-    assert await storage.get_query(fresh_hash.hash, update_ts=False) == fresh_hash
+    assert storage.get_query(stale_hash.hash, update_ts=False) is None
+    assert storage.get_query(fresh_hash.hash, update_ts=False) == fresh_hash
 
 
-@pytest.mark.asyncio
-async def test_truncate_removes_excess_entries(limited_storage: Sqlite3HashStorage) -> None:
+def test_truncate_removes_excess_entries(limited_storage: Sqlite3HashStorage) -> None:
     hashes = [
         QueryHash(hash='oldest', query='oldest query', ts=1),
         QueryHash(hash='middle', query='middle query', ts=2),
         QueryHash(hash='newest', query='newest query', ts=3),
     ]
-    await limited_storage.save_queries(
+    limited_storage.save_queries(
         *hashes,
         truncate_stale=False,
         truncate_excess=False,
     )
 
-    await limited_storage.truncate(stale=False, excess=True)
+    limited_storage.truncate(stale=False, excess=True)
 
-    assert await limited_storage.get_query(hashes[0].hash, update_ts=False) is None
-    assert await limited_storage.get_query(hashes[1].hash, update_ts=False) == hashes[1]
-    assert await limited_storage.get_query(hashes[2].hash, update_ts=False) == hashes[2]
+    assert limited_storage.get_query(hashes[0].hash, update_ts=False) is None
+    assert limited_storage.get_query(hashes[1].hash, update_ts=False) == hashes[1]
+    assert limited_storage.get_query(hashes[2].hash, update_ts=False) == hashes[2]
 
 
-@pytest.mark.asyncio
-async def test_save_queries_truncates_stale_entries(storage: Sqlite3HashStorage) -> None:
+def test_save_queries_truncates_stale_entries(storage: Sqlite3HashStorage) -> None:
     stale_hash = QueryHash(hash='stale', query='stale query', ts=1)
-    await storage.save_queries(stale_hash, truncate_stale=False)
+    storage.save_queries(stale_hash, truncate_stale=False)
 
     fresh_hash = QueryHash(hash='fresh', query='fresh query')
-    await storage.save_queries(fresh_hash)
+    storage.save_queries(fresh_hash)
 
-    assert await storage.get_query(stale_hash.hash, update_ts=False) is None
-    assert await storage.get_query(fresh_hash.hash, update_ts=False) == fresh_hash
+    assert storage.get_query(stale_hash.hash, update_ts=False) is None
+    assert storage.get_query(fresh_hash.hash, update_ts=False) == fresh_hash
 
 
-@pytest.mark.asyncio
-async def test_save_queries_truncates_excess_entries(
+def test_save_queries_truncates_excess_entries(
     limited_storage: Sqlite3HashStorage,
 ) -> None:
     hashes = [
@@ -131,8 +123,8 @@ async def test_save_queries_truncates_excess_entries(
         QueryHash(hash='newest', query='newest query', ts=3),
     ]
 
-    await limited_storage.save_queries(*hashes, truncate_stale=False)
+    limited_storage.save_queries(*hashes, truncate_stale=False)
 
-    assert await limited_storage.get_query(hashes[0].hash, update_ts=False) is None
-    assert await limited_storage.get_query(hashes[1].hash, update_ts=False) == hashes[1]
-    assert await limited_storage.get_query(hashes[2].hash, update_ts=False) == hashes[2]
+    assert limited_storage.get_query(hashes[0].hash, update_ts=False) is None
+    assert limited_storage.get_query(hashes[1].hash, update_ts=False) == hashes[1]
+    assert limited_storage.get_query(hashes[2].hash, update_ts=False) == hashes[2]

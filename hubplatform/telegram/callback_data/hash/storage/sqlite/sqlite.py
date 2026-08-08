@@ -19,9 +19,14 @@ class Sqlite3HashStorage(HashStorage):
         self._stale_after = stale_after
         self._max_entries = max_entries
 
+        self._path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self._path))
+        self._ready = False
 
-    async def setup(self) -> None:
+    def setup(self) -> None:
+        if self._ready:
+            return
+
         if __package__:
             script = files(__package__).joinpath('schema.sql').read_text(encoding='utf-8')
         else:
@@ -30,7 +35,9 @@ class Sqlite3HashStorage(HashStorage):
         with self._conn:
             self._conn.executescript(script)
 
-    async def get_query(self, hash: str, update_ts: bool = True) -> QueryHash | None:
+        self._ready = True
+
+    def get_query(self, hash: str, update_ts: bool = True) -> QueryHash | None:
         if update_ts:
             query = """
                     UPDATE hashes
@@ -49,9 +56,12 @@ class Sqlite3HashStorage(HashStorage):
         cursor.execute(query, (hash,))
         row = cursor.fetchone()
 
+        if update_ts:
+            self._conn.commit()
+
         return QueryHash(hash=row[0], query=row[1], ts=row[2]) if row else None
 
-    async def save_queries(
+    def save_queries(
         self,
         *hashes: QueryHash,
         truncate_stale: bool = True,
@@ -70,12 +80,12 @@ class Sqlite3HashStorage(HashStorage):
             )
 
             if truncate_stale:
-                await self._truncate_stale()
+                self._truncate_stale()
 
             if truncate_excess:
-                await self._truncate_excess()
+                self._truncate_excess()
 
-    async def _truncate_stale(self) -> None:
+    def _truncate_stale(self) -> None:
         self._conn.execute(
             """
             DELETE
@@ -85,7 +95,7 @@ class Sqlite3HashStorage(HashStorage):
             (self.stale_after,),
         )
 
-    async def _truncate_excess(self) -> None:
+    def _truncate_excess(self) -> None:
         with self._conn:
             self._conn.execute(
                 """
@@ -99,15 +109,18 @@ class Sqlite3HashStorage(HashStorage):
                 (self.max_entries,),
             )
 
-    async def truncate(self, stale: bool = True, excess: bool = True) -> None:
+    def truncate(self, stale: bool = True, excess: bool = True) -> None:
         if not stale and not excess:
             return
 
         with self._conn:
             if stale:
-                await self._truncate_stale()
+                self._truncate_stale()
             if excess:
-                await self._truncate_excess()
+                self._truncate_excess()
+
+    def close(self) -> None:
+        self._conn.close()
 
     @property
     def stale_after(self) -> int:

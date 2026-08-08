@@ -12,13 +12,14 @@ from ..types import QueryHash
 
 
 class HashStorage(ABC):
-    async def setup(self) -> None: ...
+    @abstractmethod
+    def setup(self) -> None: ...
 
     @abstractmethod
-    async def get_query(self, hash: str, update_ts: bool = True) -> QueryHash | None: ...
+    def get_query(self, hash: str, update_ts: bool = True) -> QueryHash | None: ...
 
     @abstractmethod
-    async def save_queries(
+    def save_queries(
         self,
         *hashes: QueryHash,
         truncate_stale: bool = True,
@@ -26,7 +27,10 @@ class HashStorage(ABC):
     ) -> None: ...
 
     @abstractmethod
-    async def truncate(self, stale: bool = True, excess: bool = True) -> None: ...
+    def truncate(self, stale: bool = True, excess: bool = True) -> None: ...
+
+    @abstractmethod
+    def close(self) -> None: ...
 
     @property
     @abstractmethod
