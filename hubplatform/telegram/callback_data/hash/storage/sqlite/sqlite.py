@@ -34,7 +34,7 @@ class Sqlite3HashStorage(HashStorage):
         if update_ts:
             query = """
                     UPDATE hashes
-                    SET ts = strftime('%s', 'now')
+                    SET ts = UNIXEPOCH()
                     WHERE hash = ?
                     RETURNING hash, query, ts;
                     """
