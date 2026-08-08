@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+from types import MappingProxyType
+from collections.abc import Mapping
 
 from hubplatform.exceptions import BadHashError
 
@@ -8,12 +10,20 @@ from . import QueryHash
 from .storage import HashStorage, Sqlite3HashStorage
 
 
-class _HashinatorT1000:
+class HashService:
     _HASH_SYMBOLS = frozenset('0123456789abcdef')
 
     def __init__(self, storage: HashStorage | None = None) -> None:
-        self.hashes: dict[str, QueryHash] = {}
-        self.storage = storage or Sqlite3HashStorage()
+        self._cache: dict[str, QueryHash] = {}
+        self._storage = storage or Sqlite3HashStorage()
+
+    @property
+    def cache(self) -> Mapping[str, QueryHash]:
+        return MappingProxyType(self._cache)
+
+    @property
+    def storage(self) -> HashStorage:
+        return self._storage
 
     def _md5(self, text: str) -> str:
         return hashlib.md5(text.encode('utf-8')).hexdigest()
@@ -23,20 +33,22 @@ class _HashinatorT1000:
             return text
         candidate = self._md5(text)
 
+        query_obj: QueryHash
         while True:
-            query = self.hashes.get(candidate)
-            if not query:
+            query = self.cache.get(candidate)
+            if query is None:
                 query = self.storage.get_query(candidate, update_ts=False)
 
-            if not query or query.query == text:
+            if query is None or query.query == text:
+                query_obj = QueryHash(candidate, text)
                 if cache:
-                    self.hashes[candidate] = QueryHash(candidate, text)
+                    self._cache[candidate] = query_obj
                 break
             candidate = self._md5(candidate)
 
         if save:
-            self.storage.save_queries(QueryHash(candidate, text))
-            self.hashes.pop(candidate, None)
+            self.storage.save_queries(query_obj)
+            self._cache.pop(query_obj.hash, None)
 
         return f'[[{candidate}]]'
 
@@ -45,17 +57,20 @@ class _HashinatorT1000:
             raise BadHashError(hash)
 
         real_hash = hash[2:-2]
-        result = self.hashes.get(real_hash, None) or self.storage.get_query(real_hash)
+        result = self.cache.get(real_hash, None) or self.storage.get_query(real_hash)
         if result is None:
             raise BadHashError(hash)
         return result
 
     def save(self) -> None:
-        if not self.hashes:
+        if not self.cache:
             return
 
-        self.storage.save_queries(*self.hashes.values())
-        self.hashes.clear()
+        self.storage.save_queries(*self.cache.values())
+        self.flush()
+
+    def flush(self) -> None:
+        self._cache.clear()
 
     @classmethod
     def is_hash(cls, value: str) -> bool:

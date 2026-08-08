@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS "hashes" (
     "hash"	TEXT NOT NULL UNIQUE,
-    "query"	TEXT NOT NULL,
+    "query"	TEXT NOT NULL UNIQUE,
     "ts"	INTEGER NOT NULL,
     PRIMARY KEY("hash")
 );

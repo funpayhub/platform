@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import sqlite3
+from typing import Any
 from pathlib import Path
+from collections.abc import Iterable, Sequence
 from importlib.resources import files
 
 from hubplatform.telegram.callback_data.hash.types import QueryHash
@@ -22,6 +24,37 @@ class Sqlite3HashStorage(HashStorage):
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self._path))
         self._ready = False
+
+    def execute(
+        self,
+        query: str,
+        params: Sequence[Any] = (),
+        commit: bool = False,
+        cursor: sqlite3.Cursor | None = None
+    ) -> None:
+        if not self._ready:
+            raise RuntimeError('...')
+
+        cursor = cursor if cursor is not None else self._conn.cursor()
+        cursor.execute(query, params)
+        if commit:
+            self._conn.commit()
+
+
+    def executemany(
+        self,
+        query: str,
+        params: Iterable[Sequence[Any]],
+        commit: bool = False,
+        cursor: sqlite3.Cursor | None = None
+    ) -> None:
+        if not self._ready:
+            raise RuntimeError('...')
+
+        cursor = cursor if cursor is not None else self._conn.cursor()
+        cursor.executemany(query, params)
+        if commit:
+            self._conn.commit()
 
     def setup(self) -> None:
         if self._ready:
@@ -53,7 +86,7 @@ class Sqlite3HashStorage(HashStorage):
                     """
 
         cursor = self._conn.cursor()
-        cursor.execute(query, (hash,))
+        self.execute(query, (hash,), cursor=cursor)
         row = cursor.fetchone()
 
         if update_ts:
@@ -68,8 +101,7 @@ class Sqlite3HashStorage(HashStorage):
         truncate_excess: bool = True,
     ) -> None:
         with self._conn:
-            cursor = self._conn.cursor()
-            cursor.executemany(
+            self.executemany(
                 """
                 INSERT 
                 INTO hashes(hash, query, ts)
@@ -79,14 +111,21 @@ class Sqlite3HashStorage(HashStorage):
                 ((i.hash, i.query, i.ts, i.ts) for i in hashes),
             )
 
-            if truncate_stale:
-                self._truncate_stale()
+            cursor = self._conn.cursor()
+            self.execute(
+                "SELECT COUNT(*) FROM hashes", cursor=cursor
+            )
+            count = cursor.fetchone()[0]
 
-            if truncate_excess:
-                self._truncate_excess()
+            if count > self._max_entries:
+                if truncate_stale:
+                    self._truncate_stale()
+
+                if truncate_excess:
+                    self._truncate_excess()
 
     def _truncate_stale(self) -> None:
-        self._conn.execute(
+        self.execute(
             """
             DELETE
             FROM hashes
@@ -96,18 +135,17 @@ class Sqlite3HashStorage(HashStorage):
         )
 
     def _truncate_excess(self) -> None:
-        with self._conn:
-            self._conn.execute(
-                """
-                DELETE
-                FROM hashes
-                WHERE rowid IN (SELECT rowid
-                                FROM hashes
-                                ORDER BY ts DESC, rowid DESC
-                                LIMIT -1 OFFSET ?);
-                """,
-                (self.max_entries,),
-            )
+        self.execute(
+            """
+            DELETE
+            FROM hashes
+            WHERE rowid IN (SELECT rowid
+                            FROM hashes
+                            ORDER BY ts DESC, rowid DESC
+                            LIMIT -1 OFFSET ?);
+            """,
+            (int(self.max_entries * 1.2),),
+        )
 
     def truncate(self, stale: bool = True, excess: bool = True) -> None:
         if not stale and not excess:
@@ -121,6 +159,7 @@ class Sqlite3HashStorage(HashStorage):
 
     def close(self) -> None:
         self._conn.close()
+        self._ready = False
 
     @property
     def stale_after(self) -> int:
