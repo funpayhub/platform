@@ -34,3 +34,9 @@ class QueryHash:
 
     def __hash__(self) -> int:
         return hash(self._hash)
+
+    def __str__(self) -> str:
+        return f'{self._hash} -> {self._query}'
+
+    def __repr__(self) -> str:
+        return str(self)

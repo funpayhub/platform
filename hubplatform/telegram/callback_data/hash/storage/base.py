@@ -15,10 +15,10 @@ class HashStorage(ABC):
     async def setup(self) -> None: ...
 
     @abstractmethod
-    async def get_callback(self, hash: str, update_ts: bool = True) -> QueryHash | None: ...
+    async def get_query(self, hash: str, update_ts: bool = True) -> QueryHash | None: ...
 
     @abstractmethod
-    async def save_callbacks(
+    async def save_queries(
         self,
         *hashes: QueryHash,
         truncate_stale: bool = True,
@@ -28,10 +28,10 @@ class HashStorage(ABC):
     @abstractmethod
     async def truncate(self, stale: bool = True, excess: bool = True) -> None: ...
 
-    @abstractmethod
     @property
+    @abstractmethod
     def stale_after(self) -> int: ...
 
-    @abstractmethod
     @property
+    @abstractmethod
     def max_entries(self) -> int: ...

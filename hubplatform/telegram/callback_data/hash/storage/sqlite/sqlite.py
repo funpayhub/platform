@@ -30,7 +30,7 @@ class Sqlite3HashStorage(HashStorage):
         with self._conn:
             self._conn.executescript(script)
 
-    async def get_callback(self, hash: str, update_ts: bool = True) -> QueryHash | None:
+    async def get_query(self, hash: str, update_ts: bool = True) -> QueryHash | None:
         if update_ts:
             query = """
                     UPDATE hashes
@@ -49,9 +49,9 @@ class Sqlite3HashStorage(HashStorage):
         cursor.execute(query, (hash,))
         row = cursor.fetchone()
 
-        return QueryHash(hash=row[0][0], query=row[0][1], ts=row[0][2]) if row else None
+        return QueryHash(hash=row[0], query=row[1], ts=row[2]) if row else None
 
-    async def save_callbacks(
+    async def save_queries(
         self,
         *hashes: QueryHash,
         truncate_stale: bool = True,
@@ -66,7 +66,7 @@ class Sqlite3HashStorage(HashStorage):
                 VALUES (?, ?, ?) ON CONFLICT(hash) DO
                 UPDATE SET query = excluded.query, ts = ?;
                 """,
-                ((i.hash, i.query, i.ts) for i in hashes),
+                ((i.hash, i.query, i.ts, i.ts) for i in hashes),
             )
 
             if truncate_stale:
