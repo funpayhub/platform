@@ -1,8 +1,10 @@
-from platform.telegram.callback_data.hash.storage.base import HashStorage
-from platform.telegram.callback_data.hash.types import QueryHash
-from pathlib import Path
+from __future__ import annotations
+
 import sqlite3
+from pathlib import Path
 from importlib.resources import files
+from platform.telegram.callback_data.hash.types import QueryHash
+from platform.telegram.callback_data.hash.storage.base import HashStorage
 
 
 class Sqlite3HashStorage(HashStorage):
