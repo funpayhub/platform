@@ -4,49 +4,33 @@ __all__ = [
 
 
 from abc import ABC, abstractmethod
-from typing import overload
+from ..types import QueryHash
 
 
 class HashStorage(ABC):
-    @abstractmethod
-    async def get_callback(self, hash: str, update_ts: bool = True) -> str | None:
+    async def setup(self) -> None:
         ...
 
     @abstractmethod
-    async def update_ts(self, *hashes: str) -> None:
+    async def get_callback(self, hash: str, update_ts: bool = True) -> QueryHash | None:
         ...
 
     @abstractmethod
     async def save_callbacks(
         self,
-        hashes: dict[str, str],
-        update_ts: bool = True,
+        *hashes: QueryHash,
         truncate_stale: bool = True,
         truncate_excess: bool = True,
     ) -> None:
         ...
 
     @abstractmethod
-    async def truncate_stale(self) -> None: ...
-
-    @abstractmethod
-    async def truncate_excess(self) -> None: ...
-
-    @abstractmethod
-    async def truncate(self) -> None: ...
-
-    @overload
-    async def get_ts(self, hash: str, /) -> int: ...
-
-    @overload
-    async def get_ts(self, hash1: str, hash2: str, /, *hashes: str) -> list[int]: ...
-
-    @abstractmethod
-    async def get_ts(self, *hashes: str) -> int: ...
+    async def truncate(self, stale: bool = True, excess: bool = True) -> None: ...
 
     @abstractmethod
     @property
-    def stale_after_seconds(self) -> int: ...
+    def stale_after(self) -> int: ...
 
     @abstractmethod
+    @property
     def max_entries(self) -> int: ...
