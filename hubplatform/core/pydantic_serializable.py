@@ -3,13 +3,14 @@ from __future__ import annotations
 
 __all__ = [
     'PydanticSerializableMixin',
+    'pydantic_fallback_serializer',
 ]
 
 from typing import Any, TypeVar
 from abc import ABCMeta, abstractmethod
 
 from pydantic import GetCoreSchemaHandler
-from pydantic_core import CoreSchema, core_schema
+from pydantic_core import CoreSchema, PydanticSerializationError, core_schema
 
 
 T = TypeVar('T')
@@ -66,7 +67,7 @@ class PydanticSerializableMixin(metaclass=ABCMeta):
         Similarly, unions such as ``str | CustomType`` may be ambiguous when
         ``CustomType`` is also represented as a string. In such cases,
         Pydantic applies its normal union-validation rules.
-        """
+    """
 
     @abstractmethod
     def __pydantic_serialize__(self) -> str:
@@ -126,3 +127,17 @@ class PydanticSerializableMixin(metaclass=ABCMeta):
                 lambda obj: obj.__pydantic_serialize__(), return_schema=core_schema.str_schema()
             ),
         )
+
+
+def pydantic_fallback_serializer(value: Any) -> str:
+    if not isinstance(value, PydanticSerializableMixin):
+        raise PydanticSerializationError(
+            f'Instance of type {type(value).__name__!r} is not serializable.'
+        )
+
+    try:
+        return value.__pydantic_serialize__()
+    except Exception as e:
+        raise PydanticSerializationError(
+            f'An error occurred while serializing instance of type {type(value).__name__!r}: {e}'
+        ) from e
