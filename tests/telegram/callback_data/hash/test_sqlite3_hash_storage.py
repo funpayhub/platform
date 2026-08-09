@@ -10,19 +10,6 @@ from hubplatform.telegram.callback_data.hash import QueryHash, Sqlite3HashStorag
 
 
 @pytest.fixture
-def db_path(tmp_path: Path) -> Path:
-    return tmp_path / 'tmp_path'
-
-
-@pytest.fixture
-def storage(db_path: Path) -> Generator[Sqlite3HashStorage, None, None]:
-    storage = Sqlite3HashStorage(db_path)
-    storage.setup()
-    yield storage
-    storage.close()
-
-
-@pytest.fixture
 def limited_storage(db_path: Path) -> Generator[Sqlite3HashStorage, None, None]:
     storage = Sqlite3HashStorage(db_path, max_entries=2)
     storage.setup()
