@@ -171,7 +171,7 @@ class CallbackData(BaseModel):
     def to_positional_envelope(self, *, drop_context: bool = False) -> PositionalCallbackEnvelope:
         if self.context and not drop_context:
             raise RuntimeError(
-                'Cant create PostionalCallbackEnvelope with non-empty context.'
+                'Cant create PositionalCallbackEnvelope with non-empty context.'
             )  # todo
 
         return PositionalCallbackEnvelope(
