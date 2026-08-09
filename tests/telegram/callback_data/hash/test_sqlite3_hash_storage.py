@@ -90,16 +90,17 @@ def test_truncate_removes_excess_entries(limited_storage: Sqlite3HashStorage) ->
     assert limited_storage.get_query(hashes[2].hash, update_ts=False) == hashes[2]
 
 
-def test_save_queries_truncates_stale_entries(storage: Sqlite3HashStorage) -> None:
-    stale_hash = QueryHash(hash='stale', query='stale query', ts=1)
-    storage.save_queries(stale_hash, truncate_stale=False)
-
-    fresh_hash = QueryHash(hash='fresh', query='fresh query')
-    storage.save_queries(fresh_hash)
-
-    assert storage.get_query(stale_hash.hash, update_ts=False) is None
-    assert storage.get_query(fresh_hash.hash, update_ts=False) == fresh_hash
-
+# def test_save_queries_truncates_stale_entries(storage: Sqlite3HashStorage) -> None:
+#     stale_hash = QueryHash(hash='stale', query='stale query', ts=1)
+#     storage.save_queries(stale_hash, truncate_stale=False)
+#
+#     fresh_hash = QueryHash(hash='fresh', query='fresh query')
+#     storage.save_queries(fresh_hash)
+#
+#     assert storage.get_query(stale_hash.hash, update_ts=False) is None
+#     assert storage.get_query(fresh_hash.hash, update_ts=False) == fresh_hash
+#
+# Truncate logic has been changed: storage truncates only if amount of entries is above max.
 
 def test_save_queries_truncates_excess_entries(
     limited_storage: Sqlite3HashStorage,
