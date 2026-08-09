@@ -83,10 +83,10 @@ class HashService:
     @classmethod
     def is_hash(cls, value: str) -> bool:
         return (
-            len(value) == 36 and
-            value.startswith('[[') and
-            value.endswith(']]') and
-            all(c in cls._HASH_SYMBOLS for c in value[2:-2])
+            len(value) == 36
+            and value.startswith('[[')
+            and value.endswith(']]')
+            and all(c in cls._HASH_SYMBOLS for c in value[2:-2])
         )
 
     @classmethod

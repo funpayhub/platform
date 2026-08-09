@@ -30,7 +30,7 @@ class Sqlite3HashStorage(HashStorage):
         query: str,
         params: Sequence[Any] = (),
         commit: bool = False,
-        cursor: sqlite3.Cursor | None = None
+        cursor: sqlite3.Cursor | None = None,
     ) -> None:
         if not self._ready:
             raise RuntimeError('...')
@@ -40,13 +40,12 @@ class Sqlite3HashStorage(HashStorage):
         if commit:
             self._conn.commit()
 
-
     def executemany(
         self,
         query: str,
         params: Iterable[Sequence[Any]],
         commit: bool = False,
-        cursor: sqlite3.Cursor | None = None
+        cursor: sqlite3.Cursor | None = None,
     ) -> None:
         if not self._ready:
             raise RuntimeError('...')
@@ -112,9 +111,7 @@ class Sqlite3HashStorage(HashStorage):
             )
 
             cursor = self._conn.cursor()
-            self.execute(
-                "SELECT COUNT(*) FROM hashes", cursor=cursor
-            )
+            self.execute('SELECT COUNT(*) FROM hashes', cursor=cursor)
             count = cursor.fetchone()[0]
 
             if count > self._max_entries:

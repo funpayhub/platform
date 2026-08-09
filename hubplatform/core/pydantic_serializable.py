@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+
+__all__ = [
+    'PydanticSerializableMixin',
+]
+
 from typing import Any, TypeVar
 from abc import ABCMeta, abstractmethod
 
@@ -26,19 +31,22 @@ class PydanticSerializableMixin(metaclass=ABCMeta):
         source_type: Any,
         handler: GetCoreSchemaHandler,
     ) -> CoreSchema:
-        from_string = core_schema.chain_schema([
-            core_schema.str_schema(),
-            core_schema.no_info_plain_validator_function(cls.__pydantic_deserialize__)
-        ])
+        from_string = core_schema.chain_schema(
+            [
+                core_schema.str_schema(),
+                core_schema.no_info_plain_validator_function(cls.__pydantic_deserialize__),
+            ]
+        )
 
         return core_schema.json_or_python_schema(
             json_schema=from_string,
-            python_schema=core_schema.union_schema([
-                core_schema.is_instance_schema(cls),
-                from_string,
-            ]),
+            python_schema=core_schema.union_schema(
+                [
+                    core_schema.is_instance_schema(cls),
+                    from_string,
+                ]
+            ),
             serialization=core_schema.plain_serializer_function_ser_schema(
-                lambda obj: obj.__pydantic_serialize__(),
-                return_schema=core_schema.str_schema()
-            )
+                lambda obj: obj.__pydantic_serialize__(), return_schema=core_schema.str_schema()
+            ),
         )
