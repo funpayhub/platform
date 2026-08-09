@@ -102,6 +102,7 @@ def test_truncate_removes_excess_entries(limited_storage: Sqlite3HashStorage) ->
 #
 # Truncate logic has been changed: storage truncates only if amount of entries is above max.
 
+
 def test_save_queries_truncates_excess_entries(
     limited_storage: Sqlite3HashStorage,
 ) -> None:
