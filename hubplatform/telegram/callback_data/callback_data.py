@@ -64,6 +64,16 @@ class CallbackData(BaseModel):
             raise ValidationError('identifier mismatch')  # todo
         return value
 
+    @field_validator('positional_data', mode='after')
+    @classmethod
+    def _check_no_positional_data(cls, value: tuple[Any]) -> tuple[Any]:
+        if cls is not CallbackData and value:
+            raise ValueError(
+                '`.positional_data` of real callback data must be empty! '
+                'All data must me assigned to the model fields.'
+            )
+        return value
+
     @classmethod
     def _hash_service(cls, hash_service: HashService | None = None) -> HashService:
         return hash_service if hash_service is not None else global_hash_service()
