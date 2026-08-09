@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+from typing import Any
 
-class HubPlatformException(Exception):  # noqa: N818
+
+class HubPlatformError(Exception):  # noqa: N818
     ...
 
 
-class TranslatableException(HubPlatformException): ...
+class TranslatableException(HubPlatformError):
+    def __init__(self, message: str, **kwargs: Any) -> None:
+        self.message = message
+        self.kwargs = kwargs
+        super().__init__(self.format_message())
+
+    def format_message(self) -> str:
+        return self.message.format(**self.kwargs)
 
 
 class BadHashError(TranslatableException): ...

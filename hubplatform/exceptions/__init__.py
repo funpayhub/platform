@@ -3,9 +3,9 @@ from __future__ import annotations
 
 __all__ = [
     'BadHashError',
-    'HubPlatformException',
+    'HubPlatformError',
     'TranslatableException',
 ]
 
 
-from .base import BadHashError, HubPlatformException, TranslatableException
+from .base import BadHashError, HubPlatformError, TranslatableException
