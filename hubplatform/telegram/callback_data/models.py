@@ -47,20 +47,18 @@ class CallbackEnvelope(BaseModel, ABC):
     identifier: Annotated[str, AfterValidator(validate_identifier)]
 
     @abstractmethod
-    def pack(self, *, hash: bool = True, hash_service: HashService | None = None) -> str: ...
+    def pack(self) -> str: ...
 
     @classmethod
     @abstractmethod
-    def unpack(
-        cls, query: str, *, check_is_hash: bool = True, hash_service: HashService | None = None
-    ) -> CallbackEnvelope: ...
+    def unpack(cls, query: str) -> CallbackEnvelope: ...
 
 
 class KeywordCallbackEnvelope(CallbackEnvelope):
     fields: dict[str, Any] = Field(default_factory=dict)
     context: dict[str, Any] = Field(default_factory=dict)
 
-    def pack(self, *, hash: bool = True, hash_service: HashService | None = None) -> str:
+    def pack(self) -> str:
         data = self.model_dump(mode='json', fallback=pydantic_fallback_serializer)
 
         data_str = json.dumps(
@@ -69,21 +67,10 @@ class KeywordCallbackEnvelope(CallbackEnvelope):
             separators=(',', ':'),
         )
 
-        result = self.identifier + data_str
-
-        if hash:
-            result = _hash_service(hash_service).hash(result)
-        return result
+        return self.identifier + data_str
 
     @classmethod
-    def unpack(
-        cls, query: str, *, check_is_hash: bool = True, hash_service: HashService | None = None
-    ) -> KeywordCallbackEnvelope:
-        if check_is_hash:
-            hash_service = _hash_service(hash_service)
-            if hash_service.is_hash(query):
-                query = hash_service.unhash(query).query
-
+    def unpack(cls, query: str) -> KeywordCallbackEnvelope:
         identifier, sep, data = query.partition('[')
         if not sep:
             raise ValueError('Cant parse it')  # todo
@@ -94,7 +81,7 @@ class KeywordCallbackEnvelope(CallbackEnvelope):
 class PositionalCallbackEnvelope(CallbackEnvelope):
     fields: list[Any] = Field(default_factory=list)
 
-    def pack(self, *, hash: bool = True, hash_service: HashService | None = None) -> str:
+    def pack(self) -> str:
         fields = self.model_dump(mode='json')['fields']
         if not fields:
             result = f'!{self.identifier}'
@@ -103,9 +90,7 @@ class PositionalCallbackEnvelope(CallbackEnvelope):
         return result
 
     @classmethod
-    def unpack(
-        cls, query: str, *, check_is_hash: bool = True, hash_service: HashService | None = None
-    ) -> PositionalCallbackEnvelope:
+    def unpack(cls, query: str) -> PositionalCallbackEnvelope:
         if not cls.is_positional_query(query):
             raise ValueError(f'{query!r} is not a positional callback query.')
 
@@ -190,31 +175,21 @@ class CallbackData(BaseModel):
         field_names = [k for k in cls.model_fields.keys() if k not in base_field_names]
         return cls.model_validate(dict(zip(field_names, envelope.fields, strict=True)))
 
-    def pack(self, *, hash: bool = True, hash_service: HashService | None = None) -> str:
+    def pack(self) -> str:
         envelope = self.to_keyword_envelope()
-        return envelope.pack(hash=hash, hash_service=hash_service)
+        return envelope.pack()
 
     def pack_compact(self, *, drop_context: bool = False) -> str:
         envelope = self.to_positional_envelope(drop_context=drop_context)
-        return envelope.pack(hash=False)
+        return envelope.pack()
 
     @classmethod
-    def unpack(
-        cls,
-        query: str | ParsedEnvelope,
-        *,
-        check_is_hash: bool = True,
-        hash_service: HashService | None = None,
-    ) -> Self:
+    def unpack(cls, query: str | ParsedEnvelope) -> Self:
         if isinstance(query, str):
             if PositionalCallbackEnvelope.is_positional_query(query):
-                query = PositionalCallbackEnvelope.unpack(
-                    query, check_is_hash=check_is_hash, hash_service=hash_service
-                )
+                query = PositionalCallbackEnvelope.unpack(query)
             else:
-                query = KeywordCallbackEnvelope.unpack(
-                    query, check_is_hash=check_is_hash, hash_service=hash_service
-                )
+                query = KeywordCallbackEnvelope.unpack(query)
 
         return cls.from_envelope(query)
 
