@@ -36,11 +36,11 @@ class AppContext(MutableMapping[str, Any]):
                     f'Workflow data not ready: an error occurred while checking {key!r}.',
                 ) from e
 
-    def __delitem__(self, item) -> None:
+    def __delitem__(self, item: Any) -> None:
         with self:
             del self._data[item]
 
-    def __getitem__(self, item: str) -> Any:
+    def __getitem__(self, item: Any) -> Any:
         if item in ['workflow_data', 'wfd']:
             return self
         return self._data[item]
@@ -51,7 +51,7 @@ class AppContext(MutableMapping[str, Any]):
     def __iter__(self) -> Iterator[str]:
         return iter(self._data)
 
-    def __setitem__(self, key, value) -> None:
+    def __setitem__(self, key: str, value: Any) -> None:
         with self:
             self._data[key] = value
 
@@ -60,24 +60,16 @@ class AppContext(MutableMapping[str, Any]):
             raise RuntimeError('App context is locked.')
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, *_: Any) -> None:
         return
 
-    def pop(self, key, /) -> Any:
-        with self:
-            self._data.pop(key)
-
-    def popitem(self) -> None:
-        with self:
-            self._data.popitem()
-
-    def clear(self) -> None:
-        with self:
-            self._data.clear()
-
-    def update(self, m, /, **kwargs) -> None:
-        with self:
-            self._data.update(m, **kwargs)
-
-    def __getattr__(self, item: str) -> Any:
-        return self._data[item]
+    def __getattribute__(self, item: str) -> Any:
+        if item in [
+            'pop',
+            'popitem',
+            'clear',
+            'update'
+        ]:
+            with self:
+                return super().__getattribute__(item)
+        return super().__getattribute__(item)
