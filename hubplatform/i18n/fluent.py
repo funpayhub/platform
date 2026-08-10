@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from pathlib import Path
 from collections.abc import Generator
 
@@ -24,25 +24,31 @@ class ResourceLoader(AbstractResourceLoader):
 
         resources = []
         for i in path.iterdir():
-            if not i.is_file():
-                continue
-
-            if i.suffix != '.ftl':
-                continue
-
-            if i.name.startswith('.'):
+            if not i.is_file() or i.suffix != '.ftl' or i.name.startswith('.'):
                 continue
 
             with open(i, 'r', encoding='utf-8') as f:
                 resources.append(FluentParser().parse(f.read()))
-
         yield resources
+
+
+class Localization(FluentLocalization):
+    def format_value(self, msg_id: str, args: dict[str, Any] | None = None) -> str:
+        for bundle in self._bundles():
+            if not bundle.has_message(msg_id):
+                continue
+            msg = bundle.get_message(msg_id)
+            if not msg.value:
+                continue
+            val, _errors = bundle.format_pattern(msg.value, args)
+            return cast(str, val)  # Never FluentNone when format_pattern called externally
+        raise KeyError(f'Unable to find key {msg_id!r}.')
 
 
 class FluentTranslator(Translator):
     def __init__(self, current_lang: str = 'en_US') -> None:
         super().__init__(current_lang=current_lang)
-        self._localizers: list[FluentLocalization] = []
+        self._localizers: list[Localization] = []
         self._sources: set[Path] = set()
 
     def add_translations(self, path: Path | str) -> None:
@@ -55,17 +61,18 @@ class FluentTranslator(Translator):
 
     def translate(self, text: str, variables: dict[str, Any] | None = None) -> str:
         for i in self._localizers:
-            r = i.format_value(text, variables)
-            if r != text:
-                return r
+            try:
+                return i.format_value(text, variables)
+            except KeyError:
+                continue
         return text
 
     def change_language(self, new_lang: str) -> None:
         super().change_language(new_lang)
         self._localizers = [self._localizer_from_source(i) for i in self._sources]
 
-    def _localizer_from_source(self, source_path: Path) -> FluentLocalization:
-        return FluentLocalization(
+    def _localizer_from_source(self, source_path: Path) -> Localization:
+        return Localization(
             locales=[self._current_lang],
             resource_ids=[],
             resource_loader=ResourceLoader(source_path),
