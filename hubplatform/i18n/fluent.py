@@ -5,7 +5,8 @@ from pathlib import Path
 from collections.abc import Generator
 
 from fluent.syntax import FluentParser
-from fluent.runtime import Resource, FluentLocalization, AbstractResourceLoader
+from fluent.runtime import FluentLocalization, AbstractResourceLoader
+from fluent.syntax.ast import Resource
 
 from .base import Translator
 
