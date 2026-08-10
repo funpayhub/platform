@@ -41,8 +41,6 @@ class AppContext(MutableMapping[str, Any]):
             del self._data[item]
 
     def __getitem__(self, item: Any) -> Any:
-        if item in ['workflow_data', 'wfd']:
-            return self
         return self._data[item]
 
     def __len__(self) -> int:
@@ -71,5 +69,8 @@ class AppContext(MutableMapping[str, Any]):
             'update'
         ]:
             with self:
-                return super().__getattribute__(item)
+                return getattr(self._data, item)
         return super().__getattribute__(item)
+
+    def __getattr__(self, item: str) -> Any:
+        return self._data[item]
