@@ -1,9 +1,12 @@
+from __future__ import annotations
+
+
 __all__ = [
     'AppContext',
 ]
 
-from collections.abc import MutableMapping, Callable, Iterator
 from typing import Any, Self
+from collections.abc import Callable, Iterator, MutableMapping
 
 
 class AppContext(MutableMapping[str, Any]):
@@ -62,12 +65,7 @@ class AppContext(MutableMapping[str, Any]):
         return
 
     def __getattribute__(self, item: str) -> Any:
-        if item in [
-            'pop',
-            'popitem',
-            'clear',
-            'update'
-        ]:
+        if item in ['pop', 'popitem', 'clear', 'update']:
             with self:
                 return getattr(self._data, item)
         return super().__getattribute__(item)

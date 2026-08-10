@@ -54,7 +54,7 @@ class CallbackQueryFilter(Filter):
                 return False
 
             callback_data = self.callback_data.from_envelope(envelope)
-        except (BadHashError, TypeError, ValueError, ValidationError):
+        except BadHashError, TypeError, ValueError, ValidationError:
             return False
 
         return {'callback_data': callback_data, 'cbd': callback_data}
