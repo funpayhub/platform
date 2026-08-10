@@ -36,23 +36,14 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 strict = true
 pretty = true
-exclude = [
-    "docs",
-    ".venv",
-    "tests"
-]
+files = ["hubplatform", "tests"]
 
 
 [tool.ruff]
 line-length = 99
-exclude = [
-    ".git",
-    "build",
-    "dist",
-    "venv",
-    ".venv",
-    "docs",
-    "*.egg-info"
+include = [
+    'hubplatform/**/*.py',
+    'tests/**/*.py'
 ]
 
 
