@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 
-__all__ = ['Translator']
+__all__ = [
+    'Translator',
+]
 
 from typing import Any
 from abc import ABCMeta, abstractmethod
