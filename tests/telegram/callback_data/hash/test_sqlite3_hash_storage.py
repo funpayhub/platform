@@ -52,6 +52,7 @@ def test_db_overrides_ts(storage: Sqlite3HashStorage) -> None:
     storage.save_queries(hash_obj)
 
     hash_from_db = storage.get_query(hash_obj.hash, update_ts=False)
+    assert hash_from_db is not None
     assert hash_from_db.ts == hash_obj.ts
 
 

@@ -7,7 +7,7 @@ class HubPlatformError(Exception):  # noqa: N818
     ...
 
 
-class TranslatableException(HubPlatformError):
+class TranslatableException(HubPlatformError):  # noqa: N818
     def __init__(self, message: str, **kwargs: Any) -> None:
         self.message = message
         self.kwargs = kwargs

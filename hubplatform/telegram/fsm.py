@@ -3,51 +3,39 @@ from __future__ import annotations
 
 __all__ = [
     'State',
-    'StateFromQuery',
+    # 'StateFromQuery',
     'StateFilter',
 ]
 
 
-from typing import TYPE_CHECKING, Any, Self, Literal, overload
-from dataclasses import dataclass
+from typing import Any, Self, Final, Literal, overload
 
 from aiogram.filters import StateFilter as AiogramStateFilter
-
-from hubplatform.core import classproperty
-from hubplatform.telegram.callback_data.models import ParsedEnvelope
-
-
-if TYPE_CHECKING:
-    from aiogram.types import Message, CallbackQuery
-    from aiogram.fsm.context import FSMContext
+from aiogram.fsm.context import FSMContext
 
 
 class State:
-    if TYPE_CHECKING:
-        __identifier__: str
-        identifier: str
+    identifier: Final[str] = ''
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
+
+        if 'identifier' not in kwargs:
+            raise TypeError(f"{cls.__name__} must be defined with keyword argument 'identifier'.")
         identifier = kwargs.pop('identifier', None)
 
-        if identifier is None:
-            raise TypeError(
-                f"'State {cls.__name__!r} must be defined with keyword argument 'identifier'."
+        if not isinstance(identifier, str):
+            raise ValueError(
+                f"'identifier' must be a string, not {identifier.__class__.__name__}.'"
             )
+        if not identifier:
+            raise ValueError('Identifier cannot be empty.')
 
-        if not isinstance(identifier, str) or not identifier:
-            raise ValueError('State identifier must be an empty string.')
-
-        cls.__identifier__ = identifier
+        cls.identifier = identifier  # type: ignore[misc]  # Final[str] is for public API.
         super().__init_subclass__(**kwargs)
-
-    @classproperty
-    def identifier(cls) -> str:
-        return cls.__identifier__
 
     async def set(self, state: FSMContext) -> None:
         await state.set_state(self.identifier)
-        await state.set_data({'_hubplatform_state_data': self})
+        await state.set_data({'data': self})
 
     @classmethod
     async def get(cls, state: FSMContext) -> Self:
@@ -56,12 +44,10 @@ class State:
             raise RuntimeError('State mismatch.')
 
         data = await state.get_data()
-        if '_hubplatform_state_data' not in data or not isinstance(
-            data['_hubplatform_state_data'], cls
-        ):
+        if data.get('data') is None or not isinstance(data['data'], cls):
             raise RuntimeError('State mismatch.')
 
-        return data['_hubplatform_state_data']
+        return data['data']
 
     @overload
     @classmethod
@@ -107,7 +93,7 @@ class State:
                 raise RuntimeError('State mismatch.')
             return None
 
-        obj = (await state.get_data()).get('_hubplatform_state_data')
+        obj = (await state.get_data()).get('data')
         if not isinstance(obj, cls):
             raise RuntimeError('State type mismatch.')
 
@@ -119,25 +105,31 @@ class State:
         return StateFilter(cls)
 
 
-@dataclass
-class StateFromQuery(State, identifier='StateFromQuery'):
-    query: CallbackQuery
-
-    @property
-    def message(self) -> Message:
-        return self.query.message
-
-    @property
-    def callback_envelope(self) -> ParsedEnvelope:
-        if hasattr(self.query, '__parsed__'):
-            return getattr(self.query, '__parsed__')
-        cb = ...
-        setattr(cb, '__parsed__', cb)
-        return cb
-
-    @property
-    def ui_history(self) -> list[MenuHistoryNode]:
-        return self.callback_data.ui_history
+# @dataclass
+# class StateFromQuery(State, identifier='StateFromQuery'):
+#     query: CallbackQuery
+#
+#     def __init_subclass__(cls, **kwargs: Any) -> None:
+#         if kwargs.get('identifier') == 'StateFromQuery':
+#             kwargs.pop('identifier')
+#
+#         super().__init_subclass__(**kwargs)
+#
+#     @property
+#     def message(self) -> Message:
+#         return self.query.message
+#
+#     @property
+#     def callback_data(self) -> UnknownCallback:
+#         if hasattr(self.query, '__parsed__'):
+#             return getattr(self.query, '__parsed__')
+#         cb = UnknownCallback.parse(self.query.data)
+#         setattr(cb, '__parsed__', cb)
+#         return cb
+#
+#     @property
+#     def ui_history(self) -> list[MenuHistoryNode]:
+#         return self.callback_data.ui_history
 
 
 class StateFilter(AiogramStateFilter):

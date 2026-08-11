@@ -36,14 +36,14 @@ class PydanticSerializableMixin(metaclass=ABCMeta):
                 self.y = y
 
             def __pydantic_serialize__(self) -> str:
-                return f"{self.x},{self.y}"
+                return f'{self.x},{self.y}'
 
             @classmethod
             def __pydantic_deserialize__(
                 cls,
                 value: str,
             ) -> Coordinates:
-                x, y = value.split(",", maxsplit=1)
+                x, y = value.split(',', maxsplit=1)
                 return cls(int(x), int(y))
 
 
@@ -51,12 +51,10 @@ class PydanticSerializableMixin(metaclass=ABCMeta):
             coordinates: Coordinates
 
 
-        container = Container.model_validate(
-            {"coordinates": "10,20"}
-        )
+        container = Container.model_validate({'coordinates': '10,20'})
 
         assert isinstance(callback.coordinates, Coordinates)
-        assert callback.model_dump(mode="json") == {"coordinates": "10,20"}
+        assert callback.model_dump(mode='json') == {'coordinates': '10,20'}
 
     Note:
         When an object is serialized inside an untyped field such as
