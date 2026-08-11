@@ -17,8 +17,7 @@ T = TypeVar('T')
 
 
 class PydanticSerializableMixin(metaclass=ABCMeta):
-    """
-    Mixin for Pydantic-compatible string serialization.
+    """Mixin for Pydantic-compatible string serialization.
 
     Subclasses must define how their instances are converted to strings and
     restored from strings by implementing :meth:`__pydantic_serialize__` and
@@ -71,8 +70,7 @@ class PydanticSerializableMixin(metaclass=ABCMeta):
 
     @abstractmethod
     def __pydantic_serialize__(self) -> str:
-        """
-        Convert this instance to its string representation.
+        """Convert this instance to its string representation.
 
         The returned value is used by Pydantic when serializing a model that
         contains this object.
@@ -87,8 +85,7 @@ class PydanticSerializableMixin(metaclass=ABCMeta):
     @classmethod
     @abstractmethod
     def __pydantic_deserialize__(cls: type[T], value: str) -> T:
-        """
-        Create an instance from its serialized string representation.
+        """Create an instance from its serialized string representation.
 
         Pydantic calls this method after validating that the input value is a string.
 

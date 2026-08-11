@@ -3,20 +3,22 @@ from __future__ import annotations
 
 __all__ = [
     'TelegramError',
-    'CallbackDataParsingError',
-    'NotPositionalDataError',
+    'CallbackDataUnpackError',
+    'InvalidPositionalCallbackDataError',
     'CallbackDataPackError',
     'NotSerializableValueError',
-    'PositionalCallbackWithContextError',
-    'IdentifierMismatchError',
+    'PositionalContextNotSupportedError',
+    'CallbackIdentifierMismatchError',
+    'BadCallbackIdentifierError',
 ]
 
 from .base import TelegramError
 from .callback_data import (
     CallbackDataPackError,
-    NotPositionalDataError,
-    IdentifierMismatchError,
-    CallbackDataParsingError,
+    CallbackDataUnpackError,
     NotSerializableValueError,
-    PositionalCallbackWithContextError,
+    BadCallbackIdentifierError,
+    CallbackIdentifierMismatchError,
+    InvalidPositionalCallbackDataError,
+    PositionalContextNotSupportedError,
 )

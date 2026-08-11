@@ -14,7 +14,7 @@ T = TypeVar('T')
 R_co = TypeVar('R_co', covariant=True)
 
 
-class ClassProperty(Generic[T, R_co]):
+class classproperty(Generic[T, R_co]):
     def __init__(self, func: Callable[[type[T]], R_co], /) -> None:
         self._func = classmethod(func)
 
@@ -30,7 +30,3 @@ class ClassProperty(Generic[T, R_co]):
             owner = type(obj)
 
         return self._func.__get__(obj, owner)()
-
-
-def classproperty(func: Callable[[type[T]], R_co], /) -> ClassProperty[T, R_co]:
-    return ClassProperty(func)

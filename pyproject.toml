@@ -51,6 +51,7 @@ include = [
 quote-style = "single"
 line-ending = "lf"
 indent-style = "space"
+docstring-code-format = true
 
 
 [tool.ruff.lint]
@@ -63,6 +64,7 @@ select = [
     "T20",
     "RET",
 ]
+extend-select = ["D212"]
 
 
 [tool.ruff.lint.isort]
@@ -74,3 +76,4 @@ lines-between-types = 0
 lines-after-imports = 2
 split-on-trailing-comma = true
 combine-as-imports = true
+

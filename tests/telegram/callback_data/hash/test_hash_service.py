@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from hubplatform.telegram.callback_data.hash.service import HashService
-from hubplatform.telegram.callback_data.hash.storage import Sqlite3HashStorage
+from hubplatform.telegram.callback_data.hash import HashService, Sqlite3HashStorage
 
 
 def test_hash_is_stable_and_persisted_across_storage_restart(tmp_path: Path) -> None:

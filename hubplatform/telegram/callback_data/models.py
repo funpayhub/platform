@@ -7,6 +7,8 @@ __all__ = [
     'PositionalCallbackEnvelope',
     'KeywordCallbackEnvelope',
     'CallbackEnvelope',
+    'parse_callback_data',
+    'validate_identifier',
 ]
 
 
@@ -20,19 +22,17 @@ from aiogram.types import CallbackQuery
 
 from hubplatform.exceptions.telegram import (
     CallbackDataPackError,
-    NotPositionalDataError,
-    IdentifierMismatchError,
-    CallbackDataParsingError,
+    CallbackDataUnpackError,
     NotSerializableValueError,
-    PositionalCallbackWithContextError,
+    BadCallbackIdentifierError,
+    CallbackIdentifierMismatchError,
+    InvalidPositionalCallbackDataError,
+    PositionalContextNotSupportedError,
 )
-from hubplatform.telegram.callback_data import global_hash_service
 from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
 
 
 if TYPE_CHECKING:
-    from hubplatform.telegram.callback_data.hash import HashService
-
     from .filter import CallbackQueryFilter
 
 
@@ -40,8 +40,7 @@ _ALLOWED_IDENTIFIER_SYMBOLS = frozenset(string.ascii_letters + string.digits + '
 
 
 def validate_identifier(identifier: str) -> str:
-    """
-    Validate a callback identifier.
+    """Validate a callback identifier.
 
     Identifier must match following regular expression: `[a-zA-Z0-9\\._-]`
 
@@ -50,22 +49,18 @@ def validate_identifier(identifier: str) -> str:
     :raises ValueError: If the identifier is empty or contains unsupported symbols.
     """
     if not identifier:
-        raise ValueError('Callback identifier cannot be empty.')
+        raise BadCallbackIdentifierError('Callback identifier cannot be empty.')
     invalid_symbols = set(identifier) - _ALLOWED_IDENTIFIER_SYMBOLS
     if invalid_symbols:
         symbols = ''.join(sorted(invalid_symbols))
-        raise ValueError(f'Callback identifier contains invalid symbols: {symbols!r}.')
+        raise BadCallbackIdentifierError(
+            f'Callback identifier contains invalid symbols: {symbols!r}.'
+        )
     return identifier
 
 
-def _hash_service(hash_service: HashService | None) -> HashService:
-    """Return an explicitly supplied hash service or the global default."""
-    return hash_service if hash_service is not None else global_hash_service()
-
-
 class CallbackEnvelope(BaseModel, ABC):
-    """
-    Base transport representation of callback data.
+    """Base transport representation of callback data.
 
     :param identifier: CallbackData identifier.
     """
@@ -79,13 +74,12 @@ class CallbackEnvelope(BaseModel, ABC):
 
     @classmethod
     @abstractmethod
-    def _unpack(cls, data: str) -> CallbackEnvelope:
+    def _unpack(cls, data: str) -> Self:
         """Deserialize an envelope from its concrete wire format."""
         ...
 
     def pack(self) -> str:
-        """
-        Serialize the envelope to a callback-data string.
+        """Serialize the envelope to a callback-data string.
 
         :return: Packed callback data.
         :raises CallbackDataPackError: If serialization fails.
@@ -98,26 +92,23 @@ class CallbackEnvelope(BaseModel, ABC):
             raise CallbackDataPackError(f'An unexpected error occurred during packing: {e}') from e
 
     @classmethod
-    def unpack(cls, data: str) -> CallbackEnvelope:
-        """
-        Deserialize a callback-data string into an envelope.
+    def unpack(cls, data: str) -> Self:
+        """Deserialize a callback-data string into an envelope.
 
         :param data: Packed callback data.
         :return: The parsed envelope.
-        :raises CallbackDataParsingError: If parsing fails.
+        :raises CallbackDataUnpackError: If unpacking fails.
         """
         try:
             return cls._unpack(data)
-        except CallbackDataParsingError:
+        except CallbackDataUnpackError:
             raise
         except Exception as e:
-            raise CallbackDataParsingError('An unexpected error occurred during parsing.') from e
+            raise CallbackDataUnpackError('An unexpected error occurred during unpacking.') from e
 
 
 class KeywordCallbackEnvelope(CallbackEnvelope):
-    """
-    Envelope that stores named payload fields and context.
-    """
+    """Envelope that stores named payload fields and context."""
 
     fields: dict[str, Any] = Field(default_factory=dict)
     context: dict[str, Any] = Field(default_factory=dict)
@@ -141,8 +132,7 @@ class KeywordCallbackEnvelope(CallbackEnvelope):
 
 
 class PositionalCallbackEnvelope(CallbackEnvelope):
-    """
-    Compact envelope that stores payload values by position.
+    """Compact envelope that stores payload values by position.
 
     Positional callback data uses the ``!identifier:value:...`` format. Colons and
     percent signs inside string values are escaped.
@@ -163,7 +153,7 @@ class PositionalCallbackEnvelope(CallbackEnvelope):
     @classmethod
     def _unpack(cls, data: str) -> PositionalCallbackEnvelope:
         if not cls.is_positional_callback(data):
-            raise NotPositionalDataError()
+            raise InvalidPositionalCallbackDataError()
 
         identifier, sep, fields = data[1:].partition(':')
         if sep:
@@ -183,8 +173,7 @@ class PositionalCallbackEnvelope(CallbackEnvelope):
 
     @staticmethod
     def is_positional_callback(data: str) -> bool:
-        """
-        Check whether a string can represent positional callback data.
+        """Check whether a string can represent positional callback data.
 
         :param data: Callback-data string to inspect.
         :return: Whether the string has the positional prefix and valid Telegram length.
@@ -195,17 +184,22 @@ class PositionalCallbackEnvelope(CallbackEnvelope):
 ParsedEnvelope = KeywordCallbackEnvelope | PositionalCallbackEnvelope
 
 
-def parse_callback_data(data: str | CallbackQuery) -> ParsedEnvelope:
-    """
-    Parse a callback data string or an aiogram `CallbackQuery`.
+def parse_callback_data(data: str | CallbackQuery | ParsedEnvelope) -> ParsedEnvelope:
+    """Parse a callback data string or an aiogram `CallbackQuery`.
     A parsed envelope cached on an aiogram `CallbackQuery` is reused when available.
 
     :param data: Packed callback data or an aiogram `CallbackQuery` containing it.
+        For API convenience, `KeywordCallbackEnvelope` and `PositionalCallbackEnvelope`
+        instances are also accepted and fast-returned unchanged.
+
     :return: The parsed keyword or positional envelope.
-    :raises CallbackDataParsingError: If the callback data cannot be parsed.
+    :raises CallbackDataUnpackError: If the callback data cannot be parsed.
     """
+    if isinstance(data, ParsedEnvelope):
+        return data
+
     if isinstance(data, CallbackQuery):
-        parsed = getattr(data, '_hubplatform_parsed_data_envelope', None)
+        parsed = getattr(data, '_hubplatform_parsed_callback_envelope', None)
         if isinstance(parsed, ParsedEnvelope):
             return parsed
 
@@ -214,12 +208,16 @@ def parse_callback_data(data: str | CallbackQuery) -> ParsedEnvelope:
         data_str = data
 
     if not data_str:
-        raise CallbackDataParsingError('Callback data string is empty.')
+        raise CallbackDataUnpackError('Callback data string is empty.')
 
+    envelope: ParsedEnvelope
     if PositionalCallbackEnvelope.is_positional_callback(data_str):
         envelope = PositionalCallbackEnvelope.unpack(data_str)
     else:
         envelope = KeywordCallbackEnvelope.unpack(data_str)
+
+    if isinstance(data, CallbackQuery):
+        setattr(data, '_hubplatform_parsed_callback_envelope', envelope)
     return envelope
 
 
@@ -297,12 +295,12 @@ class CallbackData(BaseModel):
         :param drop_context: Discard non-empty context. Positional envelopes cannot
             carry context.
         :return: An envelope containing payload values in model field order.
-        :raises PositionalCallbackWithContextError: If context is present and
+        :raises PositionalContextNotSupportedError: If context is present and
             ``drop_context`` is false.
         :raises CallbackDataPackError: If the payload cannot be converted.
         """
         if self.context and not drop_context:
-            raise PositionalCallbackWithContextError(
+            raise PositionalContextNotSupportedError(
                 'Packing to positional query with non-empty context is not allowed. '
                 'Pass `drop_context=True` to not include context in packed query.'
             )
@@ -326,11 +324,11 @@ class CallbackData(BaseModel):
 
         :param envelope: Parsed envelope to validate.
         :return: A validated instance of the concrete callback model.
-        :raises IdentifierMismatchError: If the envelope targets another model.
-        :raises CallbackDataParsingError: If the payload cannot be validated.
+        :raises CallbackIdentifierMismatchError: If the envelope targets another model.
+        :raises CallbackDataUnpackError: If the payload cannot be validated.
         """
         if envelope.identifier != cls.identifier:
-            raise IdentifierMismatchError(
+            raise CallbackIdentifierMismatchError(
                 f'Identifier from envelope ({envelope.identifier!r}) does not match with '
                 f'CallbackData identifier ({cls.identifier!r}).)'
             )
@@ -343,7 +341,7 @@ class CallbackData(BaseModel):
             field_names = [k for k in cls.model_fields.keys() if k not in base_field_names]
             return cls.model_validate(dict(zip(field_names, envelope.fields, strict=True)))
         except Exception as e:
-            raise CallbackDataParsingError(
+            raise CallbackDataUnpackError(
                 f'An unexpected error occurred while unpacking '
                 f'{cls.__name__!r} from envelope: {e}.'
             ) from e
@@ -361,7 +359,7 @@ class CallbackData(BaseModel):
 
         :param drop_context: Discard non-empty context before serialization.
         :return: Packed positional callback data.
-        :raises PositionalCallbackWithContextError: If context is present and
+        :raises PositionalContextNotSupportedError: If context is present and
             ``drop_context`` is false.
         :raises CallbackDataPackError: If serialization fails.
         """
@@ -373,18 +371,14 @@ class CallbackData(BaseModel):
 
         :param data: Packed callback data or an already parsed envelope.
         :return: A validated instance of the concrete callback model.
-        :raises IdentifierMismatchError: If the callback targets another model.
-        :raises CallbackDataParsingError: If parsing or validation fails.
+        :raises CallbackIdentifierMismatchError: If the callback targets another model.
+        :raises CallbackDataUnpackError: If unpacking or validation fails.
         """
-        if isinstance(data, ParsedEnvelope):
-            return cls.from_envelope(data)
-
         return cls.from_envelope(parse_callback_data(data))
 
     @classmethod
     def filter(cls) -> CallbackQueryFilter:
-        """
-        Create an aiogram filter for this callback model.
+        """Create an aiogram filter for this callback model.
 
         :return: A filter that parses and validates matching callback queries.
         """
