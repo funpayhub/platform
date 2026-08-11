@@ -32,6 +32,7 @@ from hubplatform.exceptions.telegram.callback_data import (
     CallbackIdentifierMismatchError,
     PositionalContextNotSupportedError,
 )
+from ._compact_json import _compact_loads, _compact_dumps
 
 
 if TYPE_CHECKING:
@@ -168,20 +169,14 @@ class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
         identifier, sep, fields = data.partition(',')
         fields = fields.replace('%S', ',').replace('%P', '%')
         return PositionalCallbackDataEnvelope(
-            identifier=identifier, fields=json.loads(f'[{fields}]')
+            identifier=identifier, fields=_compact_loads(f'[{fields}]')
         )
 
     def _serialize_value(self, value: Any) -> str:
-        if type(value) is bool:
-            return str(int(value))
-        if type(value) in (int, float):
-            return str(value)
         try:
-            adapter = TypeAdapter(type(value))
-            result = adapter.dump_json(value).decode('utf-8')
+            return _compact_dumps(value).replace('%', '%P').replace(',', '%S')
         except Exception as e:
             raise NotSerializableValueError(f'Value {value!r} is not serializable.') from e
-        return result.replace('%', '%P').replace(',', '%S')
 
 
 CallbackDataEnvelope = KeywordCallbackDataEnvelope | PositionalCallbackDataEnvelope
