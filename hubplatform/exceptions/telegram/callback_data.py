@@ -3,12 +3,13 @@ from __future__ import annotations
 
 __all__ = [
     'CallbackDataUnpackError',
-    'InvalidPositionalCallbackDataError',
+    'InvalidCallbackDataFormatError',
     'CallbackDataPackError',
     'NotSerializableValueError',
     'PositionalContextNotSupportedError',
     'CallbackIdentifierMismatchError',
     'BadCallbackIdentifierError',
+    'CallbackDataTooLongError',
 ]
 
 from .base import TelegramError
@@ -28,8 +29,8 @@ class CallbackDataPackError(CallbackDataError):
 
 # REAL EXCEPTIONS
 # Parsing exceptions
-class InvalidPositionalCallbackDataError(CallbackDataUnpackError):
-    """Raised when callback data does not use the positional wire format."""
+class InvalidCallbackDataFormatError(CallbackDataUnpackError):
+    """Raised when callback data uses not valid wire format."""
 
 
 class CallbackIdentifierMismatchError(CallbackDataUnpackError):
@@ -49,5 +50,5 @@ class PositionalContextNotSupportedError(CallbackDataPackError):
     """Raised when a positional envelope would discard callback context."""
 
 
-class PositionalCallbackTooLongError(CallbackDataPackError):
-    """Raise when a total callback string is longer then 64 bytes."""
+class CallbackDataTooLongError(CallbackDataPackError):
+    """Raise when a total callback string is longer then 64 bytes (only for positional callbacks)."""

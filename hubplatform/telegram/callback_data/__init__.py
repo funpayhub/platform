@@ -2,23 +2,27 @@ from __future__ import annotations
 
 
 __all__ = [
-    'CallbackEnvelope',
-    'KeywordCallbackEnvelope',
-    'PositionalCallbackEnvelope',
-    'ParsedEnvelope',
+    '_CallbackDataEnvelope',
+    'KeywordCallbackDataEnvelope',
+    'PositionalCallbackDataEnvelope',
+    'CallbackDataEnvelope',
     'CallbackData',
     'parse_callback_data',
     'validate_identifier',
     'CallbackQueryFilter',
+    'is_positional_callback_data',
+    'is_keyword_callback_data',
 ]
 
 from .filter import CallbackQueryFilter
 from .models import (
     CallbackData,
-    ParsedEnvelope,
-    CallbackEnvelope,
-    KeywordCallbackEnvelope,
-    PositionalCallbackEnvelope,
+    CallbackDataEnvelope,
+    KeywordCallbackDataEnvelope,
+    PositionalCallbackDataEnvelope,
     parse_callback_data,
     validate_identifier,
+    _CallbackDataEnvelope,
+    is_keyword_callback_data,
+    is_positional_callback_data,
 )

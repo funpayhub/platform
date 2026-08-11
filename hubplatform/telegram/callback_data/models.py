@@ -3,12 +3,14 @@ from __future__ import annotations
 
 __all__ = [
     'CallbackData',
-    'ParsedEnvelope',
-    'PositionalCallbackEnvelope',
-    'KeywordCallbackEnvelope',
-    'CallbackEnvelope',
+    'CallbackDataEnvelope',
+    'PositionalCallbackDataEnvelope',
+    'KeywordCallbackDataEnvelope',
+    '_CallbackDataEnvelope',
     'parse_callback_data',
     'validate_identifier',
+    'is_keyword_callback_data',
+    'is_positional_callback_data',
 ]
 
 
@@ -20,16 +22,17 @@ from abc import ABC, abstractmethod
 from pydantic import Field, BaseModel, AfterValidator
 from aiogram.types import CallbackQuery
 
-from hubplatform.exceptions.telegram import (
+from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
+from hubplatform.exceptions.telegram.callback_data import (
     CallbackDataPackError,
     CallbackDataUnpackError,
+    CallbackDataTooLongError,
     NotSerializableValueError,
     BadCallbackIdentifierError,
+    InvalidCallbackDataFormatError,
     CallbackIdentifierMismatchError,
-    InvalidPositionalCallbackDataError,
     PositionalContextNotSupportedError,
 )
-from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
 
 
 if TYPE_CHECKING:
@@ -59,7 +62,7 @@ def validate_identifier(identifier: str) -> str:
     return identifier
 
 
-class CallbackEnvelope(BaseModel, ABC):
+class _CallbackDataEnvelope(BaseModel, ABC):
     """Base transport representation of callback data.
 
     :param identifier: CallbackData identifier.
@@ -107,7 +110,7 @@ class CallbackEnvelope(BaseModel, ABC):
             raise CallbackDataUnpackError('An unexpected error occurred during unpacking.') from e
 
 
-class KeywordCallbackEnvelope(CallbackEnvelope):
+class KeywordCallbackDataEnvelope(_CallbackDataEnvelope):
     """Envelope that stores named payload fields and context."""
 
     fields: dict[str, Any] = Field(default_factory=dict)
@@ -122,16 +125,21 @@ class KeywordCallbackEnvelope(CallbackEnvelope):
             separators=(',', ':'),
         )
 
-        return self.identifier + data_str
+        return '!' + self.identifier + data_str
 
     @classmethod
-    def _unpack(cls, data: str) -> KeywordCallbackEnvelope:
+    def _unpack(cls, data: str) -> KeywordCallbackDataEnvelope:
+        if not is_keyword_callback_data(data):
+            raise InvalidCallbackDataFormatError('Not a keyword callback data format.')
+
         identifier, sep, data = data.partition('[')
         fields, context = json.loads(sep + data)
-        return KeywordCallbackEnvelope(identifier=identifier, fields=fields, context=context)
+        return KeywordCallbackDataEnvelope(
+            identifier=identifier[1:], fields=fields, context=context
+        )
 
 
-class PositionalCallbackEnvelope(CallbackEnvelope):
+class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
     """Compact envelope that stores payload values by position.
 
     Positional callback data uses the ``!identifier:value:...`` format. Colons and
@@ -142,25 +150,28 @@ class PositionalCallbackEnvelope(CallbackEnvelope):
 
     def _pack(self) -> str:
         fields = self.model_dump(mode='json')['fields']
-        result = f'!{self.identifier}'
+        result = self.identifier
         if fields:
             result += ':' + ':'.join(self._serialize_value(i) for i in fields)
 
-        if len(result) > 64:
-            raise Exception  # todo
+        length = len(result.encode('utf-8'))
+        if length > 64:
+            raise CallbackDataTooLongError(
+                f'Final callback data length ({length}) is above max (64).'
+            )
         return result
 
     @classmethod
-    def _unpack(cls, data: str) -> PositionalCallbackEnvelope:
-        if not cls.is_positional_callback(data):
-            raise InvalidPositionalCallbackDataError()
+    def _unpack(cls, data: str) -> PositionalCallbackDataEnvelope:
+        if not is_positional_callback_data(data):
+            raise InvalidCallbackDataFormatError('Not a positional callback data format.')
 
         identifier, sep, fields = data[1:].partition(':')
         if sep:
             positional = [i.replace('%S', ':').replace('%P', '%') for i in fields.split(':')]
         else:
             positional = []
-        return PositionalCallbackEnvelope(identifier=identifier, fields=positional)
+        return PositionalCallbackDataEnvelope(identifier=identifier, fields=positional)
 
     def _serialize_value(self, value: Any) -> str:
         if type(value) is bool:
@@ -171,36 +182,45 @@ class PositionalCallbackEnvelope(CallbackEnvelope):
             return value.replace('%', '%P').replace(':', '%S')
         raise NotSerializableValueError(f'Value {value!r} is not serializable.')
 
-    @staticmethod
-    def is_positional_callback(data: str) -> bool:
-        """Check whether a string can represent positional callback data.
 
-        :param data: Callback-data string to inspect.
-        :return: Whether the string has the positional prefix and valid Telegram length.
-        """
-        return data.startswith('!') and len(data) <= 64
+CallbackDataEnvelope = KeywordCallbackDataEnvelope | PositionalCallbackDataEnvelope
 
 
-ParsedEnvelope = KeywordCallbackEnvelope | PositionalCallbackEnvelope
+def is_positional_callback_data(data: str) -> bool:
+    """Check whether a string can represent positional callback data.
+
+    :param data: Callback-data string to inspect.
+    :return: Whether the string has the positional prefix and valid Telegram length.
+    """
+    return not data.startswith('!')
 
 
-def parse_callback_data(data: str | CallbackQuery | ParsedEnvelope) -> ParsedEnvelope:
+def is_keyword_callback_data(data: str) -> bool:
+    """Check whether a string can represent keyword callback data.
+
+    :param data: Callback-data string to inspect.
+    :return: Whether the string has the positional prefix and valid Telegram length.
+    """
+    return not is_positional_callback_data(data)
+
+
+def parse_callback_data(data: str | CallbackQuery | CallbackDataEnvelope) -> CallbackDataEnvelope:
     """Parse a callback data string or an aiogram `CallbackQuery`.
     A parsed envelope cached on an aiogram `CallbackQuery` is reused when available.
 
     :param data: Packed callback data or an aiogram `CallbackQuery` containing it.
-        For API convenience, `KeywordCallbackEnvelope` and `PositionalCallbackEnvelope`
+        For API convenience, `KeywordCallbackDataEnvelope` and `PositionalCallbackDataEnvelope`
         instances are also accepted and fast-returned unchanged.
 
     :return: The parsed keyword or positional envelope.
     :raises CallbackDataUnpackError: If the callback data cannot be parsed.
     """
-    if isinstance(data, ParsedEnvelope):
+    if isinstance(data, CallbackDataEnvelope):
         return data
 
     if isinstance(data, CallbackQuery):
         parsed = getattr(data, '_hubplatform_parsed_callback_envelope', None)
-        if isinstance(parsed, ParsedEnvelope):
+        if isinstance(parsed, CallbackDataEnvelope):
             return parsed
 
         data_str = data.data
@@ -210,11 +230,11 @@ def parse_callback_data(data: str | CallbackQuery | ParsedEnvelope) -> ParsedEnv
     if not data_str:
         raise CallbackDataUnpackError('Callback data string is empty.')
 
-    envelope: ParsedEnvelope
-    if PositionalCallbackEnvelope.is_positional_callback(data_str):
-        envelope = PositionalCallbackEnvelope.unpack(data_str)
+    envelope: CallbackDataEnvelope
+    if is_positional_callback_data(data_str):
+        envelope = PositionalCallbackDataEnvelope.unpack(data_str)
     else:
-        envelope = KeywordCallbackEnvelope.unpack(data_str)
+        envelope = KeywordCallbackDataEnvelope.unpack(data_str)
 
     if isinstance(data, CallbackQuery):
         setattr(data, '_hubplatform_parsed_callback_envelope', envelope)
@@ -271,14 +291,14 @@ class CallbackData(BaseModel):
             fallback=pydantic_fallback_serializer,
         )
 
-    def to_keyword_envelope(self) -> KeywordCallbackEnvelope:
+    def to_keyword_envelope(self) -> KeywordCallbackDataEnvelope:
         """Convert the payload to a keyword envelope, preserving its context.
 
         :return: An envelope containing named payload fields and context.
         :raises CallbackDataPackError: If the payload cannot be converted.
         """
         try:
-            return KeywordCallbackEnvelope(
+            return KeywordCallbackDataEnvelope(
                 identifier=self.identifier,
                 fields=self._dump_callback_fields(),
                 context=self.context,
@@ -289,7 +309,9 @@ class CallbackData(BaseModel):
                 f'to keyword envelope: {e}'
             ) from e
 
-    def to_positional_envelope(self, *, drop_context: bool = False) -> PositionalCallbackEnvelope:
+    def to_positional_envelope(
+        self, *, drop_context: bool = False
+    ) -> PositionalCallbackDataEnvelope:
         """Convert the payload to a compact positional envelope.
 
         :param drop_context: Discard non-empty context. Positional envelopes cannot
@@ -306,7 +328,7 @@ class CallbackData(BaseModel):
             )
 
         try:
-            return PositionalCallbackEnvelope(
+            return PositionalCallbackDataEnvelope(
                 identifier=self.identifier, fields=list(self._dump_callback_fields().values())
             )
         except Exception as e:
@@ -316,7 +338,7 @@ class CallbackData(BaseModel):
             ) from e
 
     @classmethod
-    def from_envelope(cls, envelope: ParsedEnvelope) -> Self:
+    def from_envelope(cls, envelope: CallbackDataEnvelope) -> Self:
         """Validate an envelope as an instance of this callback model.
 
         Keyword fields are matched by name; positional fields are matched in model
@@ -334,7 +356,7 @@ class CallbackData(BaseModel):
             )
 
         try:
-            if isinstance(envelope, KeywordCallbackEnvelope):
+            if isinstance(envelope, KeywordCallbackDataEnvelope):
                 return cls.model_validate(envelope.fields | {'context': envelope.context})
 
             base_field_names = set(CallbackData.model_fields.keys())
@@ -366,7 +388,7 @@ class CallbackData(BaseModel):
         return self.to_positional_envelope(drop_context=drop_context).pack()
 
     @classmethod
-    def unpack(cls, data: str | ParsedEnvelope | CallbackQuery) -> Self:
+    def unpack(cls, data: str | CallbackDataEnvelope | CallbackQuery) -> Self:
         """Parse callback data and validate it as this callback model.
 
         :param data: Packed callback data or an already parsed envelope.
