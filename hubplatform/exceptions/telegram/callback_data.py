@@ -51,4 +51,6 @@ class PositionalContextNotSupportedError(CallbackDataPackError):
 
 
 class CallbackDataTooLongError(CallbackDataPackError):
-    """Raise when a total callback string is longer then 64 bytes (only for positional callbacks)."""
+    """Raise when a total callback string is longer then 64 bytes
+    (only for positional callbacks).
+    """

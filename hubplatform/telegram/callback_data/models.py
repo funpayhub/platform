@@ -19,14 +19,13 @@ import string
 from typing import TYPE_CHECKING, Any, Self, ClassVar, Annotated
 from abc import ABC, abstractmethod
 
-from pydantic import Field, BaseModel, AfterValidator
+from pydantic import Field, BaseModel, TypeAdapter, AfterValidator
 from aiogram.types import CallbackQuery
 
 from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
 from hubplatform.exceptions.telegram.callback_data import (
     CallbackDataPackError,
     CallbackDataUnpackError,
-    CallbackDataTooLongError,
     NotSerializableValueError,
     BadCallbackIdentifierError,
     InvalidCallbackDataFormatError,
@@ -152,13 +151,13 @@ class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
         fields = self.model_dump(mode='json')['fields']
         result = self.identifier
         if fields:
-            result += ':' + ':'.join(self._serialize_value(i) for i in fields)
+            result += ',' + ','.join(self._serialize_value(i) for i in fields)
 
-        length = len(result.encode('utf-8'))
-        if length > 64:
-            raise CallbackDataTooLongError(
-                f'Final callback data length ({length}) is above max (64).'
-            )
+        # length = len(result.encode('utf-8'))
+        # if length > 64:
+        #     raise CallbackDataTooLongError(
+        #         f'Final callback data length ({length}) is above max (64).'
+        #     )
         return result
 
     @classmethod
@@ -166,21 +165,23 @@ class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
         if not is_positional_callback_data(data):
             raise InvalidCallbackDataFormatError('Not a positional callback data format.')
 
-        identifier, sep, fields = data[1:].partition(':')
-        if sep:
-            positional = [i.replace('%S', ':').replace('%P', '%') for i in fields.split(':')]
-        else:
-            positional = []
-        return PositionalCallbackDataEnvelope(identifier=identifier, fields=positional)
+        identifier, sep, fields = data.partition(',')
+        fields = fields.replace('%S', ',').replace('%P', '%')
+        return PositionalCallbackDataEnvelope(
+            identifier=identifier, fields=json.loads(f'[{fields}]')
+        )
 
     def _serialize_value(self, value: Any) -> str:
         if type(value) is bool:
             return str(int(value))
         if type(value) in (int, float):
             return str(value)
-        if type(value) is str:
-            return value.replace('%', '%P').replace(':', '%S')
-        raise NotSerializableValueError(f'Value {value!r} is not serializable.')
+        try:
+            adapter = TypeAdapter(type(value))
+            result = adapter.dump_json(value).decode('utf-8')
+        except Exception as e:
+            raise NotSerializableValueError(f'Value {value!r} is not serializable.') from e
+        return result.replace('%', '%P').replace(',', '%S')
 
 
 CallbackDataEnvelope = KeywordCallbackDataEnvelope | PositionalCallbackDataEnvelope
