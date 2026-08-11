@@ -19,7 +19,7 @@ import string
 from typing import TYPE_CHECKING, Any, Self, ClassVar, Annotated
 from abc import ABC, abstractmethod
 
-from pydantic import Field, BaseModel, TypeAdapter, AfterValidator
+from pydantic import Field, BaseModel, AfterValidator
 from aiogram.types import CallbackQuery
 
 from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
@@ -32,7 +32,8 @@ from hubplatform.exceptions.telegram.callback_data import (
     CallbackIdentifierMismatchError,
     PositionalContextNotSupportedError,
 )
-from ._compact_json import _compact_loads, _compact_dumps
+
+from ._compact_json import _compact_dumps, _compact_loads
 
 
 if TYPE_CHECKING:

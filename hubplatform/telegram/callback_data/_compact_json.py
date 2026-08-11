@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from typing import Any, NoReturn
 
@@ -21,7 +23,7 @@ def _can_dump_string_bare(value: str) -> bool:
 
     try:
         json.loads(value)
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         return True
 
     return False
@@ -136,14 +138,14 @@ class _CompactDecoder:
 
             self.pos += 1
 
-        token = self.data[start:self.pos]
+        token = self.data[start : self.pos]
 
         if not token or token == '~':
             return None
 
         try:
             return json.loads(token)
-        except (json.JSONDecodeError, ValueError):
+        except json.JSONDecodeError, ValueError:
             return token
 
     def _parse_sequence(self, *, end: str | None) -> list[Any]:
@@ -255,23 +257,17 @@ class _CompactDecoder:
                 break
 
             if char in '[]{}"\\':
-                self._error(
-                    f'Unexpected character {char!r} '
-                    f'inside object key'
-                )
+                self._error(f'Unexpected character {char!r} inside object key')
 
             self.pos += 1
 
         if self.pos == start:
             self._error('Empty bare object key')
 
-        return self.data[start:self.pos]
+        return self.data[start : self.pos]
 
     def _consume(self, char: str) -> bool:
-        if (
-            self.pos < len(self.data)
-            and self.data[self.pos] == char
-        ):
+        if self.pos < len(self.data) and self.data[self.pos] == char:
             self.pos += 1
             return True
 
@@ -286,9 +282,7 @@ class _CompactDecoder:
         else:
             actual = repr(self.data[self.pos])
 
-        self._error(
-            f'Expected {char!r}, got {actual}'
-        )
+        self._error(f'Expected {char!r}, got {actual}')
 
     def _error(self, message: str, *, pos: int | None = None) -> NoReturn:
         raise CompactDecodeError(f'{message} at position {pos if pos is not None else self.pos}')
