@@ -14,7 +14,6 @@ __all__ = [
 ]
 
 
-import json
 import string
 from typing import TYPE_CHECKING, Any, Self, ClassVar, Annotated
 from abc import ABC, abstractmethod
@@ -119,13 +118,7 @@ class KeywordCallbackDataEnvelope(_CallbackDataEnvelope):
 
     def _pack(self) -> str:
         data = self.model_dump(mode='json', fallback=pydantic_fallback_serializer)
-
-        data_str = json.dumps(
-            [data['fields'], data['context']],
-            ensure_ascii=False,
-            separators=(',', ':'),
-        )
-
+        data_str = dump_compact([data['fields'], data['context']], root=False)
         return '!' + self.identifier + data_str
 
     @classmethod
@@ -134,7 +127,7 @@ class KeywordCallbackDataEnvelope(_CallbackDataEnvelope):
             raise InvalidCallbackDataFormatError('Not a keyword callback data format.')
 
         identifier, sep, data = data.partition('[')
-        fields, context = json.loads(sep + data)
+        fields, context = loads_compact(sep + data)
         return KeywordCallbackDataEnvelope(
             identifier=identifier[1:], fields=fields, context=context
         )
@@ -153,29 +146,29 @@ class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
         fields = self.model_dump(mode='json')['fields']
         result = self.identifier
         if fields:
-            result += ',' + ','.join(self._serialize_value(i) for i in fields)
+            fields_str = dump_compact(fields)
+            result += fields_str
+        return result
 
         # length = len(result.encode('utf-8'))
         # if length > 64:
         #     raise CallbackDataTooLongError(
         #         f'Final callback data length ({length}) is above max (64).'
         #     )
-        return result
 
     @classmethod
     def _unpack(cls, data: str) -> PositionalCallbackDataEnvelope:
         if not is_positional_callback_data(data):
             raise InvalidCallbackDataFormatError('Not a positional callback data format.')
 
-        identifier, sep, fields = data.partition(',')
-        fields = fields.replace('%S', ',').replace('%P', '%')
+        identifier, sep, fields = data.partition(':')
         return PositionalCallbackDataEnvelope(
-            identifier=identifier, fields=loads_compact(f'[{fields}]')
+            identifier=identifier, fields=loads_compact(sep + fields)
         )
 
     def _serialize_value(self, value: Any) -> str:
         try:
-            return dump_compact(value).replace('%', '%P').replace(',', '%S')
+            return dump_compact(value)
         except Exception as e:
             raise NotSerializableValueError(f'Value {value!r} is not serializable.') from e
 
