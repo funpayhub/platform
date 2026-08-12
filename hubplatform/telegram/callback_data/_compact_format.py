@@ -7,11 +7,11 @@ from json import JSONDecoder, JSONDecodeError
 
 _OPEN_SPECIAL = frozenset('[{')
 _SPECIAL = frozenset('}]:",')
+_OBJ_SEP = ','
+_MAPPING_KEY_VAL_SEP = ':'
 
 
-def _can_dump_string_without_quotes(
-    value: str,
-) -> bool:
+def _can_dump_string_without_quotes(value: str) -> bool:
     if not value:
         return False
 
@@ -53,9 +53,9 @@ def dump_compact(value: Any, *, root: bool = True) -> str:
         elif len(value) == 1 and value[0] == '~':
             value_str = '"~"'
         else:
-            value_str = ':'.join([dump_compact(i, root=False) for i in value])
+            value_str = _OBJ_SEP.join([dump_compact(i, root=False) for i in value])
 
-        return f':{value_str}' if root else f'[{value_str}]'
+        return f'{_OBJ_SEP}{value_str}' if root else f'[{value_str}]'
 
     if isinstance(value, dict):
         pairs = []
@@ -69,9 +69,9 @@ def dump_compact(value: Any, *, root: bool = True) -> str:
             else:
                 key_str = dump_compact(key, root=False)
 
-            pairs.append(f'{key_str},{dump_compact(value, root=False)}')
+            pairs.append(f'{key_str}{_MAPPING_KEY_VAL_SEP}{dump_compact(value, root=False)}')
 
-        return '{' + ':'.join(pairs) + '}'
+        return '{' + _OBJ_SEP.join(pairs) + '}'
 
     raise ValueError(f'Cannot serialize value of type {type(value).__name__!r}.')
 
@@ -92,7 +92,7 @@ class CompactDecoder:
         if not self.value:
             return None
 
-        if self.value[0] == ':':
+        if self.value[0] == _OBJ_SEP:
             self.pos += 1
             result = self._parse_root_sequence()
         else:
@@ -150,8 +150,13 @@ class CompactDecoder:
             if self.current_char is None:
                 break
 
+            if self.current_char != _OBJ_SEP:
+                self._error(
+                    f'Expected obj separator ({_OBJ_SEP!r}), got {self.current_char!r}',
+                    self.pos
+                )
+
             self.pos += 1
-            # todo: add separator (:) check
 
         return result
 
@@ -170,11 +175,14 @@ class CompactDecoder:
             if self.current_char is None:
                 self._error("Unterminated sequence. Expected end of sequence (']'), but got EOF.")
 
-            if self.value[self.pos] == ']':
+            if self.current_char == ']':
                 break
 
-            if not self.value[self.pos] == ':':
-                self._error("Expected separator ':'.", self.pos + 1)
+            if  self.current_char != _OBJ_SEP:
+                self._error(
+                    f'Expected obj separator ({_OBJ_SEP!r}), got {self.current_char!r}',
+                    self.pos
+                )
             self.pos += 1
 
         self.pos += 1
@@ -189,8 +197,11 @@ class CompactDecoder:
         result = {}
         while True:
             key = self._parse_mapping_key()
-            if self.current_char != ',':
-                self._error(f"Expected key-value separator (','), got {self.current_char}.")
+            if self.current_char != _MAPPING_KEY_VAL_SEP:
+                self._error(
+                    f"Expected key-value separator ({_MAPPING_KEY_VAL_SEP!r}), "
+                    f"got {self.current_char!r}."
+                )
             self.pos += 1
 
             if key in result:
@@ -202,8 +213,11 @@ class CompactDecoder:
             if self.current_char == '}':
                 break
 
-            if self.current_char != ':':
-                self._error(f"Expected dict items separator (':'), got {self.current_char}.")
+            if self.current_char != _OBJ_SEP:
+                self._error(
+                    f'Expected obj separator ({_OBJ_SEP!r}), got {self.current_char!r}',
+                    self.pos
+                )
             self.pos += 1
 
         self.pos += 1
@@ -266,3 +280,10 @@ class CompactDecoder:
 def loads_compact(value: str) -> Any:
     decoder = CompactDecoder(value)
     return decoder.decode()
+
+
+data = [123, -321]
+encoded = dump_compact(data)
+print(encoded)
+decoded = loads_compact(encoded)
+print(decoded)
