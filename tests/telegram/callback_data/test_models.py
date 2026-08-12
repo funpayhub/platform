@@ -100,7 +100,7 @@ def test_pack_and_unpack_positional_callback_with_fields() -> None:
 
     packed = callback.pack_compact()
 
-    assert packed == ('f,1,2.5,"x%Sy%P",1,[1%S"x"%Sfalse],{"n":1%S"s":"x"%S"b":true}')
+    assert packed == 'f,1,2.5,"x,y%",1,[1,x,0],{n:1,s:x,b:1}'
     assert CallbackDataWithFields.unpack(packed) == callback
 
 
@@ -109,7 +109,7 @@ def test_pack_and_unpack_positional_callback_with_serializable_value() -> None:
 
     packed = callback.pack_compact()
 
-    assert packed == 'm,"x%Sy%P"'
+    assert packed == 'm,"x,y%"'
     assert CallbackDataWithSerializableValue.unpack(packed) == callback
 
 
@@ -135,8 +135,8 @@ def test_pack_and_unpack_keyword_callback_with_fields() -> None:
     packed = callback.pack()
 
     assert packed == (
-        '!f[{"integer":1,"floating":2.5,"text":"x,y%","boolean":true,'
-        '"items":[1,"x",false],"mapping":{"n":1,"s":"x","b":true}},{}]'
+        '!f[{integer:1,floating:2.5,text:"x,y%",boolean:1,'
+        'items:[1,x,0],mapping:{n:1,s:x,b:1}},{}]'
     )
     assert CallbackDataWithFields.unpack(packed) == callback
 
@@ -146,5 +146,5 @@ def test_pack_and_unpack_keyword_callback_with_serializable_value() -> None:
 
     packed = callback.pack()
 
-    assert packed == '!m[{"value":"x,y%"},{}]'
+    assert packed == '!m[{value:"x,y%"},{}]'
     assert CallbackDataWithSerializableValue.unpack(packed) == callback

@@ -161,9 +161,9 @@ class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
         if not is_positional_callback_data(data):
             raise InvalidCallbackDataFormatError('Not a positional callback data format.')
 
-        identifier, sep, fields = data.partition(':')
+        identifier, sep, fields = data.partition(',')
         return PositionalCallbackDataEnvelope(
-            identifier=identifier, fields=loads_compact(sep + fields)
+            identifier=identifier, fields=loads_compact(sep + fields) or []
         )
 
     def _serialize_value(self, value: Any) -> str:

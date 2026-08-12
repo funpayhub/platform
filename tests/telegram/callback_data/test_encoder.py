@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 from itertools import chain
+from collections.abc import Generator
 
 import pytest
 
@@ -59,17 +60,17 @@ _ATOMS = [
 ]
 
 
-def _IN_LIST():
+def in_seq() -> Generator[Any, None, None]:
     yield from ((i,) for i in _ATOMS)
     yield from ((i, j) for i in _ATOMS for j in _ATOMS)
 
 
-def _INNER_LIST():
-    yield from ((i,) for i in _IN_LIST())
-    yield from ((i, j) for i in _ATOMS for j in _IN_LIST())
+def seq_in_seq() -> Generator[Any, None, None]:
+    yield from ((i,) for i in in_seq())
+    yield from ((i, j) for i in _ATOMS for j in in_seq())
 
 
-def _ok(k):
+def _ok(k: Any) -> bool:
     if isinstance(k, bool):
         return False
     try:
@@ -79,8 +80,8 @@ def _ok(k):
         return False
 
 
-def _IN_DICT():
-    yield from ({k: v} for k in _ATOMS if _ok(k) for v in _ATOMS)
+def in_mapping() -> Generator[Any, None, None]:
+    yield from ({k: v} for k in _ATOMS if _ok(k) for v in chain(_ATOMS, in_seq()))
 
 
 def normalize_value(val: Any) -> Any:
@@ -96,15 +97,15 @@ def normalize_value(val: Any) -> Any:
 
 
 @pytest.mark.parametrize('val', _ATOMS)
-def test_atom_persistence(val):
+def test_atom_persistence(val: Any) -> None:
     encoded = dumps_compact(val)
     normalized_value = normalize_value(val)
     assert normalized_value == loads_compact(encoded)
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize('val', chain(_IN_LIST(), _INNER_LIST()))
-def test_list_persistence(val):
+@pytest.mark.parametrize('val', list(chain(in_seq(), seq_in_seq())))
+def test_list_persistence(val: Any) -> None:
     encoded = dumps_compact(val)
     normalized_value = normalize_value(val)
     logger.info('Input: %s | Normalized: %s | Encoded: %s', val, normalized_value, encoded)
@@ -112,8 +113,8 @@ def test_list_persistence(val):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize('val', _IN_DICT())
-def test_dict_persistence(val):
+@pytest.mark.parametrize('val', list(in_mapping()))
+def test_dict_persistence(val: Any) -> None:
     encoded = dumps_compact(val)
     normalized_value = normalize_value(val)
     logger.info('Input: %s | Normalized: %s | Encoded: %s', val, normalized_value, encoded)

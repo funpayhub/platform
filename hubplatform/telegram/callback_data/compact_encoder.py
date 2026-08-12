@@ -114,8 +114,11 @@ def dumps_compact(value: Any, *, root: bool = True, inside_mode: int = COMMON_MO
         else:
             value_str = _OBJ_SEP.join(
                 [
-                    dumps_compact(i, root=False,
-                                  inside_mode=INSIDE_ROOT_SEQ_MODE if root else INSIDE_SEQ_MODE)
+                    dumps_compact(
+                        i,
+                        root=False,
+                        inside_mode=INSIDE_ROOT_SEQ_MODE if root else INSIDE_SEQ_MODE,
+                    )
                     for i in value
                 ]
             )
