@@ -23,7 +23,7 @@ def _can_dump_string_without_quotes(value: str) -> bool:
 
     try:
         json.loads(value)
-    except json.JSONDecodeError, ValueError:
+    except (json.JSONDecodeError, ValueError):
         return True
     else:
         return False
@@ -83,28 +83,3 @@ def dump_compact(value: Any, *, root: bool = True, none_edge: bool = False) -> s
 
     raise ValueError(f'Cannot serialize value of type {type(value).__name__!r}.')
 
-
-print(
-    dump_compact(
-        [
-            1,
-            '2',
-            'some_string',
-            ['inner_list', 'of', 'numbers', '1', 23456],
-            {None: None},
-            {None: None},
-            {
-                12345: None,
-                None: 12345,
-                'some_key': False,
-                'another': None,
-                'inner_list': [None],
-                'inner_empty_list': [],
-                (123, 456, 789): 'value with a tuple key!',
-                1111: True,
-                2222: False,
-                'empty_string': '',
-            },
-        ]
-    )
-)
