@@ -6,7 +6,7 @@ from itertools import chain
 
 import pytest
 
-from hubplatform.telegram.callback_data._compact_format import dump_compact, loads_compact
+from hubplatform.telegram.callback_data.compact_encoder import dumps_compact, loads_compact
 
 
 logger = logging.getLogger('tests')
@@ -97,7 +97,7 @@ def normalize_value(val: Any) -> Any:
 
 @pytest.mark.parametrize('val', _ATOMS)
 def test_atom_persistence(val):
-    encoded = dump_compact(val)
+    encoded = dumps_compact(val)
     normalized_value = normalize_value(val)
     assert normalized_value == loads_compact(encoded)
 
@@ -105,7 +105,7 @@ def test_atom_persistence(val):
 @pytest.mark.slow
 @pytest.mark.parametrize('val', chain(_IN_LIST(), _INNER_LIST()))
 def test_list_persistence(val):
-    encoded = dump_compact(val)
+    encoded = dumps_compact(val)
     normalized_value = normalize_value(val)
     logger.info('Input: %s | Normalized: %s | Encoded: %s', val, normalized_value, encoded)
     assert normalized_value == loads_compact(encoded)
@@ -114,7 +114,7 @@ def test_list_persistence(val):
 @pytest.mark.slow
 @pytest.mark.parametrize('val', _IN_DICT())
 def test_dict_persistence(val):
-    encoded = dump_compact(val)
+    encoded = dumps_compact(val)
     normalized_value = normalize_value(val)
     logger.info('Input: %s | Normalized: %s | Encoded: %s', val, normalized_value, encoded)
     assert normalized_value == loads_compact(encoded)

@@ -32,7 +32,7 @@ from hubplatform.exceptions.telegram.callback_data import (
     PositionalContextNotSupportedError,
 )
 
-from ._compact_format import dump_compact, loads_compact
+from .compact_encoder import dumps_compact, loads_compact
 
 
 if TYPE_CHECKING:
@@ -118,7 +118,7 @@ class KeywordCallbackDataEnvelope(_CallbackDataEnvelope):
 
     def _pack(self) -> str:
         data = self.model_dump(mode='json', fallback=pydantic_fallback_serializer)
-        data_str = dump_compact([data['fields'], data['context']], root=False)
+        data_str = dumps_compact([data['fields'], data['context']], root=False)
         return '!' + self.identifier + data_str
 
     @classmethod
@@ -146,7 +146,7 @@ class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
         fields = self.model_dump(mode='json')['fields']
         result = self.identifier
         if fields:
-            fields_str = dump_compact(fields)
+            fields_str = dumps_compact(fields)
             result += fields_str
         return result
 
@@ -168,7 +168,7 @@ class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
 
     def _serialize_value(self, value: Any) -> str:
         try:
-            return dump_compact(value)
+            return dumps_compact(value)
         except Exception as e:
             raise NotSerializableValueError(f'Value {value!r} is not serializable.') from e
 

@@ -1,5 +1,18 @@
 from __future__ import annotations
 
+
+__all__ = [
+    'dumps_compact',
+    'loads_compact',
+    'INSIDE_SEQ_MODE',
+    'INSIDE_ROOT_SEQ_MODE',
+    'INSIDE_MAPPING_KEY_MODE',
+    'INSIDE_MAPPING_VALUE_MODE',
+    'COMMON_MODE',
+    'CompactDecoder',
+    'CompactFormatDecodeError',
+]
+
 from typing import Any, NoReturn
 from json import JSONDecoder, JSONEncoder, JSONDecodeError
 from collections.abc import Set
@@ -73,7 +86,7 @@ def _can_dump_string_without_quotes(
         return False
 
 
-def dump_compact(value: Any, *, root: bool = True, inside_mode: int = COMMON_MODE) -> str:
+def dumps_compact(value: Any, *, root: bool = True, inside_mode: int = COMMON_MODE) -> str:
     if isinstance(value, bool):
         return '1' if value else '0'
     if value is None:
@@ -101,11 +114,8 @@ def dump_compact(value: Any, *, root: bool = True, inside_mode: int = COMMON_MOD
         else:
             value_str = _OBJ_SEP.join(
                 [
-                    dump_compact(
-                        i,
-                        root=False,
-                        inside_mode=INSIDE_ROOT_SEQ_MODE if root else INSIDE_SEQ_MODE,
-                    )
+                    dumps_compact(i, root=False,
+                                  inside_mode=INSIDE_ROOT_SEQ_MODE if root else INSIDE_SEQ_MODE)
                     for i in value
                 ]
             )
@@ -122,8 +132,8 @@ def dump_compact(value: Any, *, root: bool = True, inside_mode: int = COMMON_MOD
             elif isinstance(key, bool):
                 raise ValueError('Dict key cannot be a bool.')
             else:
-                key_str = dump_compact(key, root=False, inside_mode=INSIDE_MAPPING_KEY_MODE)
-            val_str = dump_compact(value, root=False, inside_mode=INSIDE_MAPPING_VALUE_MODE)
+                key_str = dumps_compact(key, root=False, inside_mode=INSIDE_MAPPING_KEY_MODE)
+            val_str = dumps_compact(value, root=False, inside_mode=INSIDE_MAPPING_VALUE_MODE)
 
             pairs.append(f'{key_str}{_MAPPING_KEY_VAL_SEP}{val_str}')
 
@@ -158,7 +168,7 @@ class CompactDecoder:
 
         return result
 
-    def _parse_value(self, inside_mode: int = COMMON_MODE, immutable: bool = False):
+    def _parse_value(self, inside_mode: int = COMMON_MODE, immutable: bool = False) -> Any:
         if self.pos >= len(self.value):
             return None
 
