@@ -19,6 +19,7 @@ _ATOMS = [
     True,
     False,
     None,
+    'new\nline',
     '123',
     'some_string',
     '~',
@@ -97,9 +98,11 @@ def normalize_value(val: Any) -> Any:
 @pytest.mark.parametrize('val', _ATOMS)
 def test_atom_persistence(val):
     encoded = dump_compact(val)
-    assert val == loads_compact(encoded)
+    normalized_value = normalize_value(val)
+    assert normalized_value == loads_compact(encoded)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('val', chain(_IN_LIST(), _INNER_LIST()))
 def test_list_persistence(val):
     encoded = dump_compact(val)
@@ -108,6 +111,7 @@ def test_list_persistence(val):
     assert normalized_value == loads_compact(encoded)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('val', _IN_DICT())
 def test_dict_persistence(val):
     encoded = dump_compact(val)

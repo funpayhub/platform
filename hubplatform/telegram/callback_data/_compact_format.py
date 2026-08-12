@@ -6,7 +6,7 @@ from json import JSONDecoder, JSONDecodeError
 
 
 _OPEN_SPECIAL = frozenset('[{')
-_SPECIAL = frozenset('}]:"')
+_SPECIAL = frozenset('}]:",')
 
 
 def _can_dump_string_without_quotes(
@@ -26,13 +26,13 @@ def _can_dump_string_without_quotes(
 
     try:
         json.loads(value)
-    except json.JSONDecodeError, ValueError:
+    except json.JSONDecodeError:
         return True
     else:
         return False
 
 
-def dump_compact(value: Any, *, root: bool = True, none_edge: bool = False) -> str:
+def dump_compact(value: Any, *, root: bool = True) -> str:
     if isinstance(value, bool):
         return '1' if value else '0'
     if value is None:
@@ -43,8 +43,6 @@ def dump_compact(value: Any, *, root: bool = True, none_edge: bool = False) -> s
     if isinstance(value, str):
         if not value:
             return '^'
-        if value == '~' and none_edge:
-            return '"~"'
         if _can_dump_string_without_quotes(value):
             return json.dumps(value, ensure_ascii=False)[1:-1]
         return json.dumps(value, ensure_ascii=False)
@@ -53,21 +51,13 @@ def dump_compact(value: Any, *, root: bool = True, none_edge: bool = False) -> s
         if len(value) == 1 and value[0] is None:
             value_str = '~'
         elif len(value) == 1 and value[0] == '~':
-            value_str = dump_compact(value[0], none_edge=True)
+            value_str = '"~"'
         else:
             value_str = ':'.join([dump_compact(i, root=False) for i in value])
 
         return f':{value_str}' if root else f'[{value_str}]'
 
     if isinstance(value, dict):
-        if not value:
-            return '{}'
-
-        if len(value) == 1 and None in value:
-            if value[None] is None:
-                return '{~}'
-            return '{:' + dump_compact(value[None], root=False) + '}'
-
         pairs = []
         for key, value in value.items():
             if key is None:
@@ -77,10 +67,9 @@ def dump_compact(value: Any, *, root: bool = True, none_edge: bool = False) -> s
             elif isinstance(key, bool):
                 raise ValueError('Dict key cannot be a bool.')
             else:
-                key_str = dump_compact(key, none_edge=True, root=False)
+                key_str = dump_compact(key, root=False)
 
-            value_str = '~' if value is None else dump_compact(value, none_edge=True, root=False)
-            pairs.append(f'{key_str}:{value_str}')
+            pairs.append(f'{key_str},{dump_compact(value, root=False)}')
 
         return '{' + ':'.join(pairs) + '}'
 
@@ -92,7 +81,7 @@ class CompactFormatDecodeError(ValueError):
 
 
 class CompactDecoder:
-    _BARE_VALUE_STOP_LITERALS = frozenset('}]:')
+    _BARE_VALUE_STOP_LITERALS = frozenset('}]:,')
 
     def __init__(self, value: str) -> None:
         self.value = value
@@ -162,6 +151,7 @@ class CompactDecoder:
                 break
 
             self.pos += 1
+            # todo: add separator (:) check
 
         return result
 
@@ -194,16 +184,13 @@ class CompactDecoder:
         if self._consume_next('}'):
             return {}
 
-        if self._consume_next('~}'):
-            return {None: None}
-
-        self.pos += 1
+        self.pos += 1  # skip {
 
         result = {}
         while True:
             key = self._parse_mapping_key()
-            if self.current_char != ':':
-                self._error(f"Expected key-value separator (':'), got {self.current_char}.")
+            if self.current_char != ',':
+                self._error(f"Expected key-value separator (','), got {self.current_char}.")
             self.pos += 1
 
             if key in result:
@@ -223,12 +210,8 @@ class CompactDecoder:
         return result
 
     def _parse_mapping_key(self) -> Any:
-        if self._consume_next('~:'):
-            self.pos -= 1
-            return None
-
-        if self._consume_next('}'):
-            self._error('Unexpected end of mapping. Expected key.', pos=self.pos + 1)
+        if self.current_char == '}':
+            self._error('Unexpected end of mapping. Expected key.', pos=self.pos - 1)
 
         val = self._parse_value(immutable=True)
         return val
@@ -252,19 +235,19 @@ class CompactDecoder:
         try:
             return json.loads(token)
         except JSONDecodeError:
-            return token
+            try:
+                return json.loads(f'"{token}"')
+            except JSONDecodeError:
+                self._error('Invalid JSON string.')
 
     def _error(self, error_text: str, pos: int | None = None) -> NoReturn:
         raise CompactFormatDecodeError(
             f'Decoding error at {self.pos if pos is None else pos}: {error_text}'
         )
 
-    def _consume_next(self, char: str | None = None) -> bool:
+    def _consume_next(self, char: str) -> bool:
         if self.pos >= len(self.value):
             return False
-        if char is None:
-            self.pos += 2
-            return True
 
         next_char = self.pos + 1
         val = self.value[next_char : next_char + len(char)]
