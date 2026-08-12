@@ -1,51 +1,97 @@
 from __future__ import annotations
 
-import json
 from typing import Any, NoReturn
-from json import JSONDecoder, JSONDecodeError
+from json import JSONDecoder, JSONEncoder, JSONDecodeError
+from collections.abc import Set
 
 
-_OPEN_SPECIAL = frozenset('[{')
-_SPECIAL = frozenset('}]:",')
 _OBJ_SEP = ','
+_COLLECTIONS_OPENINGS = frozenset('[{')
+_SEQ_CLOSING = ']'
+_MAPPING_CLOSING = '}'
 _MAPPING_KEY_VAL_SEP = ':'
 
+_MUST_BE_QUOTED = frozenset(['"', _OBJ_SEP])
+_MUST_BE_QUOTED_MAPPING_KEY = _MUST_BE_QUOTED - {_OBJ_SEP} | {_MAPPING_KEY_VAL_SEP}
+_MUST_BE_QUOTED_MAPPING_VALUE = _MUST_BE_QUOTED | {_MAPPING_CLOSING}
+_MUST_BE_QUOTED_SEQ = _MUST_BE_QUOTED | {_SEQ_CLOSING}
+_MUST_BE_QUOTED_ROOT_SEQ = _MUST_BE_QUOTED
 
-def _can_dump_string_without_quotes(value: str) -> bool:
+_MUST_BE_QUOTED_IF_FIRST = _COLLECTIONS_OPENINGS
+_MUST_BE_QUOTED_IF_FIRST_IN_MAPPING_KEY = _MUST_BE_QUOTED_IF_FIRST | {'}'}
+
+
+INSIDE_SEQ_MODE = 1
+INSIDE_ROOT_SEQ_MODE = 2
+INSIDE_MAPPING_KEY_MODE = 3
+INSIDE_MAPPING_VALUE_MODE = 4
+COMMON_MODE = 5
+
+
+_MUST_BE_QUOTED_BY_MODE = {
+    COMMON_MODE: _MUST_BE_QUOTED,
+    INSIDE_ROOT_SEQ_MODE: _MUST_BE_QUOTED_ROOT_SEQ,
+    INSIDE_SEQ_MODE: _MUST_BE_QUOTED_SEQ,
+    INSIDE_MAPPING_KEY_MODE: _MUST_BE_QUOTED_MAPPING_KEY,
+    INSIDE_MAPPING_VALUE_MODE: _MUST_BE_QUOTED_MAPPING_VALUE,
+}
+
+_MUST_BE_QUOTED_IF_FIRST_BY_MODE = {
+    COMMON_MODE: _MUST_BE_QUOTED_IF_FIRST,
+    INSIDE_ROOT_SEQ_MODE: _MUST_BE_QUOTED_IF_FIRST,
+    INSIDE_SEQ_MODE: _MUST_BE_QUOTED_IF_FIRST,
+    INSIDE_MAPPING_KEY_MODE: _MUST_BE_QUOTED_IF_FIRST_IN_MAPPING_KEY,
+    INSIDE_MAPPING_VALUE_MODE: _MUST_BE_QUOTED_IF_FIRST,
+}
+
+_JSON_ENCODER = JSONEncoder(ensure_ascii=False, allow_nan=False)
+_JSON_DECODER = JSONDecoder()
+
+
+def _can_dump_string_without_quotes(
+    value: str,
+    quote_if_first_is: Set[str] = _COLLECTIONS_OPENINGS,
+    quote_if_contains: Set[str] = _MUST_BE_QUOTED,
+) -> bool:
     if not value:
         return False
 
-    if value[0] in _OPEN_SPECIAL:
+    if value[0] in quote_if_first_is:
         return False
 
-    if any(char in value for char in _SPECIAL):
+    if any(char in value for char in quote_if_contains):
         return False
 
     if value == '^':
         return False
 
     try:
-        json.loads(value)
-    except json.JSONDecodeError:
+        _JSON_DECODER.raw_decode(value)
+    except JSONDecodeError:
         return True
     else:
         return False
 
 
-def dump_compact(value: Any, *, root: bool = True) -> str:
+def dump_compact(value: Any, *, root: bool = True, inside_mode: int = COMMON_MODE) -> str:
     if isinstance(value, bool):
         return '1' if value else '0'
     if value is None:
         return ''
     if type(value) in (int, float):
-        return json.dumps(value, ensure_ascii=False, allow_nan=False)
+        return _JSON_ENCODER.encode(value)
 
     if isinstance(value, str):
         if not value:
             return '^'
-        if _can_dump_string_without_quotes(value):
-            return json.dumps(value, ensure_ascii=False)[1:-1]
-        return json.dumps(value, ensure_ascii=False)
+
+        must_be_quoted = _MUST_BE_QUOTED_BY_MODE[inside_mode]
+        must_be_quoted_if_first = _MUST_BE_QUOTED_IF_FIRST_BY_MODE[inside_mode]
+        if _can_dump_string_without_quotes(
+            value, quote_if_first_is=must_be_quoted_if_first, quote_if_contains=must_be_quoted
+        ):
+            return _JSON_ENCODER.encode(value)[1:-1]
+        return _JSON_ENCODER.encode(value)
 
     if isinstance(value, tuple | list):
         if len(value) == 1 and value[0] is None:
@@ -53,7 +99,16 @@ def dump_compact(value: Any, *, root: bool = True) -> str:
         elif len(value) == 1 and value[0] == '~':
             value_str = '"~"'
         else:
-            value_str = _OBJ_SEP.join([dump_compact(i, root=False) for i in value])
+            value_str = _OBJ_SEP.join(
+                [
+                    dump_compact(
+                        i,
+                        root=False,
+                        inside_mode=INSIDE_ROOT_SEQ_MODE if root else INSIDE_SEQ_MODE,
+                    )
+                    for i in value
+                ]
+            )
 
         return f'{_OBJ_SEP}{value_str}' if root else f'[{value_str}]'
 
@@ -67,9 +122,10 @@ def dump_compact(value: Any, *, root: bool = True) -> str:
             elif isinstance(key, bool):
                 raise ValueError('Dict key cannot be a bool.')
             else:
-                key_str = dump_compact(key, root=False)
+                key_str = dump_compact(key, root=False, inside_mode=INSIDE_MAPPING_KEY_MODE)
+            val_str = dump_compact(value, root=False, inside_mode=INSIDE_MAPPING_VALUE_MODE)
 
-            pairs.append(f'{key_str}{_MAPPING_KEY_VAL_SEP}{dump_compact(value, root=False)}')
+            pairs.append(f'{key_str}{_MAPPING_KEY_VAL_SEP}{val_str}')
 
         return '{' + _OBJ_SEP.join(pairs) + '}'
 
@@ -81,12 +137,11 @@ class CompactFormatDecodeError(ValueError):
 
 
 class CompactDecoder:
-    _BARE_VALUE_STOP_LITERALS = frozenset('}]:,')
+    __slots__ = ('value', 'pos')
 
     def __init__(self, value: str) -> None:
         self.value = value
         self.pos = 0
-        self.json_decoder = JSONDecoder()
 
     def decode(self) -> Any:
         if not self.value:
@@ -103,21 +158,21 @@ class CompactDecoder:
 
         return result
 
-    def _parse_value(self, immutable: bool = False):
-        if self.current_char is None:
+    def _parse_value(self, inside_mode: int = COMMON_MODE, immutable: bool = False):
+        if self.pos >= len(self.value):
             return None
 
         if self.value[self.pos] == '"':
             return self._parse_quoted_string()
         if self.value[self.pos] == '[':
-            return self._parse_sequence(root=False, immutable=immutable)
+            return self._parse_sequence(inside_mode=inside_mode, immutable=immutable)
         if self.value[self.pos] == '{':
-            return self._parse_mapping()
-        return self._parse_bare_value()
+            return self._parse_mapping(inside_mode=inside_mode, immutable=immutable)
+        return self._parse_bare_value(inside_mode=inside_mode, immutable=immutable)
 
     def _parse_quoted_string(self) -> str:
         try:
-            value, end = self.json_decoder.raw_decode(self.value, self.pos)
+            value, end = _JSON_DECODER.raw_decode(self.value, self.pos)
         except JSONDecodeError as e:
             self._error('Not a valid JSON string.', pos=e.pos)
 
@@ -127,68 +182,61 @@ class CompactDecoder:
         self.pos = end
         return value
 
-    def _parse_sequence(
-        self, root: bool = False, immutable: bool = False
-    ) -> list[Any] | tuple[Any]:
-        return (
-            self._parse_root_sequence()
-            if root
-            else self._parse_non_root_sequence(immutable=immutable)
-        )
-
     def _parse_root_sequence(self) -> list[Any]:
-        if self.current_char is None:
+        if self.pos >= len(self.value):
             return []
 
-        if len(self.value) == 2 and self.current_char == '~':
+        if len(self.value) == 2 and self.value[self.pos] == '~':
             self.pos += 1
             return [None]
 
         result = []
         while True:
-            result.append(self._parse_value())
-            if self.current_char is None:
+            result.append(self._parse_value(inside_mode=INSIDE_ROOT_SEQ_MODE))
+            if self.pos >= len(self.value):
                 break
 
-            if self.current_char != _OBJ_SEP:
+            if self.value[self.pos] != _OBJ_SEP:
                 self._error(
-                    f'Expected obj separator ({_OBJ_SEP!r}), got {self.current_char!r}',
-                    self.pos
+                    f'Expected obj separator ({_OBJ_SEP!r}), got {self.value[self.pos]!r}',
+                    self.pos,
                 )
 
             self.pos += 1
 
         return result
 
-    def _parse_non_root_sequence(self, immutable: bool = False) -> list[Any] | tuple[Any, ...]:
+    def _parse_sequence(
+        self, inside_mode: int = COMMON_MODE, immutable: bool = False
+    ) -> list[Any] | tuple[Any, ...]:
         if self._consume_next(']'):  # []
-            return [] if not immutable else ()
+            return () if immutable else []
 
         if self._consume_next('~]'):
-            return [None] if not immutable else (None,)
+            return (None,) if immutable else [None]
 
         result = []
 
         self.pos += 1
         while True:
-            result.append(self._parse_value(immutable=immutable))
-            if self.current_char is None:
+            result.append(self._parse_value(inside_mode=INSIDE_SEQ_MODE, immutable=immutable))
+            if self.pos >= len(self.value):
                 self._error("Unterminated sequence. Expected end of sequence (']'), but got EOF.")
 
-            if self.current_char == ']':
+            curr_char = self.value[self.pos]
+            if curr_char == ']':
                 break
 
-            if  self.current_char != _OBJ_SEP:
-                self._error(
-                    f'Expected obj separator ({_OBJ_SEP!r}), got {self.current_char!r}',
-                    self.pos
-                )
+            if curr_char != _OBJ_SEP:
+                self._error(f'Expected obj separator ({_OBJ_SEP!r}), got {curr_char!r}', self.pos)
             self.pos += 1
 
         self.pos += 1
-        return result if not immutable else tuple(result)
+        return tuple(result) if immutable else result
 
-    def _parse_mapping(self) -> dict[Any, Any]:
+    def _parse_mapping(
+        self, inside_mode: int = COMMON_MODE, immutable: bool = False
+    ) -> dict[Any, Any]:
         if self._consume_next('}'):
             return {}
 
@@ -197,45 +245,57 @@ class CompactDecoder:
         result = {}
         while True:
             key = self._parse_mapping_key()
-            if self.current_char != _MAPPING_KEY_VAL_SEP:
+            curr_char = self.value[self.pos]
+            if curr_char != _MAPPING_KEY_VAL_SEP:
                 self._error(
-                    f"Expected key-value separator ({_MAPPING_KEY_VAL_SEP!r}), "
-                    f"got {self.current_char!r}."
+                    f'Expected key-value separator ({_MAPPING_KEY_VAL_SEP!r}), got {curr_char!r}.'
                 )
             self.pos += 1
 
             if key in result:
                 self._error('Key duplicate.')  # todo
 
-            value = self._parse_value()
+            value = self._parse_value(inside_mode=INSIDE_MAPPING_VALUE_MODE, immutable=immutable)
             result[key] = value
 
-            if self.current_char == '}':
+            if self.pos >= len(self.value):
+                self._error(
+                    f'Unexpected EOF. '
+                    f"Expected end of mapping ('}}') or obj separator ({_OBJ_SEP!r})"
+                )
+
+            curr_char = self.value[self.pos]
+            if curr_char == '}':
                 break
 
-            if self.current_char != _OBJ_SEP:
-                self._error(
-                    f'Expected obj separator ({_OBJ_SEP!r}), got {self.current_char!r}',
-                    self.pos
-                )
+            if curr_char != _OBJ_SEP:
+                self._error(f'Expected obj separator ({_OBJ_SEP!r}), got {curr_char!r}', self.pos)
             self.pos += 1
 
         self.pos += 1
         return result
 
     def _parse_mapping_key(self) -> Any:
-        if self.current_char == '}':
+        if self.pos >= len(self.value):
+            self._error('Unexpected EOF. Expected mapping key.')
+
+        if self.value[self.pos] == '}':
             self._error('Unexpected end of mapping. Expected key.', pos=self.pos - 1)
 
-        val = self._parse_value(immutable=True)
+        start = self.pos
+        val = self._parse_value(inside_mode=INSIDE_MAPPING_KEY_MODE, immutable=True)
+
+        if isinstance(val, dict):
+            self._error('Mapping cannot be a key in mapping.', pos=start)
+
         return val
 
-    def _parse_bare_value(self) -> Any:
+    def _parse_bare_value(self, inside_mode: int = COMMON_MODE, immutable: bool = False) -> Any:
         start = self.pos
 
         while self.pos < len(self.value):
             char = self.value[self.pos]
-            if char in self._BARE_VALUE_STOP_LITERALS:
+            if char in _MUST_BE_QUOTED_BY_MODE[inside_mode]:
                 break
 
             self.pos += 1
@@ -247,10 +307,10 @@ class CompactDecoder:
             return ''
 
         try:
-            return json.loads(token)
+            return _JSON_DECODER.decode(token)
         except JSONDecodeError:
             try:
-                return json.loads(f'"{token}"')
+                return _JSON_DECODER.decode(f'"{token}"')
             except JSONDecodeError:
                 self._error('Invalid JSON string.')
 
@@ -263,27 +323,12 @@ class CompactDecoder:
         if self.pos >= len(self.value):
             return False
 
-        next_char = self.pos + 1
-        val = self.value[next_char : next_char + len(char)]
-        if val == char:
+        if self.value.startswith(char, self.pos + 1):
             self.pos += len(char) + 1
             return True
         return False
-
-    @property
-    def current_char(self) -> str | None:
-        if self.pos >= len(self.value):
-            return None
-        return self.value[self.pos]
 
 
 def loads_compact(value: str) -> Any:
     decoder = CompactDecoder(value)
     return decoder.decode()
-
-
-data = [123, -321]
-encoded = dump_compact(data)
-print(encoded)
-decoded = loads_compact(encoded)
-print(decoded)
