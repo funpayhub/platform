@@ -82,7 +82,7 @@ def setup_default_app_context(app_context: AppContext | None) -> AppContext:
 
     app_context.check_items.update(
         {
-            'hash_service': lambda i: isinstance(i, HashService) # todo: add is_ready check
+            'hash_service': lambda i: isinstance(i, HashService)  # todo: add is_ready check
         }
     )
     return app_context
