@@ -13,9 +13,10 @@ __all__ = [
     'is_positional_callback_data',
 ]
 
-
+import zlib
+import base64
 import string
-from typing import TYPE_CHECKING, Any, Self, ClassVar, Annotated
+from typing import TYPE_CHECKING, Any, Self, Final, ClassVar, Annotated
 from abc import ABC, abstractmethod
 
 from pydantic import Field, BaseModel, AfterValidator
@@ -39,7 +40,97 @@ if TYPE_CHECKING:
     from .filter import CallbackQueryFilter
 
 
-_ALLOWED_IDENTIFIER_SYMBOLS = frozenset(string.ascii_letters + string.digits + '._-')
+_ALLOWED_IDENTIFIER_SYMBOLS = frozenset(string.ascii_lowercase + '_.')
+_VERSIONS: Final[frozenset[str]] = frozenset('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+_RESERVED_VERSION: Final[str] = '0'
+_DEFAULT_DICT_VERSION: str = _RESERVED_VERSION
+_COMPRESSION_DICTS: dict[str, bytes] = {
+    '0': b'',
+}
+_COMPRESSION_CFG_LOCKED: bool = False
+
+
+def _check_version(version: str, check_reserved: bool = False) -> None:
+    if check_reserved and version == _RESERVED_VERSION:
+        raise ValueError(f'Version {version!r} is reserved.')
+    if version not in _VERSIONS:
+        raise ValueError('Not a valid version. Valid version is a single character 1-9A-Z.')
+
+
+def set_compression_dict(value: bytes, version: str) -> None:
+    global _COMPRESSION_DICTS
+    global _COMPRESSION_CFG_LOCKED
+
+    if _COMPRESSION_CFG_LOCKED:
+        raise RuntimeError('Compression configuration locked.')
+
+    if not isinstance(value, bytes):
+        raise ValueError('Compression dict must be a bytes.')
+
+    if len(value) > 32768:
+        raise ValueError(f'Compression dict is too large: {len(value)} > 32768.')
+
+    _check_version(version, check_reserved=True)
+    _COMPRESSION_DICTS[version] = value
+
+
+def lock_compression_cfg() -> None:
+    global _COMPRESSION_CFG_LOCKED
+    _COMPRESSION_CFG_LOCKED = True
+
+
+def get_compression_dict(version: str, fallback_reserved: bool = False) -> bytes:
+    _check_version(version)
+    if version not in _COMPRESSION_DICTS:
+        if fallback_reserved:
+            return _COMPRESSION_DICTS[_RESERVED_VERSION]
+        raise KeyError(f'Compression dict with version {version} not found.')
+    return _COMPRESSION_DICTS[version]
+
+
+def set_default_compression_version(version: str) -> None:
+    global _DEFAULT_DICT_VERSION
+    if _COMPRESSION_CFG_LOCKED:
+        raise RuntimeError('Compression configuration locked.')
+
+    _check_version(version)
+    _DEFAULT_DICT_VERSION = version
+
+
+def compress_bytes(
+    data: bytes, compression_version: str | None = None, fallback_reserved: bool = True
+) -> bytes:
+    version = _DEFAULT_DICT_VERSION if compression_version is None else compression_version
+    _check_version(version)
+    compression_dict = get_compression_dict(version, fallback_reserved=fallback_reserved)
+
+    compressor = zlib.compressobj(
+        level=9,
+        wbits=-15,
+        zdict=compression_dict,
+    )
+    result = compressor.compress(data) + compressor.flush()
+
+    return version.encode('utf-8') + base64.b85encode(result)
+
+
+def decompress(data: str) -> str:
+    if not data:
+        return ''
+
+    version, payload = data[0], data[1:]
+    if version not in _VERSIONS:
+        return data
+
+    decoded = base64.b85decode(payload)
+    return (
+        zlib.decompressobj(
+            wbits=-15,
+            zdict=get_compression_dict(version, fallback_reserved=False),
+        )
+        .decompress(decoded)
+        .decode('utf-8')
+    )
 
 
 def validate_identifier(identifier: str) -> str:
@@ -71,7 +162,12 @@ class _CallbackDataEnvelope(BaseModel, ABC):
     identifier: Annotated[str, AfterValidator(validate_identifier)]
 
     @abstractmethod
-    def _pack(self) -> str:
+    def _pack(
+        self,
+        compress: bool = True,
+        compression_version: str | None = None,
+        fallback_reserved: bool = True,
+    ) -> str:
         """Serialize the envelope using its concrete wire format."""
         ...
 
@@ -81,14 +177,23 @@ class _CallbackDataEnvelope(BaseModel, ABC):
         """Deserialize an envelope from its concrete wire format."""
         ...
 
-    def pack(self) -> str:
+    def pack(
+        self,
+        compress: bool = True,
+        compression_version: str | None = None,
+        fallback_reserved: bool = True,
+    ) -> str:
         """Serialize the envelope to a callback-data string.
 
         :return: Packed callback data.
         :raises CallbackDataPackError: If serialization fails.
         """
         try:
-            return self._pack()
+            return self._pack(
+                compress=compress,
+                compression_version=compression_version,
+                fallback_reserved=fallback_reserved,
+            )
         except CallbackDataPackError:
             raise
         except Exception as e:
@@ -116,15 +221,34 @@ class KeywordCallbackDataEnvelope(_CallbackDataEnvelope):
     fields: dict[str, Any] = Field(default_factory=dict)
     context: dict[str, Any] = Field(default_factory=dict)
 
-    def _pack(self) -> str:
+    def _pack(
+        self,
+        compress: bool = True,
+        compression_version: str | None = None,
+        fallback_reserved: bool = True,
+    ) -> str:
         data = self.model_dump(mode='json', fallback=pydantic_fallback_serializer)
         data_str = dumps_compact([data['fields'], data['context']], root=False)
-        return '!' + self.identifier + data_str
+        result = '!' + self.identifier + data_str
+        if not compress:
+            return result
+
+        result_bytes = result.encode('utf-8')
+        if len(result_bytes) < 64:
+            return result
+
+        return compress_bytes(
+            result_bytes,
+            compression_version=compression_version,
+            fallback_reserved=fallback_reserved,
+        ).decode('utf-8')
 
     @classmethod
     def _unpack(cls, data: str) -> KeywordCallbackDataEnvelope:
         if not is_keyword_callback_data(data):
             raise InvalidCallbackDataFormatError('Not a keyword callback data format.')
+
+        data = decompress(data)
 
         identifier, sep, data = data.partition('[')
         fields, context = loads_compact(sep + data)
@@ -142,24 +266,37 @@ class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
 
     fields: list[Any] = Field(default_factory=list)
 
-    def _pack(self) -> str:
+    def _pack(
+        self,
+        compress: bool = True,
+        compression_version: str | None = None,
+        fallback_reserved: bool = True,
+    ) -> str:
         fields = self.model_dump(mode='json')['fields']
         result = self.identifier
         if fields:
             fields_str = dumps_compact(fields)
             result += fields_str
-        return result
 
-        # length = len(result.encode('utf-8'))
-        # if length > 64:
-        #     raise CallbackDataTooLongError(
-        #         f'Final callback data length ({length}) is above max (64).'
-        #     )
+        if not compress:
+            return result
+
+        result_bytes = result.encode('utf-8')
+        if len(result_bytes) < 64:
+            return result
+
+        return compress_bytes(
+            result_bytes,
+            compression_version=compression_version,
+            fallback_reserved=fallback_reserved,
+        ).decode('utf-8')
 
     @classmethod
     def _unpack(cls, data: str) -> PositionalCallbackDataEnvelope:
         if not is_positional_callback_data(data):
             raise InvalidCallbackDataFormatError('Not a positional callback data format.')
+
+        data = decompress(data)
 
         identifier, sep, fields = data.partition(',')
         return PositionalCallbackDataEnvelope(
@@ -219,6 +356,8 @@ def parse_callback_data(data: str | CallbackQuery | CallbackDataEnvelope) -> Cal
 
     if not data_str:
         raise CallbackDataUnpackError('Callback data string is empty.')
+
+    data_str = decompress(data_str)
 
     envelope: CallbackDataEnvelope
     if is_positional_callback_data(data_str):

@@ -135,8 +135,7 @@ def test_pack_and_unpack_keyword_callback_with_fields() -> None:
     packed = callback.pack()
 
     assert packed == (
-        '!f[{integer:1,floating:2.5,text:"x,y%",boolean:1,'
-        'items:[1,x,0],mapping:{n:1,s:x,b:1}},{}]'
+        '!f[{integer:1,floating:2.5,text:"x,y%",boolean:1,items:[1,x,0],mapping:{n:1,s:x,b:1}},{}]'
     )
     assert CallbackDataWithFields.unpack(packed) == callback
 
