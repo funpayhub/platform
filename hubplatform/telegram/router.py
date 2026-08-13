@@ -12,7 +12,7 @@ from ._restricted_aiogram_observers import RestrictedCallbackQueryObserver
 
 
 def _check_router_type(router: Any) -> None:
-    if isinstance(router, Router):
+    if not isinstance(router, Router):
         raise TypeError(
             '`aiogram.Router` is not supported by Hub Platform. '
             'Use `hubplatform.telegram.Router` instead. '
