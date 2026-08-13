@@ -23,8 +23,8 @@ def _check_filter_type(filter_: Any) -> None:
 
 class RestrictedCallbackQueryObserver(TelegramEventObserver):
     def filter(self, *filters: CallbackType) -> None:
-        for f in filters:
-            _check_filter_type(f)
+        for filter_ in filters:
+            _check_filter_type(filter_)
         return super().filter(*filters)
 
     def register(

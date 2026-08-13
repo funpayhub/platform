@@ -31,8 +31,3 @@ class Router(AiogramRouter):
     def include_router(self, router: AiogramRouter) -> Router:
         _check_router_type(router)
         return super().include_router(router)
-
-    def include_routers(self, *routers: AiogramRouter) -> None:
-        for router in routers:
-            _check_router_type(router)
-        super().include_routers(*routers)
