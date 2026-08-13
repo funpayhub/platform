@@ -129,10 +129,14 @@ class CompressionCodecsRegistry:
         if ensure_not_exists and version in self._codecs:
             raise VersionAlreadyExistsError(f'Version {version!r} already exists.')
 
-    def add_codec(self, cfg: CompressionCodec, ensure_not_exists: bool = True) -> None:
+    def add_codec(
+        self, cfg: CompressionCodec, ensure_not_exists: bool = True, set_default: bool = False
+    ) -> None:
         self.check_registry_locked()
         self.check_version(cfg.version, check_reserved=True, ensure_not_exists=ensure_not_exists)
         self._codecs[cfg.version] = cfg
+        if set_default:
+            self.set_default_codec_version(cfg.version)
 
     def get_codec(self, version: str, fallback_reserved: bool = False) -> CompressionCodec:
         try:

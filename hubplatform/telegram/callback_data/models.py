@@ -414,15 +414,32 @@ class CallbackData(BaseModel):
                 f'{cls.__name__!r} from envelope: {e}.'
             ) from e
 
-    def pack(self) -> str:
+    def pack(
+        self,
+        *,
+        compress: bool = True,
+        compression_version: str | None = None,
+        fallback_reserved: bool = True,
+    ) -> str:
         """Serialize the payload in keyword format, preserving context.
 
         :return: Packed callback data.
         :raises CallbackDataPackError: If serialization fails.
         """
-        return self.to_keyword_envelope().pack()
+        return self.to_keyword_envelope().pack(
+            compress=compress,
+            compression_version=compression_version,
+            fallback_reserved=fallback_reserved,
+        )
 
-    def pack_compact(self, *, drop_context: bool = False) -> str:
+    def pack_compact(
+        self,
+        *,
+        drop_context: bool = False,
+        compress: bool = True,
+        compression_version: str | None = None,
+        fallback_reserved: bool = True,
+    ) -> str:
         """Serialize the payload in compact positional format.
 
         :param drop_context: Discard non-empty context before serialization.
@@ -431,7 +448,11 @@ class CallbackData(BaseModel):
             ``drop_context`` is false.
         :raises CallbackDataPackError: If serialization fails.
         """
-        return self.to_positional_envelope(drop_context=drop_context).pack()
+        return self.to_positional_envelope(drop_context=drop_context).pack(
+            compress=compress,
+            compression_version=compression_version,
+            fallback_reserved=fallback_reserved,
+        )
 
     @classmethod
     def unpack(cls, data: str | CallbackDataEnvelope | CallbackQuery) -> Self:

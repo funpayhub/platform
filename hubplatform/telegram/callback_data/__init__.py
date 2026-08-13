@@ -12,6 +12,7 @@ __all__ = [
     'CallbackQueryFilter',
     'is_positional_callback_data',
     'is_keyword_callback_data',
+    'global_compression_codecs_registry',
 ]
 
 from .filter import CallbackQueryFilter
@@ -25,4 +26,5 @@ from .models import (
     _CallbackDataEnvelope,
     is_keyword_callback_data,
     is_positional_callback_data,
+    global_compression_codecs_registry,
 )
