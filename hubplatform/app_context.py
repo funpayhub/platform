@@ -9,7 +9,7 @@ __all__ = [
 from typing import Any, Self
 from collections.abc import Callable, Iterator, MutableMapping
 
-from telegram.callback_data.hash import HashService
+from hubplatform.telegram.callback_data.hash import HashService
 
 
 class AppContext(MutableMapping[str, Any]):
