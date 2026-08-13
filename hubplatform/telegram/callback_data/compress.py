@@ -7,14 +7,8 @@ __all__ = [
     'NotAValidVersionError',
     'VersionAlreadyExistsError',
     'VersionDoesNotExistError',
-    'check_version',
-    'CompressionConfig',
-    'add_compression_config',
-    'lock_compression_config',
-    'get_compression_config',
-    'set_default_compression_config_version',
-    'compress',
-    'decompress'
+    'CompressionCodec',
+    'CompressionCodecsRegistry',
 ]
 
 
@@ -22,12 +16,7 @@ import zlib
 import base64
 from typing import Final
 from dataclasses import dataclass
-
-
-_VERSIONS: Final[frozenset[str]] = frozenset('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-_RESERVED_COMPRESSION_CONFIG_VERSION: Final[str] = '0'
-_DEFAULT_COMPRESSION_CONFIG_VERSION: str = _RESERVED_COMPRESSION_CONFIG_VERSION
-_COMPRESSION_CFG_LOCKED: bool = False
+from abc import ABCMeta, abstractmethod
 
 
 class VersionError(ValueError): ...
@@ -45,123 +34,143 @@ class VersionAlreadyExistsError(VersionError): ...
 class VersionDoesNotExistError(VersionError): ...
 
 
-def check_version(
-    version: str,
-    check_reserved: bool = False,
-    ensure_exists: bool = False,
-    ensure_not_exists: bool = False,
-) -> None:
-    if check_reserved and version == _RESERVED_COMPRESSION_CONFIG_VERSION:
-        raise VersionReservedError(f'Version {version!r} is reserved.')
-    if version not in _VERSIONS:
-        raise NotAValidVersionError(
-            'Not a valid version. Valid version is a single character 1-9A-Z.'
-        )
-    if ensure_exists and version not in _COMPRESSION_CONFIGS:
-        raise VersionDoesNotExistError(f'Version {version!r} does not exist.')
-    if ensure_not_exists and version in _COMPRESSION_CONFIGS:
-        raise VersionAlreadyExistsError(f'Version {version!r} already exists.')
-
-
-@dataclass(frozen=True)
-class CompressionConfig:
+@dataclass(frozen=True, kw_only=True)
+class CompressionCodec(metaclass=ABCMeta):
     version: str
+
+    @abstractmethod
+    def compress(self, data: str | bytes) -> bytes:
+        pass
+
+    @abstractmethod
+    def decompress(self, data: str) -> str:
+        pass
+
+
+@dataclass(frozen=True, kw_only=True)
+class ZLibBase85CompressionCodec(CompressionCodec):
     compression_dict: bytes
 
     def __post_init__(self) -> None:
-        check_version(self.version, check_reserved=False)
-
         if not isinstance(self.compression_dict, bytes):
-            raise TypeError('Compression dict must be a bytes.')
+            raise TypeError('Compression dict must be bytes.')
 
         if len(self.compression_dict) > 32768:
             raise ValueError(
                 f'Compression dict is too large ({len(self.compression_dict)} > 32768).'
             )
 
+    def compress(self, data: str | bytes) -> bytes:
+        compressor = zlib.compressobj(level=9, wbits=-15, zdict=self.compression_dict)
+        data = data.encode('utf-8') if isinstance(data, str) else data
+        result = compressor.compress(data) + compressor.flush()
+        return base64.b85encode(result)
 
-_COMPRESSION_CONFIGS: dict[str, CompressionConfig] = {
-    '0': CompressionConfig(version='0', compression_dict=b''),
-}
+    def decompress(self, data: str) -> str:
+        if not data:
+            return ''
 
-
-def _check_config_locked() -> None:
-    if _COMPRESSION_CFG_LOCKED:
-        raise RuntimeError('Compression configuration locked.')
-
-
-def add_compression_config(cfg: CompressionConfig, ensure_not_exists: bool = True) -> None:
-    global _COMPRESSION_CONFIGS
-
-    _check_config_locked()
-    check_version(cfg.version, check_reserved=True, ensure_not_exists=ensure_not_exists)
-    _COMPRESSION_CONFIGS[cfg.version] = cfg
+        decoded = base64.b85decode(data)
+        decompress_obj = zlib.decompressobj(wbits=-15, zdict=self.compression_dict)
+        return (decompress_obj.decompress(decoded) + decompress_obj.flush()).decode('utf-8')
 
 
-def lock_compression_config() -> None:
-    global _COMPRESSION_CFG_LOCKED
-    _COMPRESSION_CFG_LOCKED = True
+class CompressionCodecsRegistry:
+    def __init__(
+        self,
+        reserved_codec: CompressionCodec,
+    ) -> None:
+        self._versions: Final[frozenset[str]] = frozenset('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')
 
+        if reserved_codec.version not in self._versions:
+            raise ValueError('`reserved_version` must be on of A-Z0-9.')
 
-def get_compression_config(version: str, fallback_reserved: bool = False) -> CompressionConfig:
-    try:
-        check_version(version, ensure_exists=True)
-    except VersionDoesNotExistError:
-        if fallback_reserved:
-            return _COMPRESSION_CONFIGS[_RESERVED_COMPRESSION_CONFIG_VERSION]
-        raise
-    return _COMPRESSION_CONFIGS[version]
+        self._reserved_codec: Final[CompressionCodec] = reserved_codec
+        self._default_codec_version = reserved_codec.version
+        self._locked = False
+        self._codecs: dict[str, CompressionCodec] = {reserved_codec.version: reserved_codec}
 
+    @property
+    def versions(self) -> frozenset[str]:
+        return self._versions
 
-def set_default_compression_config_version(version: str) -> None:
-    global _DEFAULT_COMPRESSION_CONFIG_VERSION
+    @property
+    def reserved_version(self) -> CompressionCodec:
+        return self._reserved_codec
 
-    _check_config_locked()
-    check_version(version, ensure_exists=True)
-    _DEFAULT_COMPRESSION_CONFIG_VERSION = version
+    @property
+    def default_codec_version(self) -> str:
+        return self._default_codec_version
 
+    @property
+    def locked(self) -> bool:
+        return self._locked
 
-def compress(
-    data: str | bytes, version: str | None = None, fallback_reserved: bool = True
-) -> bytes:
-    if version is not None:
+    def check_registry_locked(self) -> None:
+        if self._locked:
+            raise RuntimeError('Compression configuration locked.')
+
+    def lock(self) -> None:
+        self._locked = True
+
+    def check_version(
+        self,
+        version: str,
+        check_reserved: bool = False,
+        ensure_exists: bool = False,
+        ensure_not_exists: bool = False,
+    ) -> None:
+        if check_reserved and version == self._reserved_codec.version:
+            raise VersionReservedError(f'Version {version!r} is reserved.')
+        if version not in self._versions:
+            raise NotAValidVersionError('Not a valid version.')
+        if ensure_exists and version not in self._codecs:
+            raise VersionDoesNotExistError(f'Version {version!r} does not exist.')
+        if ensure_not_exists and version in self._codecs:
+            raise VersionAlreadyExistsError(f'Version {version!r} already exists.')
+
+    def add_codec(self, cfg: CompressionCodec, ensure_not_exists: bool = True) -> None:
+        self.check_registry_locked()
+        self.check_version(cfg.version, check_reserved=True, ensure_not_exists=ensure_not_exists)
+        self._codecs[cfg.version] = cfg
+
+    def get_codec(self, version: str, fallback_reserved: bool = False) -> CompressionCodec:
         try:
-            check_version(version, ensure_exists=True)
+            self.check_version(version, ensure_exists=True)
         except VersionDoesNotExistError:
-            if not fallback_reserved:
-                raise
-            version = _RESERVED_COMPRESSION_CONFIG_VERSION
-    else:
-        version = _DEFAULT_COMPRESSION_CONFIG_VERSION
+            if fallback_reserved:
+                return self._reserved_codec
+            raise
+        return self._codecs[version]
 
-    compression_config = get_compression_config(version, fallback_reserved=False)
+    def set_default_codec_version(self, version: str) -> None:
+        self.check_registry_locked()
+        self.check_version(version, ensure_exists=True)
+        self._default_codec_version = version
 
-    compressor = zlib.compressobj(
-        level=9,
-        wbits=-15,
-        zdict=compression_config.compression_dict,
-    )
-    data = data.encode('utf-8') if isinstance(data, str) else data
-    result = compressor.compress(data) + compressor.flush()
+    def compress(
+        self, data: str | bytes, version: str | None = None, fallback_reserved: bool = False
+    ) -> bytes:
+        if version is not None:
+            try:
+                self.check_version(version, ensure_exists=True)
+            except VersionDoesNotExistError:
+                if not fallback_reserved:
+                    raise
+                version = self._reserved_codec.version
+        else:
+            version = self._default_codec_version
 
-    return compression_config.version.encode('utf-8') + base64.b85encode(result)
+        cfg = self.get_codec(version, fallback_reserved=False)
+        return cfg.version.encode('utf-8') + cfg.compress(data)
 
+    def decompress(self, data: str | bytes) -> str:
+        data = data.decode('utf-8') if isinstance(data, bytes) else data
+        if not data:
+            return data
+        version, payload = data[0], data[1:]
+        if version not in self._versions:
+            return data
 
-def decompress(data: str | bytes) -> str:
-    data = data.decode('utf-8') if isinstance(data, bytes) else data
-    if not data:
-        return ''
-
-    version, payload = data[0], data[1:]
-    if version not in _VERSIONS:
-        return data
-
-    compression_config = get_compression_config(version)
-    decoded = base64.b85decode(payload)
-
-    decompress_obj = zlib.decompressobj(
-            wbits=-15,
-            zdict=compression_config.compression_dict,
-        )
-
-    return (decompress_obj.decompress(decoded) + decompress_obj.flush()).decode('utf-8')
+        cfg = self.get_codec(version)
+        return cfg.decompress(payload)

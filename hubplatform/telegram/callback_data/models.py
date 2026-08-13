@@ -11,6 +11,7 @@ __all__ = [
     'validate_identifier',
     'is_keyword_callback_data',
     'is_positional_callback_data',
+    'global_compression_codecs_registry',
 ]
 
 import string
@@ -31,14 +32,21 @@ from hubplatform.exceptions.telegram.callback_data import (
     PositionalContextNotSupportedError,
 )
 
+from .compress import CompressionCodecsRegistry, ZLibBase85CompressionCodec
 from .compact_encoder import dumps_compact, loads_compact
-from .compress import compress as compress_, decompress
 
 
 if TYPE_CHECKING:
     from .filter import CallbackQueryFilter
 
 _ALLOWED_IDENTIFIER_SYMBOLS = frozenset(string.ascii_lowercase + '_.')
+_GLOBAL_COMPRESSION_CODECS_REGISTRY = CompressionCodecsRegistry(
+    reserved_codec=ZLibBase85CompressionCodec(version='0', compression_dict=b'')
+)
+
+
+def global_compression_codecs_registry() -> CompressionCodecsRegistry:
+    return _GLOBAL_COMPRESSION_CODECS_REGISTRY
 
 
 def validate_identifier(identifier: str) -> str:
@@ -72,9 +80,9 @@ class _CallbackDataEnvelope(BaseModel, ABC):
     @abstractmethod
     def _pack(
         self,
-        compress: bool = True,
-        compression_version: str | None = None,
-        fallback_reserved: bool = True,
+        compress: bool,
+        compression_version: str | None,
+        fallback_reserved: bool,
     ) -> str:
         """Serialize the envelope using its concrete wire format."""
         ...
@@ -88,6 +96,7 @@ class _CallbackDataEnvelope(BaseModel, ABC):
     def pack(
         self,
         compress: bool = True,
+        *,
         compression_version: str | None = None,
         fallback_reserved: bool = True,
     ) -> str:
@@ -131,9 +140,9 @@ class KeywordCallbackDataEnvelope(_CallbackDataEnvelope):
 
     def _pack(
         self,
-        compress: bool = True,
-        compression_version: str | None = None,
-        fallback_reserved: bool = True,
+        compress: bool,
+        compression_version: str | None,
+        fallback_reserved: bool,
     ) -> str:
         data = self.model_dump(mode='json', fallback=pydantic_fallback_serializer)
         data_str = dumps_compact([data['fields'], data['context']], root=False)
@@ -145,7 +154,7 @@ class KeywordCallbackDataEnvelope(_CallbackDataEnvelope):
         if len(result_bytes) < 64:
             return result
 
-        return compress_(
+        return _GLOBAL_COMPRESSION_CODECS_REGISTRY.compress(
             result_bytes,
             version=compression_version,
             fallback_reserved=fallback_reserved,
@@ -156,7 +165,7 @@ class KeywordCallbackDataEnvelope(_CallbackDataEnvelope):
         if not is_keyword_callback_data(data):
             raise InvalidCallbackDataFormatError('Not a keyword callback data format.')
 
-        data = decompress(data)
+        data = _GLOBAL_COMPRESSION_CODECS_REGISTRY.decompress(data)
 
         identifier, sep, data = data.partition('[')
         fields, context = loads_compact(sep + data)
@@ -176,9 +185,9 @@ class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
 
     def _pack(
         self,
-        compress: bool = True,
-        compression_version: str | None = None,
-        fallback_reserved: bool = True,
+        compress: bool,
+        compression_version: str | None,
+        fallback_reserved: bool,
     ) -> str:
         fields = self.model_dump(mode='json')['fields']
         result = self.identifier
@@ -193,7 +202,7 @@ class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
         if len(result_bytes) < 64:
             return result
 
-        return compress_(
+        return _GLOBAL_COMPRESSION_CODECS_REGISTRY.compress(
             result_bytes,
             version=compression_version,
             fallback_reserved=fallback_reserved,
@@ -204,7 +213,7 @@ class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
         if not is_positional_callback_data(data):
             raise InvalidCallbackDataFormatError('Not a positional callback data format.')
 
-        data = decompress(data)
+        data = _GLOBAL_COMPRESSION_CODECS_REGISTRY.decompress(data)
 
         identifier, sep, fields = data.partition(',')
         return PositionalCallbackDataEnvelope(
@@ -265,7 +274,7 @@ def parse_callback_data(data: str | CallbackQuery | CallbackDataEnvelope) -> Cal
     if not data_str:
         raise CallbackDataUnpackError('Callback data string is empty.')
 
-    data_str = decompress(data_str)
+    data_str = _GLOBAL_COMPRESSION_CODECS_REGISTRY.decompress(data_str)
 
     envelope: CallbackDataEnvelope
     if is_positional_callback_data(data_str):
