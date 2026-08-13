@@ -104,4 +104,5 @@ def global_hash_service() -> HashService:
     global _global_hash_service
     if _global_hash_service is None:
         _global_hash_service = HashService()
+        _global_hash_service.storage.setup()
     return _global_hash_service

@@ -15,7 +15,7 @@ from aiogram.fsm.storage.base import BaseStorage, BaseEventIsolation
 from hubplatform.exceptions import BadHashError
 from hubplatform.exceptions.telegram import CallbackDataUnpackError
 from hubplatform.telegram.callback_data import parse_callback_data
-from hubplatform.telegram.callback_data.hash import HashService
+from hubplatform.telegram.callback_data.hash.service import HashService, global_hash_service
 
 from .router import Router
 
@@ -35,7 +35,7 @@ async def parse_callback_data_middleware(
     if hash_service.is_hash(event.data):
         try:
             unhashed = hash_service.unhash(event.data).query
-            event.data = unhashed
+            object.__setattr__(event, 'data', unhashed)
         except BadHashError:
             return None  # todo: Error event?
 
@@ -56,6 +56,7 @@ class Dispatcher(AiogramDispatcher, Router):
         events_isolation: BaseEventIsolation | None = None,
         disable_fsm: bool = False,
         name: str | None = None,
+        hash_service: HashService | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(
@@ -64,6 +65,7 @@ class Dispatcher(AiogramDispatcher, Router):
             events_isolation=events_isolation,
             disable_fsm=disable_fsm,
             name=name,
+            hash_service=hash_service if hash_service is not None else global_hash_service(),
             **kwargs,
         )
 
