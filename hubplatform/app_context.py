@@ -3,10 +3,13 @@ from __future__ import annotations
 
 __all__ = [
     'AppContext',
+    'setup_default_app_context',
 ]
 
 from typing import Any, Self
 from collections.abc import Callable, Iterator, MutableMapping
+
+from telegram.callback_data.hash import HashService
 
 
 class AppContext(MutableMapping[str, Any]):
@@ -72,3 +75,14 @@ class AppContext(MutableMapping[str, Any]):
 
     def __getattr__(self, item: str) -> Any:
         return self._data[item]
+
+
+def setup_default_app_context(app_context: AppContext | None) -> AppContext:
+    app_context = app_context if app_context is not None else AppContext()
+
+    app_context.check_items.update(
+        {
+            'hash_service': lambda i: isinstance(i, HashService) # todo: add is_ready check
+        }
+    )
+    return app_context
