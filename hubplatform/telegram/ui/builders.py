@@ -20,15 +20,15 @@ from .types import Menu, ButtonSpec, MenuContext, ButtonContext
 def _validate_identifier(cls: type[Any], value: str | None) -> str:
     if value is not None:
         if not isinstance(value, str):
-            raise TypeError(f'\'id\' must be str, not {type(value).__name__!r}.')
+            raise TypeError(f"'id' must be str, not {type(value).__name__!r}.")
 
         if not value:
-            raise ValueError(f'\'id\' must not be empty.')
+            raise ValueError("'id' must not be empty.")
 
         return value
 
     if 'id' not in cls.__dict__:
-        raise TypeError(f'{cls.__name__} must define \'id\'.')
+        raise TypeError(f"{cls.__name__} must define 'id'.")
     return getattr(cls, 'id')
 
 
