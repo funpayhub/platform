@@ -17,19 +17,19 @@ from eventry.asyncio.callable_wrappers import CallableWrapper
 from .types import Menu, ButtonSpec, MenuContext, ButtonContext
 
 
-def _validate_identifier(cls: type[Any], name: str, value: str | None) -> str:
+def _validate_identifier(cls: type[Any], value: str | None) -> str:
     if value is not None:
         if not isinstance(value, str):
-            raise TypeError(f'{name!r} must be str, not {type(value).__name__!r}.')
+            raise TypeError(f'\'id\' must be str, not {type(value).__name__!r}.')
 
         if not value:
-            raise ValueError(f'{name!r} must not be empty.')
+            raise ValueError(f'\'id\' must not be empty.')
 
         return value
 
-    if name not in cls.__dict__:
-        raise TypeError(f'{cls.__name__} must define {name!r}.')
-    return getattr(cls, name)
+    if 'id' not in cls.__dict__:
+        raise TypeError(f'{cls.__name__} must define \'id\'.')
+    return getattr(cls, 'id')
 
 
 def _validate_context[T](cls: type[Any], ctx_type: type[T], value: Any) -> type[T]:
@@ -51,6 +51,7 @@ def _check_build(cls: type[Any]) -> None:
 
 
 class _Builder[O, C]:
+    id: ClassVar[str]
     build: Callable[..., Awaitable[O]] | Callable[..., O]
 
     def __init__(self) -> None:
@@ -61,35 +62,33 @@ class _Builder[O, C]:
 
 
 class MenuBuilder(_Builder[Menu, MenuContext]):
-    menu_id: ClassVar[str]
     context_type: ClassVar[type[MenuContext]] = MenuContext
 
     def __init_subclass__(
         cls,
         *,
-        menu_id: str | None = None,
+        id: str | None = None,
         context_type: type[MenuContext] | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init_subclass__(**kwargs)
-        cls.menu_id = _validate_identifier(cls, 'menu_id', menu_id)
+        cls.id = _validate_identifier(cls, id)
         cls.context_type = _validate_context(cls, MenuContext, context_type)
         _check_build(cls)
 
 
 class ButtonBuilder(_Builder[ButtonSpec, ButtonContext]):
-    button_id: ClassVar[str]
     context_type: ClassVar[type[ButtonContext]] = ButtonContext
 
     def __init_subclass__(
         cls,
         *,
-        button_id: str | None = None,
+        id: str | None = None,
         context_type: type[ButtonContext] | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init_subclass__(**kwargs)
-        cls.button_id = _validate_identifier(cls, 'button_id', button_id)
+        cls.id = _validate_identifier(cls, id)
         cls.context_type = _validate_context(cls, ButtonContext, context_type)
         _check_build(cls)
 
@@ -98,7 +97,7 @@ _DUMMY_FILTER = CallableWrapper(lambda _, __: True)
 
 
 class _Modification[O, C]:
-    modification_id: ClassVar[str]
+    id: ClassVar[str]
     build: Callable[..., Awaitable[O]] | Callable[..., O]
     filter: Callable[..., Awaitable[bool]] | Callable[..., bool]
 
@@ -115,18 +114,18 @@ class _Modification[O, C]:
         return await self._wrapped_modification((context, obj), data)
 
     @classmethod
-    def _init_subclass(cls, modification_id: str | None = None) -> None:
-        cls.modification_id = _validate_identifier(cls, 'modification_id', modification_id)
+    def _init_subclass(cls, id: str | None = None) -> None:
+        cls.id = _validate_identifier(cls, id)
         _check_build(cls)
 
 
 class MenuModification(_Modification[Menu, MenuContext]):
-    def __init_subclass__(cls, modification_id: str | None = None, **kwargs: Any) -> None:
+    def __init_subclass__(cls, id: str | None = None, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        cls._init_subclass(modification_id)
+        cls._init_subclass(id)
 
 
 class ButtonModification(_Modification[ButtonSpec, ButtonContext]):
-    def __init_subclass__(cls, modification_id: str | None = None, **kwargs: Any) -> None:
+    def __init_subclass__(cls, id: str | None = None, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        cls._init_subclass(modification_id)
+        cls._init_subclass(id)
