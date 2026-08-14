@@ -7,6 +7,7 @@ __all__ = [
     'Menu',
     'MenuContext',
     'MenuSnapshot',
+    'ButtonContext',
 ]
 
 from typing import Any, Self, Literal, ParamSpec, Concatenate
@@ -42,7 +43,7 @@ class ButtonSpec:
             raise TypeError('Button ID must be a string.')
 
         self._button_id = button_id
-        self._builder = (
+        self._builder: CallableWrapper[Buttons] = (
             builder if isinstance(builder, CallableWrapper) else CallableWrapper(builder)
         )
         self._modifications: list[ButtonSpecModification] = []
@@ -244,3 +245,9 @@ class MenuContext(BaseModel):
                 'data': envelope.data,
             }
         )
+
+
+class ButtonContext(BaseModel):
+    button_id: str
+    menu_context: MenuContext
+    data: dict[str, Any] = Field(default_factory=dict)
