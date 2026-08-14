@@ -80,6 +80,7 @@ class ButtonSpec:
 
                 print(traceback.format_exc())
                 # todo: logging
+                result_normalized = old
                 continue
 
             result_normalized = [mod_result] if not isinstance(mod_result, list) else mod_result
