@@ -8,11 +8,12 @@ __all__ = [
     'MenuContext',
     'MenuSnapshot',
     'ButtonContext',
+    'RenderedMenu',
 ]
 
 from typing import Any, Self, Literal, ParamSpec, Concatenate
 from dataclasses import field, dataclass
-from collections.abc import Callable, Awaitable
+from collections.abc import Mapping, Callable, Awaitable
 
 from pydantic import Field, BaseModel
 from aiogram.types import CopyTextButton, InlineKeyboardButton
@@ -60,9 +61,9 @@ class ButtonSpec:
         )
         self._modifications.append(ButtonSpecModification(id, modification))
 
-    async def build(self, data: dict[str, Any]) -> ButtonsRow:
+    async def build(self, menu_ctx: MenuContext, data: Mapping[str, Any]) -> ButtonsRow:
         try:
-            result = await self._builder(data=data)
+            result = await self._builder(args=[menu_ctx], data=data)
         except Exception as e:
             raise Exception(
                 f'An error occurred while building button {self.button_id}'
@@ -80,7 +81,13 @@ class ButtonSpec:
         for mod in self._modifications:
             old = [i.model_copy(deep=True) for i in result_normalized]
             try:
-                mod_result = await mod.modification(args=(result_normalized,), data=data)
+                mod_result = await mod.modification(
+                    args=[
+                        menu_ctx,
+                        result_normalized,
+                    ],
+                    data=data,
+                )
             except Exception:
                 print(
                     f'An error occurred while running modificator {mod.id!r} '
@@ -178,7 +185,7 @@ class KeyboardBuilder:
         self.keyboard.append([button])
 
 
-class Menu:
+class Menu(BaseModel):
     header_text: str = ''
     main_text: str = ''
     footer_text: str = ''
@@ -193,6 +200,29 @@ class Menu:
             *self.main_keyboard.keyboard,
             *self.footer_keyboard.keyboard,
         ]
+
+    async def render(self, ctx: MenuContext, app_context: Mapping[str, Any]) -> RenderedMenu:
+        keyboard = []
+        for kb in [self.header_keyboard, self.main_keyboard, self.footer_keyboard]:
+            for line in kb.keyboard:
+                curr = []
+                for button in line:
+                    try:
+                        curr.append(await button.build(app_context))
+                    except Exception:
+                        # todo logging
+                        continue
+                if curr:
+                    keyboard.append(curr)
+
+        # todo: render text
+        return RenderedMenu(text='TEMP TEXT', keyboard=keyboard)
+
+
+@dataclass
+class RenderedMenu:
+    text: str
+    keyboard: list[list[InlineKeyboardButton]]
 
 
 class MenuSnapshot(BaseModel):

@@ -10,7 +10,7 @@ __all__ = [
 
 import inspect
 from typing import Any, ClassVar
-from collections.abc import Callable, Awaitable
+from collections.abc import Mapping, Callable, Awaitable
 
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
@@ -57,7 +57,7 @@ class _Builder[O, C]:
     def __init__(self) -> None:
         self._wrapped: CallableWrapper[O] = CallableWrapper(self.build)
 
-    async def __call__(self, ctx: C, data: dict[str, Any]) -> O:
+    async def __call__(self, ctx: C, data: Mapping[str, Any]) -> O:
         return await self._wrapped(args=[ctx], data=data)
 
 
@@ -108,7 +108,7 @@ class _Modification[O, C]:
             CallableWrapper(filter) if filter else _DUMMY_FILTER
         )
 
-    async def __call__(self, context: C, obj: O, data: dict[str, Any]) -> O:
+    async def __call__(self, context: C, obj: O, data: Mapping[str, Any]) -> O:
         if not (await self._wrapped_filter((context, obj), data)):
             return obj
         return await self._wrapped_modification((context, obj), data)

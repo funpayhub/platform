@@ -14,14 +14,10 @@ _REGISTRABLE = type[MenuBuilder | ButtonBuilder | MenuModification | ButtonModif
 
 class UIRegistry:
     def __init__(self, *, context: Mapping[str, Any] | None = None) -> None:
-        self._menus: dict[str, type[MenuBuilder]] = {}
-        self._buttons: dict[str, type[ButtonBuilder]] = {}
-        self._menu_mods: dict[str, dict[str, list[type[MenuModification]]]] = defaultdict(
-            lambda: defaultdict(list)
-        )
-        self._button_mods: dict[str, dict[str, list[type[ButtonModification]]]] = defaultdict(
-            lambda: defaultdict(list)
-        )
+        self._menus: dict[str, MenuBuilder] = {}
+        self._buttons: dict[str, ButtonBuilder] = {}
+        self._menu_mods: dict[str, dict[str, MenuModification]] = defaultdict(dict)
+        self._button_mods: dict[str, dict[str, ButtonModification]] = defaultdict(dict)
         self._context = context if context is not None else {}
 
     @overload
@@ -54,7 +50,7 @@ class UIRegistry:
                     raise RuntimeError(
                         f'{type_.__name__!r} with id {cls.id!r} is already registered.'
                     )
-                dict_[cls.id] = cls  # type: ignore[assignment]
+                dict_[cls.id] = cls()  # type: ignore[assignment]
                 return cls
 
         for type_, dict_ in (
@@ -68,7 +64,7 @@ class UIRegistry:
                     raise RuntimeError(
                         f'{type_.__name__!r} with id {cls.id!r} for {for_id!r} is already registered.'
                     )
-                dict_[for_id][cls.id] = cls  # type: ignore[assignment]
+                dict_[for_id][cls.id] = cls()  # type: ignore[assignment]
                 return cls
 
         raise TypeError('must be a subclass of _REGISTRABLE')  # todo
@@ -81,6 +77,37 @@ class UIRegistry:
 
     async def build_menu(self, ctx: MenuContext) -> Menu:
         if ctx.menu_id not in self._menus:
-            ...
+            raise ValueError(f'Menu with ID {ctx.menu_id!r} not found.')  # todo: custom error
+
+        menu_builder = self._menus[ctx.menu_id]
+
+        try:
+            menu = await menu_builder(ctx, self._context)
+        except Exception:
+            raise Exception('Unable to build menu.')  # todo: custom error
+
+        if ctx.menu_id not in self._menu_mods:
+            return menu
+
+        mods = self._menu_mods[ctx.menu_id]
+        menu_copy = menu.model_copy(deep=True)
+        for mod in mods.values():
+            try:
+                menu = await mod(ctx, menu, self._context)
+            except Exception:
+                print('Error in menu mod')
+                menu = menu_copy
+                menu_copy = menu.model_copy(deep=True)
+                continue
+
+        menu_copy = menu.model_copy(deep=True)
+        try:
+            await menu.finalizer(ctx, menu, self._context)
+        except Exception:
+            print('Error in menu finalizer')
+            menu = menu_copy
+
+        # todo: rendered_menu = await menu.render(ctx, menu, self._context)
+        # todo: return rendered menu
 
     async def build_button(self, ctx: ButtonContext) -> ButtonSpec: ...

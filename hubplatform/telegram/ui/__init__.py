@@ -8,6 +8,7 @@ from .types import (
     ButtonType,
     MenuContext,
     MenuSnapshot,
+    RenderedMenu,
     ButtonContext,
     KeyboardBuilder,
     InlineKeyboardButton,
