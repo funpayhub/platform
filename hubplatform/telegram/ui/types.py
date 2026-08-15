@@ -2,12 +2,15 @@ from __future__ import annotations
 
 
 __all__ = [
-    'ButtonsBlockSpec',
+    'Button',
+    'Keyboard',
+    'KeyboardBlockSpec',
+    'KeyboardModification',
+    'KeyboardBuildingState',
     'MenuSpec',
-    'MenuContext',
-    'MenuSnapshot',
-    'ButtonContext',
     'RenderedMenu',
+    'MenuContext',
+    'MenuContextSnapshot',
 ]
 
 from typing import TYPE_CHECKING, Any, Self, Literal, ParamSpec, Concatenate
@@ -28,17 +31,16 @@ if TYPE_CHECKING:
 
 
 _P = ParamSpec('_P')
-KeyboardSpec = list[list['Button']]
-ButtonsBlockBuilder = Callable[..., Awaitable[KeyboardSpec]] | Callable[..., KeyboardSpec]
-ButtonsBlockModificationCallable = (
-    Callable[Concatenate['ButtonsBlock', _P], Awaitable['ButtonsBlock']]
-    | Callable[Concatenate['ButtonsBlock', _P], 'ButtonsBlock']
+Keyboard = list[list['Button']]
+KeyboardSpecBuilder = Callable[..., Awaitable[Keyboard]] | Callable[..., Keyboard]
+KeyboardModificationCallable = (
+    Callable[Concatenate['KeyboardBuildingState', _P], Awaitable['KeyboardBuildingState']]
+    | Callable[Concatenate['KeyboardBuildingState', _P], 'KeyboardBuildingState']
 )
 MenuFinalizer = (
     Callable[Concatenate['MenuSpec', _P], Awaitable['MenuSpec']]
     | Callable[Concatenate['MenuSpec', _P], 'MenuSpec']
 )
-# todo: ButtonsBlockModification callable first positional arg is ButtonsBlock.
 
 
 class Button(BaseModel):
@@ -151,28 +153,28 @@ class Button(BaseModel):
         )
 
 
-class ButtonsBlockSpec:
+class KeyboardBlockSpec:
     def __init__(
-        self, block_id: str, builder: ButtonsBlockBuilder | CallableWrapper[KeyboardSpec]
+        self, block_id: str, builder: KeyboardSpecBuilder | CallableWrapper[Keyboard]
     ) -> None:
         if not isinstance(block_id, str):
             raise TypeError('Button ID must be a string.')
 
         self._block_id = block_id
-        self._builder: CallableWrapper[KeyboardSpec] = (
+        self._builder: CallableWrapper[Keyboard] = (
             builder if isinstance(builder, CallableWrapper) else CallableWrapper(builder)
         )
-        self._modifications: list[ButtonsBlockModification] = []
+        self._modifications: list[KeyboardModification] = []
 
     @property
     def block_id(self) -> str:
         return self._block_id
 
     def modify_with(
-        self, modification_id: str, modification: ButtonsBlockModificationCallable
+        self, modification_id: str, modification: KeyboardModificationCallable
     ) -> None:
         self._modifications.append(
-            ButtonsBlockModification(
+            KeyboardModification(
                 modification_id=modification_id,
                 modification_callable=modification,
             )
@@ -195,7 +197,7 @@ class ButtonsBlockSpec:
         while pending_mods:
             modification = pending_mods.pop()
             try:
-                new_block = ButtonsBlock(
+                new_block = KeyboardBuildingState(
                     buttons=buttons, pending_modifications=pending_mods.copy()
                 )
                 wrapped = CallableWrapper(modification.modification_callable)
@@ -230,8 +232,8 @@ class ButtonsBlockSpec:
         compress: bool = True,
         compression_version: str | None = None,
         hash: bool = True,
-    ) -> ButtonsBlockSpec:
-        async def build() -> KeyboardSpec:
+    ) -> KeyboardBlockSpec:
+        async def build() -> Keyboard:
             return [
                 [
                     Button(
@@ -247,7 +249,7 @@ class ButtonsBlockSpec:
                 ]
             ]
 
-        return ButtonsBlockSpec(block_id, builder=build)
+        return KeyboardBlockSpec(block_id, builder=build)
 
     @classmethod
     def copy_text_button(
@@ -258,8 +260,8 @@ class ButtonsBlockSpec:
         text: str,
         copy_text: str,
         style: Literal['danger', 'success', 'primary'] | None = None,
-    ) -> ButtonsBlockSpec:
-        async def build() -> KeyboardSpec:
+    ) -> KeyboardBlockSpec:
+        async def build() -> Keyboard:
             return [
                 [
                     Button(
@@ -271,7 +273,7 @@ class ButtonsBlockSpec:
                 ]
             ]
 
-        return ButtonsBlockSpec(block_id, builder=build)
+        return KeyboardBlockSpec(block_id, builder=build)
 
     @classmethod
     def url_button(
@@ -282,8 +284,8 @@ class ButtonsBlockSpec:
         text: str,
         url: str,
         style: Literal['danger', 'success', 'primary'] | None = None,
-    ) -> ButtonsBlockSpec:
-        async def build() -> KeyboardSpec:
+    ) -> KeyboardBlockSpec:
+        async def build() -> Keyboard:
             return [
                 [
                     Button(
@@ -295,57 +297,61 @@ class ButtonsBlockSpec:
                 ]
             ]
 
-        return ButtonsBlockSpec(block_id, builder=build)
+        return KeyboardBlockSpec(block_id, builder=build)
 
 
 @dataclass(frozen=True)
-class ButtonsBlockModification:
+class KeyboardModification:
     modification_id: str
-    modification_callable: ButtonsBlockModificationCallable
+    modification_callable: KeyboardModificationCallable
 
 
 @dataclass
-class ButtonsBlock:
+class KeyboardBuildingState:
     buttons: list[list[Button]]
-    pending_modifications: list[ButtonsBlockModification]
+    pending_modifications: list[KeyboardModification]
 
 
 class MenuSpec(BaseModel):
     header_text: str = ''
-    main_text: str = ''
+    header_body_sep: str = '\n\n'
+    body_text: str = ''
+    body_footer_sep: str = '\n\n'
     footer_text: str = ''
-    header_keyboard: list[ButtonsBlockSpec] = field(default_factory=list)
-    main_keyboard: list[ButtonsBlockSpec] = field(default_factory=list)
-    footer_keyboard: list[ButtonsBlockSpec] = field(default_factory=list)
-    finalizer: MenuFinalizer | None = None  # todo
+    header_footer_sep: str = '\n\n'
+    header_keyboard: list[KeyboardBlockSpec] = field(default_factory=list)
+    main_keyboard: list[KeyboardBlockSpec] = field(default_factory=list)
+    footer_keyboard: list[KeyboardBlockSpec] = field(default_factory=list)
+    finalizer: MenuFinalizer | None = None
 
-    def total_blocks(self) -> list[ButtonsBlockSpec]:
+    def total_blocks(self) -> list[KeyboardBlockSpec]:
         return [
             *self.header_keyboard,
             *self.main_keyboard,
             *self.footer_keyboard,
         ]
 
-    async def render(self, ctx: MenuContext, app_context: Mapping[str, Any]) -> RenderedMenu:
+    async def render(
+        self, app_context: Mapping[str, Any], hash_service: HashService | None = None
+    ) -> RenderedMenu:
         keyboard = []
-        for kb in [self.header_keyboard, self.main_keyboard, self.footer_keyboard]:
-            for line in kb.keyboard:
-                curr = []
-                for button in line:
-                    try:
-                        curr.append(
-                            await button.build(
-                                app_context,
-                            )
-                        )
-                    except Exception:
-                        # todo logging
-                        continue
-                if curr:
-                    keyboard.append(curr)
+        for block in self.total_blocks():
+            result = await block.build(app_context, hash_service=hash_service)
+            keyboard.extend(result)
 
-        # todo: render text
-        return RenderedMenu(text='TEMP TEXT', keyboard=keyboard)
+        text = self.header_text
+        if self.body_text:
+            if text:
+                text += self.header_body_sep
+            text += self.body_text
+        if self.footer_text:
+            if self.body_text:
+                text += self.body_footer_sep
+            elif self.header_text:
+                text += self.header_footer_sep
+            text += self.footer_text
+
+        return RenderedMenu(text=text, keyboard=keyboard)
 
 
 @dataclass
@@ -354,7 +360,7 @@ class RenderedMenu:
     keyboard: list[list[InlineKeyboardButton]]
 
 
-class MenuSnapshot(BaseModel):
+class MenuContextSnapshot(BaseModel):
     menu_id: str
     keyboard_page: int
     text_page: int
@@ -382,10 +388,10 @@ class MenuContext(BaseModel):
             fallback=pydantic_fallback_serializer,
         )
 
-    def to_envelope(self) -> MenuSnapshot:
+    def snapshot(self) -> MenuContextSnapshot:
         fields = self._dump_context_fields()
         data = fields.pop('data', {})
-        return MenuSnapshot(
+        return MenuContextSnapshot(
             menu_id=self.menu_id,
             keyboard_page=self.keyboard_page,
             text_page=self.text_page,
@@ -394,7 +400,7 @@ class MenuContext(BaseModel):
         )
 
     @classmethod
-    def from_envelope(cls, envelope: MenuSnapshot) -> Self:
+    def from_snapshot(cls, envelope: MenuContextSnapshot) -> Self:
         return cls.model_validate(
             envelope.fields
             | {
@@ -404,9 +410,3 @@ class MenuContext(BaseModel):
                 'data': envelope.data,
             }
         )
-
-
-class ButtonContext(BaseModel):
-    button_id: str
-    menu_context: MenuContext
-    data: dict[str, Any] = Field(default_factory=dict)

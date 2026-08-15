@@ -14,7 +14,7 @@ from collections.abc import Mapping, Callable, Awaitable
 
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
-from .types import MenuSpec, MenuContext, ButtonContext, ButtonsBlockSpec
+from .types import MenuSpec, MenuContext, ButtonContext, KeyboardBlockSpec
 
 
 def _validate_identifier(cls: type[Any], value: str | None) -> str:
@@ -77,7 +77,7 @@ class MenuBuilder(_Builder[MenuSpec, MenuContext]):
         _check_build(cls)
 
 
-class ButtonBuilder(_Builder[ButtonsBlockSpec, ButtonContext]):
+class ButtonBuilder(_Builder[KeyboardBlockSpec, ButtonContext]):
     context_type: ClassVar[type[ButtonContext]] = ButtonContext
 
     def __init_subclass__(
@@ -125,7 +125,7 @@ class MenuModification(_Modification[MenuSpec, MenuContext]):
         cls._init_subclass(id)
 
 
-class ButtonModification(_Modification[ButtonsBlockSpec, ButtonContext]):
+class ButtonModification(_Modification[KeyboardBlockSpec, ButtonContext]):
     def __init_subclass__(cls, id: str | None = None, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         cls._init_subclass(id)

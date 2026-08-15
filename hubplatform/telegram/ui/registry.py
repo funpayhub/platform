@@ -5,7 +5,7 @@ from functools import partial
 from collections import defaultdict
 from collections.abc import Mapping, Callable
 
-from .types import MenuSpec, MenuContext, ButtonContext, ButtonsBlockSpec
+from .types import MenuSpec, MenuContext, ButtonContext, KeyboardBlockSpec
 from .builders import MenuBuilder, ButtonBuilder, MenuModification, ButtonModification
 
 
@@ -110,4 +110,4 @@ class UIRegistry:
         # todo: rendered_menu = await menu.render(ctx, menu, self._context)
         # todo: return rendered menu
 
-    async def build_button(self, ctx: ButtonContext) -> ButtonsBlockSpec: ...
+    async def build_button(self, ctx: ButtonContext) -> KeyboardBlockSpec: ...
