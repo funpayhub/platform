@@ -13,21 +13,17 @@ __all__ = [
     'MenuContextSnapshot',
 ]
 
-from typing import TYPE_CHECKING, Any, Self, Literal, ParamSpec, Concatenate
+from typing import Any, Self, Literal, ParamSpec, Concatenate
 from dataclasses import field, dataclass
 from collections.abc import Mapping, Callable, Awaitable
 
-from pydantic import Field, BaseModel
-from aiogram.types import CopyTextButton, InlineKeyboardButton
+from pydantic import Field, BaseModel, ConfigDict
+from aiogram.types import LoginUrl, WebAppInfo, CallbackGame, CopyTextButton, InlineKeyboardButton
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
 from hubplatform.telegram.callback_data import CallbackData
 from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
 from hubplatform.telegram.callback_data.hash import HashService
-
-
-if TYPE_CHECKING:
-    from aiogram.types import LoginUrl, WebAppInfo, CallbackGame
 
 
 _P = ParamSpec('_P')
@@ -140,7 +136,9 @@ class Button(BaseModel):
                 cb = self.callback_data
 
             if self.hash:
-                callback_data = hash_service.hash(cb)
+                cb = hash_service.hash(cb)
+
+            callback_data = cb
 
         return InlineKeyboardButton(
             text=self.text,
@@ -226,7 +224,7 @@ class KeyboardBlockSpec:
         block_id: str,
         button_id: str | None = None,
         text: str,
-        callback_data: CallbackData,
+        callback_data: CallbackData | str,
         style: Literal['danger', 'success', 'primary'] | None = None,
         pack_compact: bool = False,
         compress: bool = True,
@@ -313,6 +311,10 @@ class KeyboardBuildingState:
 
 
 class MenuSpec(BaseModel):
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+    )
+
     header_text: str = ''
     header_body_sep: str = '\n\n'
     body_text: str = ''
