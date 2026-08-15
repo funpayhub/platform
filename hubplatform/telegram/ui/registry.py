@@ -5,7 +5,7 @@ from functools import partial
 from collections import defaultdict
 from collections.abc import Mapping, Callable
 
-from .types import Menu, ButtonSpec, MenuContext, ButtonContext
+from .types import MenuSpec, MenuContext, ButtonContext, ButtonsBlockSpec
 from .builders import MenuBuilder, ButtonBuilder, MenuModification, ButtonModification
 
 
@@ -75,7 +75,7 @@ class UIRegistry:
         self, *registries: UIRegistry, overwrite: bool = False
     ) -> None: ...
 
-    async def build_menu(self, ctx: MenuContext) -> Menu:
+    async def build_menu(self, ctx: MenuContext) -> MenuSpec:
         if ctx.menu_id not in self._menus:
             raise ValueError(f'Menu with ID {ctx.menu_id!r} not found.')  # todo: custom error
 
@@ -110,4 +110,4 @@ class UIRegistry:
         # todo: rendered_menu = await menu.render(ctx, menu, self._context)
         # todo: return rendered menu
 
-    async def build_button(self, ctx: ButtonContext) -> ButtonSpec: ...
+    async def build_button(self, ctx: ButtonContext) -> ButtonsBlockSpec: ...

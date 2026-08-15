@@ -14,7 +14,7 @@ from collections.abc import Mapping, Callable, Awaitable
 
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
-from .types import Menu, ButtonSpec, MenuContext, ButtonContext
+from .types import MenuSpec, MenuContext, ButtonContext, ButtonsBlockSpec
 
 
 def _validate_identifier(cls: type[Any], value: str | None) -> str:
@@ -61,7 +61,7 @@ class _Builder[O, C]:
         return await self._wrapped(args=[ctx], data=data)
 
 
-class MenuBuilder(_Builder[Menu, MenuContext]):
+class MenuBuilder(_Builder[MenuSpec, MenuContext]):
     context_type: ClassVar[type[MenuContext]] = MenuContext
 
     def __init_subclass__(
@@ -77,7 +77,7 @@ class MenuBuilder(_Builder[Menu, MenuContext]):
         _check_build(cls)
 
 
-class ButtonBuilder(_Builder[ButtonSpec, ButtonContext]):
+class ButtonBuilder(_Builder[ButtonsBlockSpec, ButtonContext]):
     context_type: ClassVar[type[ButtonContext]] = ButtonContext
 
     def __init_subclass__(
@@ -119,13 +119,13 @@ class _Modification[O, C]:
         _check_build(cls)
 
 
-class MenuModification(_Modification[Menu, MenuContext]):
+class MenuModification(_Modification[MenuSpec, MenuContext]):
     def __init_subclass__(cls, id: str | None = None, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         cls._init_subclass(id)
 
 
-class ButtonModification(_Modification[ButtonSpec, ButtonContext]):
+class ButtonModification(_Modification[ButtonsBlockSpec, ButtonContext]):
     def __init_subclass__(cls, id: str | None = None, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         cls._init_subclass(id)

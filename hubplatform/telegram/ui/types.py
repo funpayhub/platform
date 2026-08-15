@@ -2,16 +2,15 @@ from __future__ import annotations
 
 
 __all__ = [
-    'ButtonSpec',
-    'KeyboardBuilder',
-    'Menu',
+    'ButtonsBlockSpec',
+    'MenuSpec',
     'MenuContext',
     'MenuSnapshot',
     'ButtonContext',
     'RenderedMenu',
 ]
 
-from typing import Any, Self, Literal, ParamSpec, Concatenate
+from typing import TYPE_CHECKING, Any, Self, Literal, ParamSpec, Concatenate
 from dataclasses import field, dataclass
 from collections.abc import Mapping, Callable, Awaitable
 
@@ -24,181 +23,307 @@ from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
 from hubplatform.telegram.callback_data.hash import HashService
 
 
-P = ParamSpec('P')
-ButtonType = InlineKeyboardButton
-ButtonsRow = list[InlineKeyboardButton]
-Buttons = ButtonType | ButtonsRow
-ButtonBuilder = Callable[..., Awaitable[Buttons]] | CallableWrapper[Buttons]
-ButtonModification = Callable[Concatenate[ButtonsRow, P], Buttons] | CallableWrapper[Buttons]
+if TYPE_CHECKING:
+    from aiogram.types import LoginUrl, WebAppInfo, CallbackGame
 
 
-@dataclass(frozen=True)
-class ButtonSpecModification:
-    id: str
-    modification: CallableWrapper[Buttons]
+_P = ParamSpec('_P')
+KeyboardSpec = list[list['Button']]
+ButtonsBlockBuilder = Callable[..., Awaitable[KeyboardSpec]] | Callable[..., KeyboardSpec]
+ButtonsBlockModificationCallable = (
+    Callable[Concatenate['ButtonsBlock', _P], Awaitable['ButtonsBlock']]
+    | Callable[Concatenate['ButtonsBlock', _P], 'ButtonsBlock']
+)
+MenuFinalizer = (
+    Callable[Concatenate['MenuSpec', _P], Awaitable['MenuSpec']]
+    | Callable[Concatenate['MenuSpec', _P], 'MenuSpec']
+)
+# todo: ButtonsBlockModification callable first positional arg is ButtonsBlock.
 
 
-class ButtonSpec:
-    def __init__(self, button_id: str, builder: ButtonBuilder) -> None:
-        if not isinstance(button_id, str):
+class Button(BaseModel):
+    button_id: str
+    """Button ID."""
+
+    text: str
+    """Label text on the button"""
+
+    icon_custom_emoji_id: str | None = None
+    """Unique identifier of the custom emoji shown before the text of the button. 
+    Can only be used by bots that purchased additional usernames on 
+    `Fragment <https://fragment.com>`_ or in the messages directly sent by the bot to private, 
+    group and supergroup chats if the owner of the bot has a Telegram Premium subscription
+    """
+
+    style: str | None = None
+    """Style of the button. 
+    Must be one of 'danger' (red), 'success' (green) or 'primary' (blue). 
+    If omitted, then an app-specific style is used
+    """
+
+    url: str | None = None
+    """HTTP or tg:// URL to be opened when the button is pressed. 
+    Links :code:`tg://user?id=<user_id>` can be used to mention a user by their identifier 
+    without using a username, if this is allowed by their privacy settings
+    """
+
+    callback_data: str | CallbackData | None = None
+    """Data to be sent in a `callback query <https://core.telegram.org/bots/api#callbackquery>`_ 
+    to the bot when the button is pressed.
+    """
+
+    pack_compact: bool = False
+    """*Optional*. Whether to use compact packing algorithm for buttons callback or not.
+    Does not uses if `callback_data` is a string.
+    """
+
+    compress: bool = True
+    """*Optional*. Whether to compress packed `callback_data` or not.
+    Does not uses if `callback_data` is a string.
+    """
+
+    compression_version: str | None = None
+    """*Optional*. Use specific compression version. If `None`_, an apps default compression 
+    version will be used.
+    Does not uses if `callback_data` is a string.
+    """
+
+    hash: bool = True
+    """*Optional*. Whether to hash and store value into callback_data database or not."""
+
+    web_app: WebAppInfo | None = None
+    """Description of the `Web App <https://core.telegram.org/bots/webapps>`_ that will be 
+    launched when the user presses the button. The Web App will be able to send an arbitrary 
+    message on behalf of the user using the method 
+    :class:`aiogram.methods.answer_web_app_query.AnswerWebAppQuery`. 
+    Available only in private chats between a user and the bot. 
+    Not supported for messages sent on behalf of a business account
+    """
+
+    login_url: LoginUrl | None = None
+    """An HTTPS URL used to automatically authorize the user. 
+    Can be used as a replacement for the 
+    `Telegram Login Widget <https://core.telegram.org/widgets/login>`_
+    """
+
+    copy_text: CopyTextButton | None = None
+    """Description of the button that copies the specified text to the clipboard"""
+
+    callback_game: CallbackGame | None = None
+    """Description of the game that will be launched when the user presses the button"""
+
+    pay: bool | None = None
+    """Specify :code:`True`, to send a `Pay button <https://core.telegram.org/bots/api#payments>`_. 
+    Substrings '⭐' and 'XTR' in the buttons's text will be replaced with a Telegram Star icon.
+    """
+
+    def render(self, hash_service: HashService | None = None) -> InlineKeyboardButton:
+        callback_data: str | None = None
+        if self.callback_data is not None:
+            if self.hash and hash_service is None:
+                raise ValueError(
+                    f'Cannot render button {self.button_id}. '
+                    'Button requires to hash its `callback_data`, '
+                    'but hash_service was not provided.'
+                )
+
+            if isinstance(self.callback_data, CallbackData):
+                method = (
+                    self.callback_data.pack_compact
+                    if self.pack_compact
+                    else self.callback_data.pack
+                )
+                cb = method(compress=self.compress, compression_version=self.compression_version)
+            else:
+                cb = self.callback_data
+
+            if self.hash:
+                callback_data = hash_service.hash(cb)
+
+        return InlineKeyboardButton(
+            text=self.text,
+            icon_custom_emoji_id=self.icon_custom_emoji_id,
+            style=self.style,
+            url=self.url,
+            callback_data=callback_data,
+            web_app=self.web_app,
+            login_url=self.login_url,
+        )
+
+
+class ButtonsBlockSpec:
+    def __init__(
+        self, block_id: str, builder: ButtonsBlockBuilder | CallableWrapper[KeyboardSpec]
+    ) -> None:
+        if not isinstance(block_id, str):
             raise TypeError('Button ID must be a string.')
 
-        self._button_id = button_id
-        self._builder: CallableWrapper[Buttons] = (
+        self._block_id = block_id
+        self._builder: CallableWrapper[KeyboardSpec] = (
             builder if isinstance(builder, CallableWrapper) else CallableWrapper(builder)
         )
-        self._modifications: list[ButtonSpecModification] = []
+        self._modifications: list[ButtonsBlockModification] = []
 
     @property
-    def button_id(self) -> str:
-        return self._button_id
+    def block_id(self) -> str:
+        return self._block_id
 
-    def modify_with(self, id: str, modification: ButtonModification[P]) -> None:
-        modification = (
-            modification
-            if isinstance(modification, CallableWrapper)
-            else CallableWrapper(modification)
+    def modify_with(
+        self, modification_id: str, modification: ButtonsBlockModificationCallable
+    ) -> None:
+        self._modifications.append(
+            ButtonsBlockModification(
+                modification_id=modification_id,
+                modification_callable=modification,
+            )
         )
-        self._modifications.append(ButtonSpecModification(id, modification))
 
-    async def build(self, menu_ctx: MenuContext, data: Mapping[str, Any]) -> ButtonsRow:
+    async def build(
+        self,
+        app_context: Mapping[str, Any],
+        hash_service: HashService | None = None,
+    ) -> list[list[InlineKeyboardButton]]:
         try:
-            result = await self._builder(args=[menu_ctx], data=data)
+            initial_keyboard = await self._builder(data=app_context)
         except Exception as e:
             raise Exception(
-                f'An error occurred while building button {self.button_id}'
+                f'An error occurred while building button {self.block_id}'
             ) from e  # todo: button build exception
 
-        result_normalized = [result] if not isinstance(result, list) else result
-        for index, btn in enumerate(result_normalized):
-            if not isinstance(btn, InlineKeyboardButton):
-                raise Exception(
-                    f'Button builder {self.button_id} returned instance of '
-                    f'{btn.__class__.__name__!r} at position {index}. '
-                    f'Only `aiogram.types.InlineKeyboardButton` is allowed.'
-                )
-
-        for mod in self._modifications:
-            old = [i.model_copy(deep=True) for i in result_normalized]
+        buttons = initial_keyboard
+        pending_mods = self._modifications.copy()
+        while pending_mods:
+            modification = pending_mods.pop()
             try:
-                mod_result = await mod.modification(
-                    args=[
-                        menu_ctx,
-                        result_normalized,
-                    ],
-                    data=data,
+                new_block = ButtonsBlock(
+                    buttons=buttons, pending_modifications=pending_mods.copy()
                 )
+                wrapped = CallableWrapper(modification.modification_callable)
+                block = await wrapped(args=(new_block,), data=app_context)
+                buttons = block.buttons
+                pending_mods = block.pending_modifications
             except Exception:
-                print(
-                    f'An error occurred while running modificator {mod.id!r} '
-                    f'for button {self.button_id!r}.'
-                )
                 import traceback
 
                 print(traceback.format_exc())
-                # todo: logging
-                result_normalized = old
+                # todo: normal logging
                 continue
 
-            result_normalized = [mod_result] if not isinstance(mod_result, list) else mod_result
-            for index, btn in enumerate(result_normalized):
-                if not isinstance(btn, InlineKeyboardButton):
-                    print(
-                        f'Button modification {mod.id!r} for button {self.button_id!r} '
-                        f'returned {btn.__class__.__name__!r} at position {index!r}. '
-                        f'Only `aiogram.types.InlineKeyboardButton` is allowed.\n'
-                        f'Skipping '
-                    )  # todo: logging
-                    result_normalized = old
-                    break
-
-        return result_normalized
+        result = []
+        for line in buttons:
+            result_line = []
+            for button in line:
+                result_line.append(button.render(hash_service=hash_service))
+            result.append(result_line)
+        return result
 
     @classmethod
     def callback_button(
         cls,
-        button_id: str,
+        *,
+        block_id: str,
+        button_id: str | None = None,
         text: str,
         callback_data: CallbackData,
         style: Literal['danger', 'success', 'primary'] | None = None,
         pack_compact: bool = False,
         compress: bool = True,
-        compress_version: str | None = None,
+        compression_version: str | None = None,
         hash: bool = True,
-    ) -> ButtonSpec:
-        async def build_button(hash_service: HashService) -> InlineKeyboardButton:
-            method = callback_data.pack_compact if pack_compact else callback_data.pack
-            result = method(compress=compress, compression_version=compress_version)
-            if hash:
-                result = hash_service.hash(result)
+    ) -> ButtonsBlockSpec:
+        async def build() -> KeyboardSpec:
+            return [
+                [
+                    Button(
+                        button_id=button_id or block_id,
+                        text=text,
+                        callback_data=callback_data,
+                        style=style,
+                        pack_compact=pack_compact,
+                        compress=compress,
+                        compression_version=compression_version,
+                        hash=hash,
+                    )
+                ]
+            ]
 
-            return InlineKeyboardButton(
-                text=text,
-                callback_data=result,
-                style=style,
-            )
-
-        return ButtonSpec(button_id, builder=build_button)
+        return ButtonsBlockSpec(block_id, builder=build)
 
     @classmethod
     def copy_text_button(
         cls,
-        button_id: str,
+        *,
+        block_id: str,
+        button_id: str | None = None,
         text: str,
         copy_text: str,
         style: Literal['danger', 'success', 'primary'] | None = None,
-    ) -> ButtonSpec:
-        async def build_button() -> InlineKeyboardButton:
-            return InlineKeyboardButton(
-                text=text,
-                copy_text=CopyTextButton(text=copy_text),
-                style=style,
-            )
+    ) -> ButtonsBlockSpec:
+        async def build() -> KeyboardSpec:
+            return [
+                [
+                    Button(
+                        button_id=button_id or block_id,
+                        text=text,
+                        copy_text=CopyTextButton(text=copy_text),
+                        style=style,
+                    )
+                ]
+            ]
 
-        return ButtonSpec(button_id, builder=build_button)
+        return ButtonsBlockSpec(block_id, builder=build)
 
     @classmethod
     def url_button(
         cls,
-        button_id: str,
+        *,
+        block_id: str,
+        button_id: str | None = None,
         text: str,
         url: str,
         style: Literal['danger', 'success', 'primary'] | None = None,
-    ) -> ButtonSpec:
-        async def build_button() -> InlineKeyboardButton:
-            return InlineKeyboardButton(text=text, url=url, style=style)
+    ) -> ButtonsBlockSpec:
+        async def build() -> KeyboardSpec:
+            return [
+                [
+                    Button(
+                        button_id=button_id or block_id,
+                        text=text,
+                        url=url,
+                        style=style,
+                    )
+                ]
+            ]
 
-        return ButtonSpec(button_id, builder=build_button)
+        return ButtonsBlockSpec(block_id, builder=build)
+
+
+@dataclass(frozen=True)
+class ButtonsBlockModification:
+    modification_id: str
+    modification_callable: ButtonsBlockModificationCallable
 
 
 @dataclass
-class KeyboardBuilder:
-    keyboard: list[list[ButtonSpec]] = field(default_factory=list)
-
-    def add_row(self, *buttons: ButtonSpec) -> None:
-        self.keyboard.append(list(buttons))
-
-    def add_rows(self, *rows: list[ButtonSpec]) -> None:
-        self.keyboard.extend(rows)
-
-    def add_button(self, button: ButtonSpec) -> None:
-        self.keyboard.append([button])
+class ButtonsBlock:
+    buttons: list[list[Button]]
+    pending_modifications: list[ButtonsBlockModification]
 
 
-class Menu(BaseModel):
+class MenuSpec(BaseModel):
     header_text: str = ''
     main_text: str = ''
     footer_text: str = ''
-    header_keyboard: KeyboardBuilder = field(default_factory=KeyboardBuilder)
-    main_keyboard: KeyboardBuilder = field(default_factory=KeyboardBuilder)
-    footer_keyboard: KeyboardBuilder = field(default_factory=KeyboardBuilder)
-    finalizer: Any | None = None  # todo
+    header_keyboard: list[ButtonsBlockSpec] = field(default_factory=list)
+    main_keyboard: list[ButtonsBlockSpec] = field(default_factory=list)
+    footer_keyboard: list[ButtonsBlockSpec] = field(default_factory=list)
+    finalizer: MenuFinalizer | None = None  # todo
 
-    def total_keyboard(self) -> list[list[ButtonSpec]]:
+    def total_blocks(self) -> list[ButtonsBlockSpec]:
         return [
-            *self.header_keyboard.keyboard,
-            *self.main_keyboard.keyboard,
-            *self.footer_keyboard.keyboard,
+            *self.header_keyboard,
+            *self.main_keyboard,
+            *self.footer_keyboard,
         ]
 
     async def render(self, ctx: MenuContext, app_context: Mapping[str, Any]) -> RenderedMenu:
@@ -208,7 +333,11 @@ class Menu(BaseModel):
                 curr = []
                 for button in line:
                     try:
-                        curr.append(await button.build(app_context))
+                        curr.append(
+                            await button.build(
+                                app_context,
+                            )
+                        )
                     except Exception:
                         # todo logging
                         continue

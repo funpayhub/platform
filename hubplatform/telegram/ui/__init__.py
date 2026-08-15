@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from .types import (
-    Menu,
     Buttons,
-    ButtonSpec,
+    MenuSpec,
     ButtonsRow,
     ButtonType,
     MenuContext,
@@ -11,6 +10,7 @@ from .types import (
     RenderedMenu,
     ButtonContext,
     KeyboardBuilder,
+    ButtonsBlockSpec,
     InlineKeyboardButton,
 )
 from .builders import (
