@@ -1,113 +1,194 @@
 from __future__ import annotations
 
-from typing import Any, overload
-from functools import partial
+import inspect
+from typing import Any, TypeVar, Callable, Protocol, ParamSpec, Concatenate
+from dataclasses import field, dataclass
 from collections import defaultdict
-from collections.abc import Mapping, Callable
+from collections.abc import Mapping, Sequence, Awaitable
 
-from .types import MenuSpec, MenuContext, ButtonContext, KeyboardBlockSpec
-from .builders import MenuBuilder, ButtonBuilder, MenuModification, ButtonModification
+from eventry.asyncio.callable_wrappers import CallableWrapper
+
+from .types import MenuSpec, MenuContext
 
 
-_REGISTRABLE = type[MenuBuilder | ButtonBuilder | MenuModification | ButtonModification]
+_P = ParamSpec('_P')
+MenuBuilder = Callable[Concatenate[MenuContext, _P], Awaitable[MenuSpec]]
+MenuModification = Callable[Concatenate[MenuContext, 'MenuBuildingState', _P], Awaitable[MenuSpec]]
+MenuModificationFilter = Callable[
+    Concatenate[MenuContext, 'MenuBuildingState', _P], Awaitable[bool]
+]
+
+
+class MenuBuilderProto(Protocol[_P]):
+    async def __call__(self, _c: MenuContext, /, *_a: _P.args, **_k: _P.kwargs) -> MenuSpec: ...
+
+
+class MenuModificationProto(Protocol[_P]):
+    async def __call__(
+        self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
+    ) -> MenuSpec: ...
+
+
+class MenuModificationWithFilterProto(MenuModificationProto[_P], Protocol[_P]):
+    async def filter(
+        self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
+    ) -> bool: ...
+
+
+_MenuBuilderType = MenuBuilder[Any] | type[MenuBuilderProto[Any]]
+_MenuModificationType = (
+    MenuModification[Any]
+    | type[MenuModificationProto[Any]]
+    | type[MenuModificationWithFilterProto[Any]]
+)
+
+
+@dataclass
+class MenuBuildingState:
+    menu: MenuSpec
+    pending_modifications: list[MenuModificationMeta]
+
+
+@dataclass(frozen=True)
+class MenuBuilderMeta:
+    _callable_wrapper: CallableWrapper[MenuSpec] = field(init=False)
+    _is_class: bool = field(init=False)
+
+    id: str
+    builder_obj: _MenuBuilderType
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, '_is_class', isinstance(self.builder_obj, type))
+        object.__setattr__(
+            self,
+            '_callable_wrapper',
+            CallableWrapper(self.builder_obj.__call__ if self._is_class else self.builder_obj),
+        )
+
+    async def build(
+        self,
+        menu_context: MenuContext,
+        args: Sequence[Any],
+        data: Mapping[str, Any],
+        modifications: list[MenuModificationMeta],
+    ) -> MenuSpec:
+        if self._is_class:
+            total_args = [self.builder_obj(), menu_context, *args]
+        else:
+            total_args = [menu_context, *args]
+
+        result = await self._callable_wrapper(args=total_args, data=data)
+        if not isinstance(result, MenuSpec):
+            raise Exception('not a menu spec')  # todo
+
+        mods = modifications.copy()
+        while mods:
+            try:
+                mod = mods.pop()
+                state = MenuBuildingState(menu=result, pending_modifications=mods.copy())
+                state = await mod.build(menu_context, state, args=args, data=data)
+                result = state.menu
+                mods = state.pending_modifications
+            except Exception:
+                ...
+
+        return result
+
+
+@dataclass(frozen=True)
+class MenuModificationMeta:
+    _is_class: bool = field(init=False)
+    _explicit_filter_wrapper: CallableWrapper[bool] | None = field(init=False, default=None)
+    _filter_from_mod_wrapper: CallableWrapper[bool] | None = field(init=False, default=None)
+    _modification_wrapper: CallableWrapper[MenuBuildingState] = field(init=False)
+
+    id: str
+    menu_id: str
+    modification: _MenuModificationType
+    filter: MenuModificationFilter | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, '_is_class', isinstance(self.modification, type))
+        object.__setattr__(
+            self,
+            '_callable_wrapper',
+            CallableWrapper(self.modification.__call__ if self._is_class else self.modification),
+        )
+        if self.filter is not None:
+            object.__setattr__(self, '_explicit_filter_wrapper', CallableWrapper(self.filter))
+
+        if (
+            self._is_class
+            and hasattr(self.modification, 'filter')
+            and inspect.isfunction(self.modification.filter)
+        ):
+            object.__setattr__(
+                self, '_filter_from_mod_wrapper', CallableWrapper(self.modification.filter)
+            )
+
+    async def run_filter(self, args: Sequence[Any], data: Mapping[str, Any]) -> bool:
+        if self._explicit_filter_wrapper is not None:
+            result = bool(await self._explicit_filter_wrapper(args=args, data=data))
+            if not result:
+                return False
+
+        if self._filter_from_mod_wrapper is not None:
+            result = bool(await self._filter_from_mod_wrapper(args=args, data=data))
+            if not result:
+                return False
+
+        return True
+
+    async def build(
+        self,
+        menu_context: MenuContext,
+        menu_state: MenuBuildingState,
+        args: Sequence[Any],
+        data: Mapping[str, Any],
+    ) -> MenuBuildingState:
+        args = [menu_context, menu_state, *args]
+
+        if not (await self.run_filter(args=args, data=data)):
+            return menu_state
+
+        result = await self._modification_wrapper(args=args, data=data)
+        if not isinstance(result, MenuBuildingState):
+            print('not a building state')  # todo: loggin
+            result = menu_state
+
+        return result
+
+
+_MB = TypeVar('_MB', bound=_MenuBuilderType)
+_MM = TypeVar('_MM', bound=_MenuModificationType)
 
 
 class UIRegistry:
     def __init__(self, *, context: Mapping[str, Any] | None = None) -> None:
-        self._menus: dict[str, MenuBuilder] = {}
-        self._buttons: dict[str, ButtonBuilder] = {}
-        self._menu_mods: dict[str, dict[str, MenuModification]] = defaultdict(dict)
-        self._button_mods: dict[str, dict[str, ButtonModification]] = defaultdict(dict)
         self._context = context if context is not None else {}
+        self._menus: dict[str, MenuBuilderMeta] = {}
+        self._menu_modifications: dict[str, dict[str, Any]] = defaultdict(dict)
 
-    @overload
-    def register[R](self, cls: None = None, *, overwrite: bool = False) -> Callable[[R], R]:
-        pass
+    def add_menu_builder(self, menu_id: str) -> Callable[[_MB], _MB]:
+        if not isinstance(menu_id, str):
+            raise TypeError('menu_id must be a string.')
+        if not menu_id:
+            raise ValueError('menu_id cannot be empty.')
+        if menu_id == '*':
+            raise ValueError('Invalid menu_id.')
+        if menu_id in self._menus:
+            raise RuntimeError(f'Menu {menu_id!r} already registered.')
 
-    @overload
-    def register[R: _REGISTRABLE](self, cls: R, *, overwrite: bool = False) -> R:
-        pass
+        def inner(builder: _MB) -> _MB:
+            self._menus[menu_id] = MenuBuilderMeta(id=menu_id, builder_obj=builder)
+            return builder
 
-    def register[R: _REGISTRABLE](
-        self, cls: R | None = None, *, for_id: str | None = None, overwrite: bool = False
-    ) -> R | Callable[[R], R]:
-        if cls is None:
-            return partial(self._register, for_id=for_id, overwrite=overwrite)
-        return self._register(cls, for_id=for_id, overwrite=overwrite)
+        return inner
 
-    def _register[R: _REGISTRABLE](
-        self, cls: R, *, for_id: str | None = None, overwrite: bool = False
-    ) -> R:
-        if not isinstance(cls, type):
-            raise TypeError('must be a subclass of _REGISTRABLE')  # todo
-
-        for type_, dict_ in (
-            (MenuBuilder, self._menus),
-            (ButtonBuilder, self._buttons),
-        ):
-            if issubclass(cls, type_):
-                if cls.id in dict_ and not overwrite:
-                    raise RuntimeError(
-                        f'{type_.__name__!r} with id {cls.id!r} is already registered.'
-                    )
-                dict_[cls.id] = cls()  # type: ignore[assignment]
-                return cls
-
-        for type_, dict_ in (
-            (MenuModification, self._menu_mods),
-            (ButtonBuilder, self._button_mods),
-        ):
-            if issubclass(cls, type_):
-                if for_id is None:
-                    raise ValueError("For modifications 'for_id' must be specified.")
-                if cls.id in dict_[for_id] and not overwrite:
-                    raise RuntimeError(
-                        f'{type_.__name__!r} with id {cls.id!r} for {for_id!r} is already registered.'
-                    )
-                dict_[for_id][cls.id] = cls()  # type: ignore[assignment]
-                return cls
-
-        raise TypeError('must be a subclass of _REGISTRABLE')  # todo
-
-    def include_from_registry(self, registry: UIRegistry, overwrite: bool = False) -> None: ...
-
-    def include_from_registries(
-        self, *registries: UIRegistry, overwrite: bool = False
-    ) -> None: ...
-
-    async def build_menu(self, ctx: MenuContext) -> MenuSpec:
-        if ctx.menu_id not in self._menus:
-            raise ValueError(f'Menu with ID {ctx.menu_id!r} not found.')  # todo: custom error
-
-        menu_builder = self._menus[ctx.menu_id]
-
-        try:
-            menu = await menu_builder(ctx, self._context)
-        except Exception:
-            raise Exception('Unable to build menu.')  # todo: custom error
-
-        if ctx.menu_id not in self._menu_mods:
-            return menu
-
-        mods = self._menu_mods[ctx.menu_id]
-        menu_copy = menu.model_copy(deep=True)
-        for mod in mods.values():
-            try:
-                menu = await mod(ctx, menu, self._context)
-            except Exception:
-                print('Error in menu mod')
-                menu = menu_copy
-                menu_copy = menu.model_copy(deep=True)
-                continue
-
-        menu_copy = menu.model_copy(deep=True)
-        try:
-            await menu.finalizer(ctx, menu, self._context)
-        except Exception:
-            print('Error in menu finalizer')
-            menu = menu_copy
-
-        # todo: rendered_menu = await menu.render(ctx, menu, self._context)
-        # todo: return rendered menu
-
-    async def build_button(self, ctx: ButtonContext) -> KeyboardBlockSpec: ...
+    def add_menu_modification(
+        self, menu_id: str, modification_id: str, filter: MenuModificationFilter | None = None
+    ) -> Callable[[_MM], _MM]:
+        if not isinstance(menu_id, str):
+            raise TypeError('menu_id must be a string.')
+        if not menu_id:
+            raise ValueError('menu_id cannot be empty.')
