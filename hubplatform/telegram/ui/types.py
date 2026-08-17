@@ -5,7 +5,7 @@ __all__ = [
     'Button',
     'Keyboard',
     'KeyboardBlockSpec',
-    'KeyboardModification',
+    'KeyboardModificationMeta',
     'KeyboardBuildingState',
     'MenuSpec',
     'RenderedMenu',
@@ -13,7 +13,7 @@ __all__ = [
     'MenuContextSnapshot',
 ]
 
-from typing import Any, Self, Literal, ParamSpec, Concatenate
+from typing import Any, Self, Union, Literal, ParamSpec, Concatenate
 from dataclasses import field, dataclass
 from collections.abc import Mapping, Callable, Awaitable
 
@@ -21,22 +21,30 @@ from pydantic import Field, BaseModel, ConfigDict
 from aiogram.types import LoginUrl, WebAppInfo, CallbackGame, CopyTextButton, InlineKeyboardButton
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
+from hubplatform.logging.loggers import telegram as _logger
 from hubplatform.telegram.callback_data import CallbackData
+from hubplatform.telegram.ui.exceptions import KeyboardBlockBuildingError
 from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
 from hubplatform.telegram.callback_data.hash import HashService
 
 
+logger = _logger.ui
+
 _P = ParamSpec('_P')
 Keyboard = list[list['Button']]
 KeyboardSpecBuilder = Callable[..., Awaitable[Keyboard]] | Callable[..., Keyboard]
-KeyboardModificationCallable = (
-    Callable[Concatenate['KeyboardBuildingState', _P], Awaitable['KeyboardBuildingState']]
-    | Callable[Concatenate['KeyboardBuildingState', _P], 'KeyboardBuildingState']
-)
-MenuFinalizer = (
-    Callable[Concatenate['MenuSpec', _P], Awaitable['MenuSpec']]
-    | Callable[Concatenate['MenuSpec', _P], 'MenuSpec']
-)
+KeyboardModificationCallable = Union[
+    Callable[
+        Concatenate['KeyboardBuildingState', _P],
+        Awaitable[Union['KeyboardBuildingState', 'Keyboard']],
+    ],
+    Callable[Concatenate['KeyboardBuildingState', _P], Union['KeyboardBuildingState', 'Keyboard']],
+]
+
+MenuFinalizer = Union[
+    Callable[Concatenate['MenuContext', 'MenuSpec', _P], Awaitable[Union['MenuSpec']]],
+    Callable[Concatenate['MenuContext', 'MenuSpec', _P], 'MenuSpec'],
+]
 
 
 class Button(BaseModel):
@@ -162,7 +170,7 @@ class KeyboardBlockSpec:
         self._builder: CallableWrapper[Keyboard] = (
             builder if isinstance(builder, CallableWrapper) else CallableWrapper(builder)
         )
-        self._modifications: list[KeyboardModification] = []
+        self._modifications: list[KeyboardModificationMeta] = []
 
     @property
     def block_id(self) -> str:
@@ -172,42 +180,44 @@ class KeyboardBlockSpec:
         self, modification_id: str, modification: KeyboardModificationCallable
     ) -> None:
         self._modifications.append(
-            KeyboardModification(
+            KeyboardModificationMeta(
                 modification_id=modification_id,
-                modification_callable=modification,
+                callable=modification,
             )
         )
 
     async def build(
         self,
-        app_context: Mapping[str, Any],
+        di_context: Mapping[str, Any],
         hash_service: HashService | None = None,
     ) -> list[list[InlineKeyboardButton]]:
         try:
-            initial_keyboard = await self._builder(data=app_context)
+            initial_keyboard = await self._builder(data=di_context)
         except Exception as e:
-            raise Exception(
-                f'An error occurred while building button {self.block_id}'
-            ) from e  # todo: button build exception
+            raise KeyboardBlockBuildingError(
+                f'An error occurred while building keyboard block {self.block_id!r}.'
+            ) from e
 
         buttons = initial_keyboard
         pending_mods = self._modifications.copy()
         while pending_mods:
             modification = pending_mods.pop()
             try:
-                new_block = KeyboardBuildingState(
-                    buttons=buttons, pending_modifications=pending_mods.copy()
-                )
-                wrapped = CallableWrapper(modification.modification_callable)
-                block = await wrapped(args=(new_block,), data=app_context)
-                buttons = block.buttons
-                pending_mods = block.pending_modifications
+                state = KeyboardBuildingState(buttons=buttons, pending_modifications=pending_mods)
+                result = await modification.build(state, di_context)
+                if isinstance(result, KeyboardBuildingState):
+                    buttons = result.buttons
+                    pending_mods = result.pending_modifications
+                else:
+                    buttons = result
             except Exception:
-                import traceback
-
-                print(traceback.format_exc())
-                # todo: normal logging
-                continue
+                logger.error(
+                    'An error occurred while executing modification %s for keyboard block %s. '
+                    'Skipping modification.',
+                    modification.modification_id,
+                    self.block_id,
+                    exc_info=True,
+                )
 
         result = []
         for line in buttons:
@@ -299,15 +309,50 @@ class KeyboardBlockSpec:
 
 
 @dataclass(frozen=True)
-class KeyboardModification:
+class KeyboardModificationMeta:
+    _wrapped: CallableWrapper[Keyboard | KeyboardBuildingState] = field(init=False)
     modification_id: str
-    modification_callable: KeyboardModificationCallable
+    callable: KeyboardModificationCallable
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, '_wrapped', CallableWrapper(self.callable))
+
+    async def build(
+        self, state: KeyboardBuildingState, di_context: Mapping[str, Any]
+    ) -> KeyboardBuildingState | Keyboard:
+        result = await self._wrapped(args=[state], data=di_context)
+        if isinstance(result, KeyboardBuildingState):
+            return result
+        if isinstance(result, list):
+            for line_index, line in enumerate(result):
+                if not isinstance(line, list):
+                    raise KeyboardBlockBuildingError(
+                        f'Keyboard block modification returned '
+                        f'unexpected value typed at line {line_index}. '
+                        f'Expected: list[Button], got: {type(line).__name__!r}.'
+                    )
+                for button_index, button in enumerate(line):
+                    if not isinstance(button, Button):
+                        raise KeyboardBlockBuildingError(
+                            f'Keyboard block modification returned '
+                            f'unexpected value typed at line {line_index} '
+                            f'at position {button_index}. '
+                            f'Expected: list[Button], got: {type(line).__name__!r}.'
+                        )
+        else:
+            raise KeyboardBlockBuildingError(
+                f'Keyboard block modification {self.modification_id!r} '
+                f'returned unexpected value type. '
+                f'Expected: list[Button] or KeyboardBuildingState, got: {type(result).__name__!r}.'
+            )
+
+        return result
 
 
 @dataclass
 class KeyboardBuildingState:
     buttons: list[list[Button]]
-    pending_modifications: list[KeyboardModification]
+    pending_modifications: list[KeyboardModificationMeta]
 
 
 class MenuSpec(BaseModel):

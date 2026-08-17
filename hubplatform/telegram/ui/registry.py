@@ -8,8 +8,12 @@ from collections.abc import Mapping, Sequence, Awaitable
 
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
+from hubplatform.logging.loggers import telegram as _logger
+
 from .types import MenuSpec, MenuContext
 
+
+logger = _logger.ui
 
 _P = ParamSpec('_P')
 MenuBuilder = Callable[Concatenate[MenuContext, _P], Awaitable[MenuSpec]]
@@ -83,14 +87,32 @@ class MenuBuilderMeta:
 
         mods = modifications.copy()
         while mods:
+            mod = mods.pop()
             try:
-                mod = mods.pop()
                 state = MenuBuildingState(menu=result, pending_modifications=mods.copy())
-                state = await mod.build(menu_context, state, args=args, data=data)
-                result = state.menu
-                mods = state.pending_modifications
-            except Exception:
-                ...
+                mod_result = await mod.build(menu_context, state, args=args, data=data)
+                if isinstance(mod_result, MenuSpec):
+                    result = mod_result
+                elif isinstance(mod_result, MenuBuildingState):
+                    result = state.menu
+                    mods = state.pending_modifications
+                else:
+                    logger.error(
+                        'An error occurred while running modification %s for menu %s: '
+                        'modification return %s, but expected `MenuSpec` or `MenuBuildingState. '
+                        'Skipping modification.',
+                        mod.id,
+                        menu_context.menu_id,
+                        type(mod_result).__name__,
+                    )
+            except Exception as e:
+                logger.exception(
+                    'An error occurred while running modification %s for menu %s. '
+                    'Skipping modification.',
+                    mod.id,
+                    menu_context.menu_id,
+                    exc_info=e,
+                )
 
         return result
 

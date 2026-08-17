@@ -5,7 +5,7 @@ __all__ = [
     'Button',
     'Keyboard',
     'KeyboardBlockSpec',
-    'KeyboardModification',
+    'KeyboardModificationMeta',
     'KeyboardBuildingState',
     'MenuSpec',
     'RenderedMenu',
@@ -21,6 +21,6 @@ from .types import (
     RenderedMenu,
     KeyboardBlockSpec,
     MenuContextSnapshot,
-    KeyboardModification,
     KeyboardBuildingState,
+    KeyboardModificationMeta,
 )
