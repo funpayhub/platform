@@ -41,9 +41,7 @@ class MenuModificationWithFilterProto(MenuModificationProto[_P], Protocol[_P]):
 
 _MenuBuilderType = MenuBuilder | type[MenuBuilderProto]
 _MenuModificationType = (
-    MenuModification
-    | type[MenuModificationProto]
-    | type[MenuModificationWithFilterProto]
+    MenuModification | type[MenuModificationProto] | type[MenuModificationWithFilterProto]
 )
 
 
