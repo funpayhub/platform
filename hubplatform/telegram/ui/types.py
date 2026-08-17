@@ -36,7 +36,7 @@ from hubplatform.telegram.callback_data.hash import HashService
 
 logger = _logger.ui
 
-_P = ParamSpec('_P')
+_P = ParamSpec('_P', default=...)
 Keyboard = MutableSequence[MutableSequence['Button']]
 KeyboardSpecBuilder = Callable[..., Awaitable[Keyboard]] | Callable[..., Keyboard]
 KeyboardModificationCallable = Union[
@@ -390,13 +390,13 @@ class MenuSpec:
     footer_keyboard: MutableSequence[KeyboardBlockSpec] = dataclass_field(default_factory=list)
     finalizer: MenuFinalizer | None = None
 
-    async def _build_keyboard(
+    async def _build_kb(
         self,
         keyboard: MutableSequence[KeyboardBlockSpec],
         errors_list: list[KeyboardBlockBuildingError],
         di_context: Mapping[str, Any],
     ) -> Keyboard:
-        result_keyboard = []
+        result_keyboard: Keyboard = []
         for block in keyboard:
             try:
                 result = await block.build(di_context)
@@ -416,7 +416,7 @@ class MenuSpec:
         di_context: Mapping[str, Any],
         hash_service: HashService | None = None,
     ) -> RenderedMenu:
-        building_errors = []
+        building_errors: list[KeyboardBlockBuildingError] = []
         pre_render_menu = PreRenderedMenu(
             header_text=self.header_text,
             header_body_sep=self.header_body_sep,
@@ -424,15 +424,9 @@ class MenuSpec:
             body_footer_sep=self.body_footer_sep,
             footer_text=self.footer_text,
             header_footer_sep=self.header_footer_sep,
-            header_keyboard=await self._build_keyboard(
-                self.header_keyboard, building_errors, di_context
-            ),
-            main_keyboard=await self._build_keyboard(
-                self.main_keyboard, building_errors, di_context
-            ),
-            footer_keyboard=await self._build_keyboard(
-                self.footer_keyboard, building_errors, di_context
-            ),
+            header_keyboard=await self._build_kb(self.header_keyboard, building_errors, di_context),
+            main_keyboard=await self._build_kb(self.main_keyboard, building_errors, di_context),
+            footer_keyboard=await self._build_kb(self.footer_keyboard, building_errors, di_context),
         )
 
         menu_finalizing_error: MenuFinalizingError | None = None
@@ -457,8 +451,7 @@ class MenuSpec:
                 menu_finalizing_error = new_e
 
         converted_keyboard: list[list[InlineKeyboardButton]] = []
-        render_errors = []
-
+        render_errors: list[ButtonRenderError] = []
         for line in pre_render_menu.total_keyboard:
             result_line = []
             for button in line:

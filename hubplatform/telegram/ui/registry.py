@@ -15,7 +15,7 @@ from .types import MenuSpec, MenuContext
 
 logger = _logger.ui
 
-_P = ParamSpec('_P')
+_P = ParamSpec('_P', default=...)
 MenuBuilder = Callable[Concatenate[MenuContext, _P], Awaitable[MenuSpec]]
 MenuModification = Callable[Concatenate[MenuContext, 'MenuBuildingState', _P], Awaitable[MenuSpec]]
 MenuModificationFilter = Callable[
@@ -39,11 +39,11 @@ class MenuModificationWithFilterProto(MenuModificationProto[_P], Protocol[_P]):
     ) -> bool: ...
 
 
-_MenuBuilderType = MenuBuilder[Any] | type[MenuBuilderProto[Any]]
+_MenuBuilderType = MenuBuilder | type[MenuBuilderProto]
 _MenuModificationType = (
-    MenuModification[Any]
-    | type[MenuModificationProto[Any]]
-    | type[MenuModificationWithFilterProto[Any]]
+    MenuModification
+    | type[MenuModificationProto]
+    | type[MenuModificationWithFilterProto]
 )
 
 
@@ -127,7 +127,7 @@ class MenuModificationMeta:
     id: str
     menu_id: str
     modification: _MenuModificationType
-    filter: MenuModificationFilter | None = None
+    filter: MenuModificationFilter[Any] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, '_is_class', isinstance(self.modification, type))
