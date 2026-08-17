@@ -26,6 +26,7 @@ from hubplatform.logging.loggers import telegram as _logger
 from hubplatform.telegram.callback_data import CallbackData
 from hubplatform.telegram.ui.exceptions import (
     ButtonRenderError,
+    MenuFinalizingError,
     KeyboardBlockBuildingError,
     KeyboardBlockModificationError,
 )
@@ -47,8 +48,8 @@ KeyboardModificationCallable = Union[
 ]
 
 MenuFinalizer = Union[
-    Callable[Concatenate['MenuContext', 'MenuSpec', _P], Awaitable[Union['MenuSpec']]],
-    Callable[Concatenate['MenuContext', 'MenuSpec', _P], 'MenuSpec'],
+    Callable[Concatenate['PreRenderedMenu', _P], Awaitable['PreRenderedMenu']],
+    Callable[Concatenate['PreRenderedMenu', _P], 'PreRenderedMenu'],
 ]
 
 
@@ -377,6 +378,7 @@ class KeyboardBlockBuildingResult:
     validate_on_init=True,
 )
 class MenuSpec:
+    menu_id: str
     header_text: str = ''
     header_body_sep: str = '\n\n'
     body_text: str = ''
@@ -388,35 +390,76 @@ class MenuSpec:
     footer_keyboard: MutableSequence[KeyboardBlockSpec] = dataclass_field(default_factory=list)
     finalizer: MenuFinalizer | None = None
 
-    def total_blocks(self) -> list[KeyboardBlockSpec]:
-        return [
-            *self.header_keyboard,
-            *self.main_keyboard,
-            *self.footer_keyboard,
-        ]
-
-    async def render(
+    async def _build_keyboard(
         self,
-        app_context: Mapping[str, Any],
-        hash_service: HashService | None = None,
-    ) -> RenderedMenu:
-        keyboard = []
-        building_errors = []
-        for block in self.total_blocks():
+        keyboard: MutableSequence[KeyboardBlockSpec],
+        errors_list: list[KeyboardBlockBuildingError],
+        di_context: Mapping[str, Any],
+    ) -> Keyboard:
+        result_keyboard = []
+        for block in keyboard:
             try:
-                result = await block.build(app_context)
-                keyboard.extend(result.keyboard)
-                building_errors.extend(result.errors)
+                result = await block.build(di_context)
+                result_keyboard.extend(result.keyboard)
+                errors_list.extend(result.errors)
             except KeyboardBlockBuildingError as e:
-                building_errors.append(e)
+                errors_list.append(e)
             except Exception as e:
                 new_e = KeyboardBlockBuildingError(block_id=block.block_id)
                 new_e.__cause__ = e
-                building_errors.append(new_e)
+                errors_list.append(new_e)
+
+        return result_keyboard
+
+    async def render(
+        self,
+        di_context: Mapping[str, Any],
+        hash_service: HashService | None = None,
+    ) -> RenderedMenu:
+        building_errors = []
+        pre_render_menu = PreRenderedMenu(
+            header_text=self.header_text,
+            header_body_sep=self.header_body_sep,
+            body_text=self.body_text,
+            body_footer_sep=self.body_footer_sep,
+            footer_text=self.footer_text,
+            header_footer_sep=self.header_footer_sep,
+            header_keyboard=await self._build_keyboard(
+                self.header_keyboard, building_errors, di_context
+            ),
+            main_keyboard=await self._build_keyboard(
+                self.main_keyboard, building_errors, di_context
+            ),
+            footer_keyboard=await self._build_keyboard(
+                self.footer_keyboard, building_errors, di_context
+            ),
+        )
+
+        menu_finalizing_error: MenuFinalizingError | None = None
+        if self.finalizer is not None:
+            try:
+                wrapped = CallableWrapper(self.finalizer)
+                result = await wrapped(args=[pre_render_menu], data=di_context)
+                if not isinstance(result, PreRenderedMenu):
+                    menu_finalizing_error = MenuFinalizingError(
+                        menu_id=self.menu_id,
+                        message=f'Finalizer for menu {self.menu_id!r} return unexpected type. '
+                        f'Expected: PreRenderedMenu!r, '
+                        f'got {result.__class__.__name__!r}',
+                    )
+                else:
+                    pre_render_menu = result
+            except MenuFinalizingError as e:
+                menu_finalizing_error = e
+            except Exception as e:
+                new_e = MenuFinalizingError(menu_id=self.menu_id)
+                new_e.__cause__ = e
+                menu_finalizing_error = new_e
 
         converted_keyboard: list[list[InlineKeyboardButton]] = []
         render_errors = []
-        for line in keyboard:
+
+        for line in pre_render_menu.total_keyboard:
             result_line = []
             for button in line:
                 try:
@@ -446,6 +489,7 @@ class MenuSpec:
             text=text,
             keyboard=converted_keyboard,
             building_errors=building_errors,
+            finalizing_error=menu_finalizing_error,
             render_errors=render_errors,
         )
 
@@ -453,16 +497,24 @@ class MenuSpec:
 @pydantic_dataclass(
     config=ConfigDict(arbitrary_types_allowed=True, validate_assignment=True),
 )
-class PreFinalizedMenu:
+class PreRenderedMenu:
     header_text: str
     header_body_sep: str
     body_text: str
     body_footer_sep: str
     footer_text: str
     header_footer_sep: str
-    header_keyboard: Keyboard = dataclass_field(default_factory=list)
-    main_keyboard: Keyboard = dataclass_field(default_factory=list)
-    footer_keyboard: Keyboard = dataclass_field(default_factory=list)
+    header_keyboard: Keyboard
+    main_keyboard: Keyboard
+    footer_keyboard: Keyboard
+
+    @property
+    def total_keyboard(self) -> Keyboard:
+        return [
+            *self.header_keyboard,
+            *self.main_keyboard,
+            *self.footer_keyboard,
+        ]
 
 
 @pydantic_dataclass
@@ -470,6 +522,7 @@ class RenderedMenu:
     text: str
     keyboard: list[list[InlineKeyboardButton]]
     building_errors: list[KeyboardBlockBuildingError] = Field(default_factory=list)
+    finalizing_error: MenuFinalizingError | None = Field(default=None)
     render_errors: list[ButtonRenderError] = Field(default_factory=list)
 
 
