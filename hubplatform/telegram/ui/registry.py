@@ -16,37 +16,49 @@ from .types import MenuSpec, MenuContext
 logger = _logger.ui
 
 _P = ParamSpec('_P', default=...)
-MenuBuilder = Callable[Concatenate[MenuContext, _P], Awaitable[MenuSpec | 'MenuBuildingSpec']]
-MenuModification = Callable[Concatenate[MenuContext, 'MenuBuildingSpec', _P], Awaitable[MenuSpec]]
-MenuModificationFilter = Callable[
-    Concatenate[MenuContext, 'MenuBuildingSpec', _P], Awaitable[bool]
-]
 MenuFinalizer = Union[
-    Callable[Concatenate[MenuContext, 'MenuSpec', _P], Awaitable['MenuSpec']],
-    Callable[Concatenate[MenuContext, 'MenuSpec', _P], 'MenuSpec'],
+    Callable[Concatenate[MenuContext, 'MenuBuildingState', _P], Awaitable[MenuSpec]],
+    Callable[Concatenate[MenuContext, 'MenuBuildingState', _P], MenuSpec],
 ]
 
 
 class MenuBuilderProto(Protocol[_P]):
-    async def __call__(self, _c: MenuContext, /, *_a: _P.args, **_k: _P.kwargs) -> MenuSpec: ...
+    async def __call__(
+        self, _c: MenuContext, /, *_a: _P.args, **_k: _P.kwargs
+    ) -> MenuSpec | MenuBuildingSpec: ...
 
 
 class MenuModificationProto(Protocol[_P]):
     async def __call__(
-        self, _c: MenuContext, _s: MenuBuildingSpec, /, *_a: _P.args, **_k: _P.kwargs
-    ) -> MenuSpec: ...
+        self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
+    ) -> MenuSpec | MenuBuildingState: ...
+
+
+class MenuModificationFilterProto(Protocol[_P]):
+    async def __call__(
+        self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
+    ) -> bool: ...
 
 
 class MenuModificationWithFilterProto(MenuModificationProto[_P], Protocol[_P]):
     async def filter(
-        self, _c: MenuContext, _s: MenuBuildingSpec, /, *_a: _P.args, **_k: _P.kwargs
+        self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
     ) -> bool: ...
 
 
-_MenuBuilderType = MenuBuilder | type[MenuBuilderProto]
-_MenuModificationType = (
-    MenuModification | type[MenuModificationProto] | type[MenuModificationWithFilterProto]
-)
+class MenuFinalizerProto(Protocol[_P]):
+    async def __call__(
+        self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
+    ) -> MenuSpec: ...
+
+
+MenuBuilderType = MenuBuilderProto | type[MenuBuilderProto]
+MenuModificationType = Union[
+    MenuModificationProto,
+    MenuModificationWithFilterProto,
+    type[MenuModificationProto],
+    type[MenuModificationWithFilterProto],
+]
 
 
 @dataclass
@@ -56,20 +68,27 @@ class MenuBuildingSpec:
     finalizer: MenuFinalizer | None = None
 
 
+@dataclass
+class MenuBuildingState:
+    menu: MenuSpec
+    pending_modifications: list[MenuModificationMeta] = field(default_factory=list)
+    finalizer: MenuFinalizer | None = None
+
+
 @dataclass(frozen=True)
 class MenuBuilderMeta:
-    _callable_wrapper: CallableWrapper[MenuSpec] = field(init=False)
+    _builder_wrapped: CallableWrapper[MenuSpec] = field(init=False)
     _is_class: bool = field(init=False)
 
     id: str
-    builder_obj: _MenuBuilderType
+    builder: MenuBuilderType
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, '_is_class', isinstance(self.builder_obj, type))
+        object.__setattr__(self, '_is_class', isinstance(self.builder, type))
         object.__setattr__(
             self,
-            '_callable_wrapper',
-            CallableWrapper(self.builder_obj.__call__ if self._is_class else self.builder_obj),
+            '_builder_wrapped',
+            CallableWrapper(self.builder.__call__ if self._is_class else self.builder),
         )
 
     async def build(
@@ -80,11 +99,11 @@ class MenuBuilderMeta:
         modifications: list[MenuModificationMeta],
     ) -> MenuSpec:
         if self._is_class:
-            total_args = [self.builder_obj(), menu_context, *args]
+            total_args = [self.builder(), menu_context, *args]
         else:
             total_args = [menu_context, *args]
 
-        result = await self._callable_wrapper(args=total_args, data=data)
+        result = await self._builder_wrapped(args=total_args, data=data)
         if not isinstance(result, MenuSpec):
             raise Exception('not a menu spec')  # todo
 
@@ -92,17 +111,17 @@ class MenuBuilderMeta:
         while mods:
             mod = mods.pop()
             try:
-                state = MenuBuildingSpec(menu=result, modifications=mods.copy())
+                state = MenuBuildingState(menu=result, pending_modifications=mods.copy())
                 mod_result = await mod.build(menu_context, state, args=args, data=data)
                 if isinstance(mod_result, MenuSpec):
                     result = mod_result
-                elif isinstance(mod_result, MenuBuildingSpec):
+                elif isinstance(mod_result, MenuBuildingState):
                     result = state.menu
-                    mods = state.modifications
+                    mods = state.pending_modifications
                 else:
                     logger.error(
                         'An error occurred while running modification %s for menu %s: '
-                        'modification return %s, but expected `MenuSpec` or `MenuBuildingSpec. '
+                        'modification return %s, but expected `MenuSpec` or `MenuBuildingState. '
                         'Skipping modification.',
                         mod.id,
                         menu_context.menu_id,
@@ -125,18 +144,18 @@ class MenuModificationMeta:
     _is_class: bool = field(init=False)
     _explicit_filter_wrapper: CallableWrapper[bool] | None = field(init=False, default=None)
     _filter_from_mod_wrapper: CallableWrapper[bool] | None = field(init=False, default=None)
-    _modification_wrapper: CallableWrapper[MenuBuildingSpec] = field(init=False)
+    _modification_wrapper: CallableWrapper[MenuBuildingState] = field(init=False)
 
     id: str
     menu_id: str
-    modification: _MenuModificationType
-    filter: MenuModificationFilter[Any] | None = None
+    modification: MenuModificationProto | MenuModificationWithFilterProto
+    filter: MenuModificationFilterProto | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, '_is_class', isinstance(self.modification, type))
         object.__setattr__(
             self,
-            '_callable_wrapper',
+            '_builder_wrapped',
             CallableWrapper(self.modification.__call__ if self._is_class else self.modification),
         )
         if self.filter is not None:
@@ -167,17 +186,17 @@ class MenuModificationMeta:
     async def build(
         self,
         menu_context: MenuContext,
-        menu_state: MenuBuildingSpec,
+        menu_state: MenuBuildingState,
         args: Sequence[Any],
         data: Mapping[str, Any],
-    ) -> MenuBuildingSpec:
+    ) -> MenuBuildingState:
         args = [menu_context, menu_state, *args]
 
         if not (await self.run_filter(args=args, data=data)):
             return menu_state
 
         result = await self._modification_wrapper(args=args, data=data)
-        if not isinstance(result, MenuBuildingSpec):
+        if not isinstance(result, MenuBuildingState):
             print('not a building state')  # todo: loggin
             result = menu_state
 
@@ -205,7 +224,7 @@ class UIRegistry:
             raise RuntimeError(f'Menu {menu_id!r} already registered.')
 
         def inner(builder: _MB) -> _MB:
-            self._menus[menu_id] = MenuBuilderMeta(id=menu_id, builder_obj=builder)
+            self._menus[menu_id] = MenuBuilderMeta(id=menu_id, builder=builder)
             return builder
 
         return inner
