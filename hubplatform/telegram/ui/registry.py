@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, TypeVar, Callable, Protocol, ParamSpec, Concatenate
+from typing import Any, Union, TypeVar, Callable, Protocol, ParamSpec, Concatenate
 from dataclasses import field, dataclass
 from collections import defaultdict
 from collections.abc import Mapping, Sequence, Awaitable
@@ -16,10 +16,14 @@ from .types import MenuSpec, MenuContext
 logger = _logger.ui
 
 _P = ParamSpec('_P', default=...)
-MenuBuilder = Callable[Concatenate[MenuContext, _P], Awaitable[MenuSpec]]
-MenuModification = Callable[Concatenate[MenuContext, 'MenuBuildingState', _P], Awaitable[MenuSpec]]
+MenuBuilder = Callable[Concatenate[MenuContext, _P], Awaitable[MenuSpec | 'MenuBuildingSpec']]
+MenuModification = Callable[Concatenate[MenuContext, 'MenuBuildingSpec', _P], Awaitable[MenuSpec]]
 MenuModificationFilter = Callable[
-    Concatenate[MenuContext, 'MenuBuildingState', _P], Awaitable[bool]
+    Concatenate[MenuContext, 'MenuBuildingSpec', _P], Awaitable[bool]
+]
+MenuFinalizer = Union[
+    Callable[Concatenate[MenuContext, 'MenuSpec', _P], Awaitable['MenuSpec']],
+    Callable[Concatenate[MenuContext, 'MenuSpec', _P], 'MenuSpec'],
 ]
 
 
@@ -29,13 +33,13 @@ class MenuBuilderProto(Protocol[_P]):
 
 class MenuModificationProto(Protocol[_P]):
     async def __call__(
-        self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
+        self, _c: MenuContext, _s: MenuBuildingSpec, /, *_a: _P.args, **_k: _P.kwargs
     ) -> MenuSpec: ...
 
 
 class MenuModificationWithFilterProto(MenuModificationProto[_P], Protocol[_P]):
     async def filter(
-        self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
+        self, _c: MenuContext, _s: MenuBuildingSpec, /, *_a: _P.args, **_k: _P.kwargs
     ) -> bool: ...
 
 
@@ -46,9 +50,10 @@ _MenuModificationType = (
 
 
 @dataclass
-class MenuBuildingState:
+class MenuBuildingSpec:
     menu: MenuSpec
-    pending_modifications: list[MenuModificationMeta]
+    modifications: list[MenuModificationMeta] = field(default_factory=list)
+    finalizer: MenuFinalizer | None = None
 
 
 @dataclass(frozen=True)
@@ -87,17 +92,17 @@ class MenuBuilderMeta:
         while mods:
             mod = mods.pop()
             try:
-                state = MenuBuildingState(menu=result, pending_modifications=mods.copy())
+                state = MenuBuildingSpec(menu=result, modifications=mods.copy())
                 mod_result = await mod.build(menu_context, state, args=args, data=data)
                 if isinstance(mod_result, MenuSpec):
                     result = mod_result
-                elif isinstance(mod_result, MenuBuildingState):
+                elif isinstance(mod_result, MenuBuildingSpec):
                     result = state.menu
-                    mods = state.pending_modifications
+                    mods = state.modifications
                 else:
                     logger.error(
                         'An error occurred while running modification %s for menu %s: '
-                        'modification return %s, but expected `MenuSpec` or `MenuBuildingState. '
+                        'modification return %s, but expected `MenuSpec` or `MenuBuildingSpec. '
                         'Skipping modification.',
                         mod.id,
                         menu_context.menu_id,
@@ -120,7 +125,7 @@ class MenuModificationMeta:
     _is_class: bool = field(init=False)
     _explicit_filter_wrapper: CallableWrapper[bool] | None = field(init=False, default=None)
     _filter_from_mod_wrapper: CallableWrapper[bool] | None = field(init=False, default=None)
-    _modification_wrapper: CallableWrapper[MenuBuildingState] = field(init=False)
+    _modification_wrapper: CallableWrapper[MenuBuildingSpec] = field(init=False)
 
     id: str
     menu_id: str
@@ -162,17 +167,17 @@ class MenuModificationMeta:
     async def build(
         self,
         menu_context: MenuContext,
-        menu_state: MenuBuildingState,
+        menu_state: MenuBuildingSpec,
         args: Sequence[Any],
         data: Mapping[str, Any],
-    ) -> MenuBuildingState:
+    ) -> MenuBuildingSpec:
         args = [menu_context, menu_state, *args]
 
         if not (await self.run_filter(args=args, data=data)):
             return menu_state
 
         result = await self._modification_wrapper(args=args, data=data)
-        if not isinstance(result, MenuBuildingState):
+        if not isinstance(result, MenuBuildingSpec):
             print('not a building state')  # todo: loggin
             result = menu_state
 
