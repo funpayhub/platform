@@ -204,7 +204,7 @@ class MenuModificationMeta:
             ):
                 return menu_state
 
-            result = await self._modification_wrapped(args=args, data=di_context)
+            result = await self._modification_wrapped(args=instance_args, data=di_context)
         except Exception as e:
             raise MenuModificationError(
                 menu_id=self.menu_id, modification_id=self.modification_id
@@ -250,7 +250,7 @@ async def build_menu(
     if state.finalizer is not None:
         try:
             wrapped: CallableWrapper[MenuSpec] = CallableWrapper(state.finalizer)
-            result = await wrapped(args=[state, menu_context], data=di_context)
+            result = await wrapped(args=[menu_context, state], data=di_context)
         except Exception as e:
             raise MenuFinalizingError(menu_id=menu_builder.menu_id) from e
 
