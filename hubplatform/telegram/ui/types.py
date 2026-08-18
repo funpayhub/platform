@@ -18,7 +18,8 @@ from dataclasses import field as dataclass_field, dataclass
 from collections.abc import Mapping, Callable, Awaitable, MutableSequence
 
 from pydantic import Field, BaseModel, ConfigDict
-from aiogram.types import LoginUrl, WebAppInfo, CallbackGame, CopyTextButton, InlineKeyboardButton
+from aiogram.types import LoginUrl, WebAppInfo, CallbackGame, CopyTextButton, InlineKeyboardButton, \
+    Message, CallbackQuery, InaccessibleMessage
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
@@ -452,6 +453,9 @@ class MenuContext(BaseModel):
     text_page: int = 0
     ui_history: list[MenuContextSnapshot]
     data: dict[str, Any] = Field(default_factory=dict)
+    chat_id: int | None = None
+    thread_id: int | None = None
+    message_id: int | None = None
 
     def _dump_context_fields(self) -> dict[str, Any]:
         return self.model_dump(
@@ -473,8 +477,15 @@ class MenuContext(BaseModel):
 
     @classmethod
     def from_snapshot(
-        cls, snapshot: MenuContextSnapshot, ui_history: list[MenuContextSnapshot] | None = None
+        cls,
+        snapshot: MenuContextSnapshot,
+        ui_history: list[MenuContextSnapshot] | None = None,
+        trigger: Any = None,
+        chat_id: int | None | Ellipsis = ...,
+        thread_id: int | None | Ellipsis = ...,
+        message_id: int | None | Ellipsis = ...,
     ) -> Self:
+
         return cls.model_validate(
             snapshot.fields
             | {
@@ -484,14 +495,34 @@ class MenuContext(BaseModel):
                 'ui_history': snapshot.ui_history if ui_history is None else ui_history,
                 'data': snapshot.data,
             }
+            | _trigger_dict(
+                trigger=trigger,
+                chat_id=chat_id,
+                thread_id=thread_id,
+                message_id=message_id,
+            )
         )
 
     @classmethod
-    def from_ui_history(cls, ui_history: list[MenuContextSnapshot]) -> Self:
+    def from_ui_history(
+        cls,
+        ui_history: list[MenuContextSnapshot],
+        trigger: Any = None,
+        chat_id: int | None | Ellipsis = ...,
+        thread_id: int | None | Ellipsis = ...,
+        message_id: int | None | Ellipsis = ...,
+    ) -> Self:
         if not ui_history:
             raise ValueError('UI history cannot be empty.')
 
-        return cls.from_snapshot(snapshot=ui_history[-1], ui_history=ui_history[:-1])
+        return cls.from_snapshot(
+            snapshot=ui_history[-1],
+            ui_history=ui_history[:-1],
+            trigger=trigger,
+            chat_id=chat_id,
+            thread_id=thread_id,
+            message_id=message_id,
+        )
 
 
 class MenuContextSnapshot(BaseModel):
@@ -501,3 +532,30 @@ class MenuContextSnapshot(BaseModel):
     data: dict[str, Any]
     fields: dict[str, Any]
     ui_history: list[MenuContextSnapshot]
+
+
+def _trigger_dict(
+    trigger: Any = None,
+    chat_id: int | None | Ellipsis = ...,
+    thread_id: int | None | Ellipsis = ...,
+    message_id: int | None | Ellipsis = ...,
+):
+    message: Message | InaccessibleMessage | None = None
+    if isinstance(trigger, Message):
+        message = trigger
+    elif isinstance(trigger, CallbackQuery):
+        message = trigger.message
+
+    if message is not None:
+        if chat_id is Ellipsis:
+            chat_id = message.chat.id
+        if thread_id is Ellipsis:
+            thread_id = message.message_thread_id if isinstance(message, Message) else None
+        if message_id is Ellipsis:
+            message_id = message.message_id
+
+    return {
+        'message_id': message_id,
+        'chat_id': chat_id,
+        'thread_id': thread_id,
+    }
