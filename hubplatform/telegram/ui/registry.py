@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Union, Protocol, ParamSpec
+from typing import Any, Union, Protocol, ParamSpec, TypeVar
+from collections import defaultdict
 from dataclasses import field, dataclass
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Callable
 
 from pydantic import ConfigDict
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
 from hubplatform.logging.loggers import telegram as _logger
+from . import MenuRenderResult
 
 from .types import MenuSpec, MenuContext
 from .exceptions import MenuBuildingError, MenuFinalizingError, MenuModificationError
-
+from ..callback_data.hash import HashService
 
 logger = _logger.ui
 
@@ -74,7 +76,7 @@ class MenuBuildingState:
     finalizer: MenuFinalizerType | None = None
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(frozen=True, config=ConfigDict(arbitrary_types_allowed=True, validate_assignment=True))
 class _MenuBuilderMeta:
     _builder_wrapped: CallableWrapper[MenuSpec] = field(init=False)
     _is_class: bool = field(init=False)
@@ -113,7 +115,7 @@ class _MenuBuilderMeta:
         )
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(frozen=True, config=ConfigDict(arbitrary_types_allowed=True, validate_assignment=True))
 class MenuModificationMeta:
     _is_class: bool = field(init=False)
     _explicit_filter_wrapped: CallableWrapper[bool] | None = field(init=False, default=None)
@@ -240,15 +242,17 @@ async def build_menu(
     return result
 
 
-_MB = TypeVar('_MB', bound=_MenuBuilderType)
-_MM = TypeVar('_MM', bound=_MenuModificationType)
+_MB = TypeVar('_MB', bound=MenuBuilderType)
+_MM = TypeVar('_MM', bound=MenuModificationType)
 
 
 class UIRegistry:
-    def __init__(self, *, context: Mapping[str, Any] | None = None) -> None:
+    def __init__(self, *, context: Mapping[str, Any] | None = None, hash_serivce: HashService | None = None) -> None:
         self._context = context if context is not None else {}
         self._menus: dict[str, _MenuBuilderMeta] = {}
-        self._menu_modifications: dict[str, dict[str, Any]] = defaultdict(dict)
+        self._menu_modifications: dict[str, dict[str, MenuModificationMeta]] = defaultdict(dict)
+        self._global_modifications: dict[str, MenuModificationMeta] = {}
+        self._hash_service = hash_serivce
 
     def add_menu_builder(self, menu_id: str) -> Callable[[_MB], _MB]:
         if not isinstance(menu_id, str):
@@ -267,10 +271,53 @@ class UIRegistry:
         return inner
 
     def add_menu_modification(
-        self, menu_id: str, modification_id: str, filter: MenuModificationFilter | None = None
+        self, menu_id: str, modification_id: str, filter: MenuModificationFilterProto | None = None
     ) -> Callable[[_MM], _MM]:
         if not isinstance(menu_id, str):
             raise TypeError('menu_id must be a string.')
         if not menu_id:
             raise ValueError('menu_id cannot be empty.')
+        if not isinstance(modification_id, str):
+            raise TypeError('modification_id must be a string.')
+        if not modification_id:
+            raise ValueError('modification_id cannot be empty.')
+        if menu_id in self._menu_modifications and modification_id in self._menu_modifications[menu_id]:
+            raise RuntimeError(
+                f'Menu modification {modification_id!r} for menu {menu_id!r} already registered.'
+            )
 
+        def inner(modification: _MM) -> _MM:
+            self._menu_modifications[menu_id][modification_id] = MenuModificationMeta(
+                modification_id=modification_id,
+                menu_id=menu_id,
+                filter=filter,
+                modification=modification
+            )
+            return modification
+
+        return inner
+
+    async def build_menu(
+        self,
+        menu_context: MenuContext,
+        hash_service: HashService | None = None,
+    ) -> MenuRenderResult:
+        if not isinstance(menu_context, MenuContext):
+            raise TypeError('menu_context must be an instance of `MenuContext`.')
+        if menu_context.menu_id not in self._menus:
+            raise KeyError(f'Menu {menu_context.menu_id!r} not registered.')
+
+        menu_spec = await build_menu(
+            menu_builder=self._menus[menu_context.menu_id],
+            menu_context=menu_context,
+            modifications=[
+                *self._global_modifications.values(),
+                *self._menu_modifications[menu_context.menu_id].values()
+            ],
+            di_context=self._context
+        )
+
+        return await menu_spec.render(
+            di_context=self._context,
+            hash_service=hash_service if hash_service is not None else self._hash_service
+        )
