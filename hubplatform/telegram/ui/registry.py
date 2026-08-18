@@ -98,6 +98,7 @@ class MenuBuildingState:
 class _MenuBuilderMeta:
     menu_id: str
     builder: MenuBuilderType
+    context_type: type[MenuContext]
 
     _builder_wrapped: CallableWrapper[MenuSpec] = dataclass_field(init=False)
     _is_class: bool = dataclass_field(init=False)
@@ -291,7 +292,13 @@ class UIRegistry:
         self._global_modifications: dict[str, MenuModificationMeta] = {}
         self._hash_service = hash_service
 
-    def add_menu_builder(self, menu_id: str) -> Callable[[_MB], _MB]:
+    def get_menu_context_type(self, menu_id: str) -> type[MenuContext]:
+        if menu_id not in self._context:
+            raise KeyError(f'Menu {menu_id!r} not registered.')
+
+        return self._menus[menu_id].context_type
+
+    def add_menu_builder(self, menu_id: str, context_type: type[MenuContext] = MenuContext) -> Callable[[_MB], _MB]:
         if not isinstance(menu_id, str):
             raise TypeError('menu_id must be a string.')
         if not menu_id:
@@ -302,7 +309,7 @@ class UIRegistry:
             raise RuntimeError(f'Menu {menu_id!r} already registered.')
 
         def inner(builder: _MB) -> _MB:
-            self._menus[menu_id] = _MenuBuilderMeta(menu_id=menu_id, builder=builder)
+            self._menus[menu_id] = _MenuBuilderMeta(menu_id=menu_id, builder=builder, context_type=context_type)
             return builder
 
         return inner
