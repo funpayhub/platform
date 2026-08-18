@@ -31,6 +31,7 @@ from hubplatform.telegram.ui.exceptions import (
 )
 from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
 from hubplatform.telegram.callback_data.hash import HashService
+from aiogram.types import InlineKeyboardButton
 
 
 logger = _logger.ui
@@ -197,7 +198,7 @@ class KeyboardBlockSpec:
         self, block_id: str, builder: KeyboardSpecBuilder | CallableWrapper[Keyboard]
     ) -> None:
         if not isinstance(block_id, str):
-            raise TypeError('Button ID must be a string.')
+            raise TypeError('Block ID must be a string.')
 
         self._block_id = block_id
         self._builder: CallableWrapper[Keyboard] = (
