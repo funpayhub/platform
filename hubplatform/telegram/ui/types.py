@@ -32,6 +32,7 @@ from hubplatform.telegram.ui.exceptions import (
 )
 from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
 from hubplatform.telegram.callback_data.hash import HashService
+from aiogram import Bot
 
 
 logger = _logger.ui
@@ -456,6 +457,7 @@ class MenuContext(BaseModel):
     chat_id: int | None = None
     thread_id: int | None = None
     message_id: int | None = None
+    trigger_meta: dict[str, Any] = Field(default_factory=dict, exclude=True)
 
     def _dump_context_fields(self) -> dict[str, Any]:
         return self.model_dump(
@@ -480,7 +482,6 @@ class MenuContext(BaseModel):
         cls,
         snapshot: MenuContextSnapshot,
         ui_history: list[MenuContextSnapshot] | None = None,
-        trigger: Any = None,
         chat_id: int | None | Ellipsis = ...,
         thread_id: int | None | Ellipsis = ...,
         message_id: int | None | Ellipsis = ...,
@@ -495,12 +496,6 @@ class MenuContext(BaseModel):
                 'ui_history': snapshot.ui_history if ui_history is None else ui_history,
                 'data': snapshot.data,
             }
-            | _trigger_dict(
-                trigger=trigger,
-                chat_id=chat_id,
-                thread_id=thread_id,
-                message_id=message_id,
-            )
         )
 
     @classmethod
@@ -518,7 +513,6 @@ class MenuContext(BaseModel):
         return cls.from_snapshot(
             snapshot=ui_history[-1],
             ui_history=ui_history[:-1],
-            trigger=trigger,
             chat_id=chat_id,
             thread_id=thread_id,
             message_id=message_id,
@@ -532,30 +526,3 @@ class MenuContextSnapshot(BaseModel):
     data: dict[str, Any]
     fields: dict[str, Any]
     ui_history: list[MenuContextSnapshot]
-
-
-def _trigger_dict(
-    trigger: Any = None,
-    chat_id: int | None | Ellipsis = ...,
-    thread_id: int | None | Ellipsis = ...,
-    message_id: int | None | Ellipsis = ...,
-):
-    message: Message | InaccessibleMessage | None = None
-    if isinstance(trigger, Message):
-        message = trigger
-    elif isinstance(trigger, CallbackQuery):
-        message = trigger.message
-
-    if message is not None:
-        if chat_id is Ellipsis:
-            chat_id = message.chat.id
-        if thread_id is Ellipsis:
-            thread_id = message.message_thread_id if isinstance(message, Message) else None
-        if message_id is Ellipsis:
-            message_id = message.message_id
-
-    return {
-        'message_id': message_id,
-        'chat_id': chat_id,
-        'thread_id': thread_id,
-    }
