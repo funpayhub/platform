@@ -260,13 +260,13 @@ _MM = TypeVar('_MM', bound=MenuModificationType)
 
 class UIRegistry:
     def __init__(
-        self, *, context: Mapping[str, Any] | None = None, hash_serivce: HashService | None = None
+        self, *, context: Mapping[str, Any] | None = None, hash_service: HashService | None = None
     ) -> None:
         self._context = context if context is not None else {}
         self._menus: dict[str, _MenuBuilderMeta] = {}
         self._menu_modifications: dict[str, dict[str, MenuModificationMeta]] = defaultdict(dict)
         self._global_modifications: dict[str, MenuModificationMeta] = {}
-        self._hash_service = hash_serivce
+        self._hash_service = hash_service
 
     def add_menu_builder(self, menu_id: str) -> Callable[[_MB], _MB]:
         if not isinstance(menu_id, str):
