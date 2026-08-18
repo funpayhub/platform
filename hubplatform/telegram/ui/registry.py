@@ -101,7 +101,10 @@ class _MenuBuilderMeta:
         di_context: Mapping[str, Any],
     ) -> MenuBuildingSpec:
         try:
-            args = [self.builder(), menu_context] if self._is_class else [menu_context]
+            args = [
+                self.builder(),  # type: ignore[call-arg]  # init must have no args
+                menu_context
+            ] if self._is_class else [menu_context]
             result = await self._builder_wrapped(args=args, data=di_context)
         except Exception as e:
             raise MenuBuildingError(menu_id=self.menu_id) from e
@@ -129,7 +132,7 @@ class MenuModificationMeta:
 
     modification_id: str
     menu_id: str
-    modification: MenuModificationProto | MenuModificationWithFilterProto
+    modification: MenuModificationType
     filter: MenuModificationFilterProto | None = None
 
     def __post_init__(self) -> None:
@@ -175,7 +178,11 @@ class MenuModificationMeta:
         try:
             args = instance_args = [menu_context, menu_state]
             if self._is_class:
-                instance_args = [self.modification(), menu_context, menu_state]
+                instance_args = [
+                    self.modification(), # type: ignore[call-arg]  # init must have no args
+                    menu_context,
+                    menu_state
+                ]
 
             if not (
                 await self._run_filter(
@@ -229,7 +236,7 @@ async def build_menu(
 
     if state.finalizer is not None:
         try:
-            wrapped = CallableWrapper(state.finalizer)
+            wrapped: CallableWrapper[MenuSpec] = CallableWrapper(state.finalizer)
             result = await wrapped(args=[state, menu_context], data=di_context)
         except Exception as e:
             raise MenuFinalizingError(menu_id=menu_builder.menu_id) from e
@@ -242,7 +249,7 @@ async def build_menu(
                 f'Expected: `MenuSpec`, got: {result.__class__.__name__!r}.',
             )
     else:
-        result = state
+        result = state.menu
 
     return result
 

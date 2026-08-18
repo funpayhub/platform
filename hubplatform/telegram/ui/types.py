@@ -174,7 +174,7 @@ class Button(BaseModel):
                 cb = self.callback_data
 
             if self.hash:
-                cb = hash_service.hash(cb)
+                cb = hash_service.hash(cb)  # type: ignore[union-attr]  # check above
 
             callback_data = cb
 
@@ -398,9 +398,9 @@ class MenuSpec:
             except KeyboardBlockBuildingError as e:
                 building_errors.append(e)
             except Exception as e:
-                new_e = KeyboardBlockBuildingError(block_id=block.block_id)
-                new_e.__cause__ = e
-                building_errors.append(new_e)
+                new_building_e = KeyboardBlockBuildingError(block_id=block.block_id)
+                new_building_e.__cause__ = e
+                building_errors.append(new_building_e)
 
         converted_keyboard: list[list[InlineKeyboardButton]] = []
         render_errors: list[ButtonRenderError] = []
@@ -412,9 +412,9 @@ class MenuSpec:
                 except ButtonRenderError as e:
                     render_errors.append(e)
                 except Exception as e:
-                    new_e = ButtonRenderError(button_id=button.button_id)
-                    new_e.__cause__ = e
-                    render_errors.append(new_e)
+                    new_render_e = ButtonRenderError(button_id=button.button_id)
+                    new_render_e.__cause__ = e
+                    render_errors.append(new_render_e)
             if result_line:
                 converted_keyboard.append(result_line)
 
