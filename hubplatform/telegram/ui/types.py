@@ -31,7 +31,6 @@ from hubplatform.telegram.ui.exceptions import (
 )
 from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
 from hubplatform.telegram.callback_data.hash import HashService
-from aiogram.types import InlineKeyboardButton
 
 
 logger = _logger.ui
@@ -452,13 +451,6 @@ class MenuContext(BaseModel):
     keyboard_page: int = 0
     text_page: int = 0
     data: dict[str, Any] = Field(default_factory=dict)
-
-    @classmethod
-    def _validate_menu_id(cls, menu_id: str) -> str:
-        if not menu_id:
-            raise ValueError('Menu ID cannot be empty.')
-
-        return menu_id
 
     def _dump_context_fields(self) -> dict[str, Any]:
         return self.model_dump(
