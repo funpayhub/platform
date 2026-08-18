@@ -21,7 +21,6 @@ __all__ = [
     'MenuBuildingSpec',
     'MenuBuildingState',
     'MenuModificationMeta',
-
 ]
 
 from .types import (
@@ -35,15 +34,13 @@ from .types import (
     KeyboardBuildingState,
     KeyboardModificationMeta,
 )
-
-from .callback_data import UICallbackData
-
 from .registry import (
     UIRegistry,
     MenuBuilderType,
-    MenuModificationType,
-    MenuFinalizerType,
     MenuBuildingSpec,
     MenuBuildingState,
+    MenuFinalizerType,
     MenuModificationMeta,
+    MenuModificationType,
 )
+from .callback_data import UICallbackData

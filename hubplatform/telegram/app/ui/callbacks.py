@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 __all__ = [
     'OpenMenu',
     'ChangePageTo',
@@ -5,13 +8,19 @@ __all__ = [
     'Dummy',
 ]
 
-
-from hubplatform.telegram.ui import UICallbackData, CallbackData, MenuContextSnapshot
+from hubplatform.telegram.ui import MenuContext, UICallbackData, MenuContextSnapshot
 
 
 class OpenMenu(UICallbackData, identifier='hubplatform.open_menu'):
     context: MenuContextSnapshot
     new_message: bool = False
+
+    @classmethod
+    def from_context(cls, menu_context: MenuContext, new_message: bool = False) -> OpenMenu:
+        return OpenMenu(
+            context=menu_context.snapshot(),
+            new_message=new_message,
+        )
 
 
 class ChangePageTo(UICallbackData, identifier='hubplatform.change_page_to'):
@@ -19,7 +28,9 @@ class ChangePageTo(UICallbackData, identifier='hubplatform.change_page_to'):
     text_page: int | None = None
 
 
-class GoBack(UICallbackData, identifier='hubplatform.go_back'): pass
+class GoBack(UICallbackData, identifier='hubplatform.go_back'):
+    pass
 
 
-class Dummy(UICallbackData, identifier='hubplatform.dummy'): pass
+class Dummy(UICallbackData, identifier='hubplatform.dummy'):
+    pass

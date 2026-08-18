@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 from aiogram.types import CallbackQuery
 
 from hubplatform.telegram.router import Router
 from hubplatform.telegram.ui.registry import UIRegistry
+
 from . import callbacks as cbs
+
 
 router = Router(name='hubplatform.ui_router')
 

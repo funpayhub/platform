@@ -460,7 +460,7 @@ class MenuContext(BaseModel):
             fallback=pydantic_fallback_serializer,
         )
 
-    def snapshot(self, drop_history: bool = True) -> MenuContextSnapshot:
+    def snapshot(self, drop_history: bool = False) -> MenuContextSnapshot:
         fields = self._dump_context_fields()
         return MenuContextSnapshot(
             menu_id=self.menu_id,
@@ -472,7 +472,9 @@ class MenuContext(BaseModel):
         )
 
     @classmethod
-    def from_snapshot(cls, snapshot: MenuContextSnapshot, ui_history: list[MenuContextSnapshot] | None = None) -> Self:
+    def from_snapshot(
+        cls, snapshot: MenuContextSnapshot, ui_history: list[MenuContextSnapshot] | None = None
+    ) -> Self:
         return cls.model_validate(
             snapshot.fields
             | {

@@ -1,10 +1,12 @@
-__all__ = [
-    'UICallbackData'
-]
+from __future__ import annotations
+
+
+__all__ = ['UICallbackData']
 
 from pydantic import Field
 
 from hubplatform.telegram.callback_data import CallbackData
+
 from .types import MenuContextSnapshot
 
 

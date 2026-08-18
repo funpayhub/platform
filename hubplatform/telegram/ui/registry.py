@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 __all__ = [
     'UIRegistry',
     'MenuBuilderType',
@@ -21,11 +22,10 @@ from pydantic.dataclasses import dataclass as pydantic_dataclass
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
 from hubplatform.logging.loggers import telegram as _logger
+from hubplatform.telegram.callback_data.hash.service import HashService, global_hash_service
 
-from . import MenuRenderResult
-from .types import MenuSpec, MenuContext
+from .types import MenuSpec, MenuContext, MenuRenderResult
 from .exceptions import MenuBuildingError, MenuFinalizingError, MenuModificationError
-from ..callback_data.hash import HashService
 
 
 logger = _logger.ui
@@ -298,7 +298,9 @@ class UIRegistry:
 
         return self._menus[menu_id].context_type
 
-    def add_menu_builder(self, menu_id: str, context_type: type[MenuContext] = MenuContext) -> Callable[[_MB], _MB]:
+    def add_menu_builder(
+        self, menu_id: str, context_type: type[MenuContext] = MenuContext
+    ) -> Callable[[_MB], _MB]:
         if not isinstance(menu_id, str):
             raise TypeError('menu_id must be a string.')
         if not menu_id:
@@ -309,7 +311,9 @@ class UIRegistry:
             raise RuntimeError(f'Menu {menu_id!r} already registered.')
 
         def inner(builder: _MB) -> _MB:
-            self._menus[menu_id] = _MenuBuilderMeta(menu_id=menu_id, builder=builder, context_type=context_type)
+            self._menus[menu_id] = _MenuBuilderMeta(
+                menu_id=menu_id, builder=builder, context_type=context_type
+            )
             return builder
 
         return inner
@@ -368,3 +372,13 @@ class UIRegistry:
             di_context=self._context,
             hash_service=hash_service if hash_service is not None else self._hash_service,
         )
+
+
+_UI_REGISTRY: UIRegistry | None = None
+
+
+def global_ui_registry() -> UIRegistry:
+    global _UI_REGISTRY
+    if _UI_REGISTRY is None:
+        _UI_REGISTRY = UIRegistry(hash_service=global_hash_service())
+    return _UI_REGISTRY
