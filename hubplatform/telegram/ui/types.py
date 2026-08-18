@@ -8,7 +8,7 @@ __all__ = [
     'KeyboardModificationMeta',
     'KeyboardBuildingState',
     'MenuSpec',
-    'RenderedMenu',
+    'MenuRenderResult',
     'MenuContext',
     'MenuContextSnapshot',
 ]
@@ -43,7 +43,6 @@ KeyboardModificationCallable = Union[
         Concatenate['KeyboardBuildingState', _P],
         Awaitable[Union['KeyboardBuildingState', 'Keyboard']],
     ],
-    Callable[Concatenate['KeyboardBuildingState', _P], Union['KeyboardBuildingState', 'Keyboard']],
 ]
 
 
@@ -91,7 +90,7 @@ class Button(BaseModel):
 
     url: str | None = None
     """HTTP or tg:// URL to be opened when the button is pressed. 
-    Links :code:`tg://user?id=<user_id>` can be used to mention a user by their identifier 
+    Links :code:`tg://user?menu_id=<user_id>` can be used to mention a user by their identifier 
     without using a username, if this is allowed by their privacy settings
     """
 
@@ -220,37 +219,29 @@ class KeyboardBlockSpec:
             )
         )
 
-    async def build(self, di_context: Mapping[str, Any]) -> KeyboardBlockBuildingResult:
+    async def build(self, di_context: Mapping[str, Any]) -> _KeyboardBuildingResult:
         try:
             keyboard = await self._builder(data=di_context)
-            _validate_keyboard(keyboard)
+            state = KeyboardBuildingState(
+                keyboard=keyboard, pending_modifications=self._modifications.copy()
+            )
         except Exception as e:
             raise KeyboardBlockBuildingError(block_id=self.block_id) from e
 
-        keyboard = keyboard
-        pending_mods = self._modifications.copy()
-        errors = []
-        while pending_mods:
-            modification = pending_mods.pop(0)
+        while True:
+            if not state.pending_modifications:
+                break
+            mod = state.pending_modifications.pop(0)
             try:
-                state = KeyboardBuildingState(
-                    keyboard=keyboard, pending_modifications=pending_mods
-                )
-                result = await modification.build(state, di_context)
-                if isinstance(result, KeyboardBuildingState):
-                    keyboard = result.keyboard
-                    pending_mods = result.pending_modifications
-                else:
-                    keyboard = result
-            except KeyboardBlockModificationError as e:
-                errors.append(e)
+                state = await mod.build(state, di_context)
+            except KeyboardBlockBuildingError:
+                raise
             except Exception as e:
-                new_e = KeyboardBlockModificationError(
-                    block_id=self.block_id, modification_id=modification.modification_id
-                )
-                new_e.__cause__ = e
-                errors.append(new_e)
-        return KeyboardBlockBuildingResult(keyboard=keyboard, errors=errors)
+                raise KeyboardBlockModificationError(
+                    block_id=self.block_id, modification_id=mod.modification_id
+                ) from e
+
+        return _KeyboardBuildingResult(keyboard=state.keyboard)
 
     @classmethod
     def callback_button(
@@ -333,7 +324,7 @@ class KeyboardBlockSpec:
         return KeyboardBlockSpec(block_id, builder=build)
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(frozen=True)
 class KeyboardModificationMeta:
     _wrapped: CallableWrapper[Keyboard | KeyboardBuildingState] = dataclass_field(init=False)
     modification_id: str
@@ -344,15 +335,16 @@ class KeyboardModificationMeta:
 
     async def build(
         self, state: KeyboardBuildingState, di_context: Mapping[str, Any]
-    ) -> KeyboardBuildingState | Keyboard:
+    ) -> KeyboardBuildingState:
         result = await self._wrapped(args=[state], data=di_context)
         if isinstance(result, KeyboardBuildingState):
             return result
-        _validate_keyboard(result)
-        return result
+        return KeyboardBuildingState(
+            keyboard=result, pending_modifications=state.pending_modifications
+        )
 
 
-@dataclass
+@pydantic_dataclass()
 class KeyboardBuildingState:
     keyboard: Keyboard
     pending_modifications: list[KeyboardModificationMeta]
@@ -362,17 +354,17 @@ class KeyboardBuildingState:
 
 
 @dataclass
-class KeyboardBlockBuildingResult:
+class _KeyboardBuildingResult:
     keyboard: Keyboard
-    errors: list[KeyboardBlockModificationError] = dataclass_field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        _validate_keyboard(self.keyboard)
 
 
 @pydantic_dataclass(
     config=ConfigDict(arbitrary_types_allowed=True, validate_assignment=True),
-    validate_on_init=True,
 )
 class MenuSpec:
-    menu_id: str
     header_text: str = ''
     header_body_sep: str = '\n\n'
     body_text: str = ''
@@ -395,7 +387,7 @@ class MenuSpec:
         self,
         di_context: Mapping[str, Any],
         hash_service: HashService | None = None,
-    ) -> RenderedMenu:
+    ) -> MenuRenderResult:
         building_errors: list[KeyboardBlockBuildingError] = []
         keyboard: Keyboard = []
 
@@ -403,7 +395,6 @@ class MenuSpec:
             try:
                 result = await block.build(di_context)
                 keyboard.extend(result.keyboard)
-                building_errors.extend(result.errors)
             except KeyboardBlockBuildingError as e:
                 building_errors.append(e)
             except Exception as e:
@@ -439,7 +430,7 @@ class MenuSpec:
                 text += self.header_footer_sep
             text += self.footer_text
 
-        return RenderedMenu(
+        return MenuRenderResult(
             text=text,
             keyboard=converted_keyboard,
             building_errors=building_errors,
@@ -448,7 +439,7 @@ class MenuSpec:
 
 
 @pydantic_dataclass
-class RenderedMenu:
+class MenuRenderResult:
     text: str
     keyboard: list[list[InlineKeyboardButton]]
     building_errors: list[KeyboardBlockBuildingError] = Field(default_factory=list)

@@ -4,6 +4,7 @@ from __future__ import annotations
 __all__ = [
     'TelegramUIError',
     'MenuBuildingError',
+    'MenuModificationError',
     'MenuFinalizingError',
     'KeyboardBlockBuildingError',
     'KeyboardBlockModificationError',
@@ -21,6 +22,17 @@ class MenuBuildingError(TelegramUIError):
         self.menu_id = menu_id
         message = message if message is not None else f'Failed to build menu {menu_id!r}.'
         super().__init__(message)
+
+
+class MenuModificationError(MenuBuildingError):
+    def __init__(self, *, menu_id: str, modification_id: str, message: str | None = None) -> None:
+        self.modification_id = modification_id
+        message = (
+            message
+            if message is not None
+            else f'Failed to run modification {modification_id!r} for menu {menu_id!r}.'
+        )
+        super().__init__(menu_id=menu_id, message=message)
 
 
 class MenuFinalizingError(MenuBuildingError):

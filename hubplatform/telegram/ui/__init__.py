@@ -8,7 +8,7 @@ __all__ = [
     'KeyboardModificationMeta',
     'KeyboardBuildingState',
     'MenuSpec',
-    'RenderedMenu',
+    'MenuRenderResult',
     'MenuContext',
     'MenuContextSnapshot',
 ]
@@ -18,7 +18,7 @@ from .types import (
     Keyboard,
     MenuSpec,
     MenuContext,
-    RenderedMenu,
+    MenuRenderResult,
     KeyboardBlockSpec,
     MenuContextSnapshot,
     KeyboardBuildingState,
