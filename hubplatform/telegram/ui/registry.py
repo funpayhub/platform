@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Union, TypeVar, Protocol, ParamSpec
-from dataclasses import field
+from typing import Any, Union, TypeVar, Protocol, ParamSpec, runtime_checkable
+from dataclasses import field as dataclass_field
 from collections import defaultdict
 from collections.abc import Mapping, Callable, Sequence
 
@@ -23,30 +23,35 @@ logger = _logger.ui
 _P = ParamSpec('_P', default=...)
 
 
+@runtime_checkable
 class MenuBuilderProto(Protocol[_P]):
     async def __call__(
         self, _c: MenuContext, /, *_a: _P.args, **_k: _P.kwargs
     ) -> MenuSpec | MenuBuildingSpec: ...
 
 
+@runtime_checkable
 class MenuModificationProto(Protocol[_P]):
     async def __call__(
         self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
     ) -> MenuSpec | MenuBuildingState: ...
 
 
+@runtime_checkable
 class MenuModificationFilterProto(Protocol[_P]):
     async def __call__(
         self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
     ) -> bool: ...
 
 
+@runtime_checkable
 class MenuModificationWithFilterProto(MenuModificationProto[_P], Protocol[_P]):
     async def filter(
         self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
     ) -> bool: ...
 
 
+@runtime_checkable
 class MenuFinalizerProto(Protocol[_P]):
     async def __call__(
         self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
@@ -66,14 +71,14 @@ MenuFinalizerType = MenuFinalizerProto
 @pydantic_dataclass(config=ConfigDict(arbitrary_types_allowed=True, validate_assignment=True))
 class MenuBuildingSpec:
     menu: MenuSpec
-    modifications: list[MenuModificationMeta] = field(default_factory=list)
+    modifications: list[MenuModificationMeta] = dataclass_field(default_factory=list)
     finalizer: MenuFinalizerType | None = None
 
 
 @pydantic_dataclass(config=ConfigDict(arbitrary_types_allowed=True, validate_assignment=True))
 class MenuBuildingState:
     menu: MenuSpec
-    pending_modifications: list[MenuModificationMeta] = field(default_factory=list)
+    pending_modifications: list[MenuModificationMeta] = dataclass_field(default_factory=list)
     finalizer: MenuFinalizerType | None = None
 
 
@@ -81,11 +86,11 @@ class MenuBuildingState:
     frozen=True, config=ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 )
 class _MenuBuilderMeta:
-    _builder_wrapped: CallableWrapper[MenuSpec] = field(init=False)
-    _is_class: bool = field(init=False)
-
     menu_id: str
     builder: MenuBuilderType
+
+    _builder_wrapped: CallableWrapper[MenuSpec] = dataclass_field(init=False)
+    _is_class: bool = dataclass_field(init=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, '_is_class', isinstance(self.builder, type))
@@ -101,10 +106,14 @@ class _MenuBuilderMeta:
         di_context: Mapping[str, Any],
     ) -> MenuBuildingSpec:
         try:
-            args = [
-                self.builder(),  # type: ignore[call-arg]  # init must have no args
-                menu_context
-            ] if self._is_class else [menu_context]
+            args = (
+                [
+                    self.builder(),  # type: ignore[call-arg]  # init must have no args
+                    menu_context,
+                ]
+                if self._is_class
+                else [menu_context]
+            )
             result = await self._builder_wrapped(args=args, data=di_context)
         except Exception as e:
             raise MenuBuildingError(menu_id=self.menu_id) from e
@@ -125,15 +134,19 @@ class _MenuBuilderMeta:
     frozen=True, config=ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 )
 class MenuModificationMeta:
-    _is_class: bool = field(init=False)
-    _explicit_filter_wrapped: CallableWrapper[bool] | None = field(init=False, default=None)
-    _filter_from_mod_wrapped: CallableWrapper[bool] | None = field(init=False, default=None)
-    _modification_wrapped: CallableWrapper[MenuBuildingState] = field(init=False)
-
     modification_id: str
     menu_id: str
     modification: MenuModificationType
     filter: MenuModificationFilterProto | None = None
+
+    _is_class: bool = dataclass_field(init=False)
+    _explicit_filter_wrapped: CallableWrapper[bool] | None = dataclass_field(
+        init=False, default=None
+    )
+    _filter_from_mod_wrapped: CallableWrapper[bool] | None = dataclass_field(
+        init=False, default=None
+    )
+    _modification_wrapped: CallableWrapper[MenuBuildingState] = dataclass_field(init=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, '_is_class', isinstance(self.modification, type))
@@ -179,9 +192,9 @@ class MenuModificationMeta:
             args = instance_args = [menu_context, menu_state]
             if self._is_class:
                 instance_args = [
-                    self.modification(), # type: ignore[call-arg]  # init must have no args
+                    self.modification(),  # type: ignore[call-arg]  # init must have no args
                     menu_context,
-                    menu_state
+                    menu_state,
                 ]
 
             if not (

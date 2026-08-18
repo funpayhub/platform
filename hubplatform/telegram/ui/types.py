@@ -438,7 +438,7 @@ class MenuSpec:
         )
 
 
-@pydantic_dataclass
+@pydantic_dataclass(config=ConfigDict(arbitrary_types_allowed=True, validate_assignment=True))
 class MenuRenderResult:
     text: str
     keyboard: list[list[InlineKeyboardButton]]
