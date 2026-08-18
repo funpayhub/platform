@@ -450,6 +450,7 @@ class MenuContext(BaseModel):
     menu_id: str
     keyboard_page: int = 0
     text_page: int = 0
+    ui_history: list[MenuContextSnapshot]
     data: dict[str, Any] = Field(default_factory=dict)
 
     def _dump_context_fields(self) -> dict[str, Any]:
@@ -459,28 +460,36 @@ class MenuContext(BaseModel):
             fallback=pydantic_fallback_serializer,
         )
 
-    def snapshot(self) -> MenuContextSnapshot:
+    def snapshot(self, drop_history: bool = True) -> MenuContextSnapshot:
         fields = self._dump_context_fields()
-        data = fields.pop('data', {})
         return MenuContextSnapshot(
             menu_id=self.menu_id,
             keyboard_page=self.keyboard_page,
             text_page=self.text_page,
             fields=fields,
-            data=data,
+            ui_history=[] if drop_history else self.ui_history.copy(),
+            data=self.data.copy(),
         )
 
     @classmethod
-    def from_snapshot(cls, envelope: MenuContextSnapshot) -> Self:
+    def from_snapshot(cls, snapshot: MenuContextSnapshot, ui_history: list[MenuContextSnapshot] | None = None) -> Self:
         return cls.model_validate(
-            envelope.fields
+            snapshot.fields
             | {
-                'menu_id': envelope.menu_id,
-                'keyboard_page': envelope.keyboard_page,
-                'text_page': envelope.text_page,
-                'data': envelope.data,
+                'menu_id': snapshot.menu_id,
+                'keyboard_page': snapshot.keyboard_page,
+                'text_page': snapshot.text_page,
+                'ui_history': snapshot.ui_history if ui_history is None else ui_history,
+                'data': snapshot.data,
             }
         )
+
+    @classmethod
+    def from_ui_history(cls, ui_history: list[MenuContextSnapshot]) -> Self:
+        if not ui_history:
+            raise ValueError('UI history cannot be empty.')
+
+        return cls.from_snapshot(snapshot=ui_history[-1], ui_history=ui_history[:-1])
 
 
 class MenuContextSnapshot(BaseModel):
@@ -489,3 +498,4 @@ class MenuContextSnapshot(BaseModel):
     text_page: int
     data: dict[str, Any]
     fields: dict[str, Any]
+    ui_history: list[MenuContextSnapshot]

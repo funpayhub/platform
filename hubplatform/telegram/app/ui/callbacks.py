@@ -6,7 +6,7 @@ __all__ = [
 ]
 
 
-from hubplatform.telegram.ui import UICallbackData, MenuContextSnapshot
+from hubplatform.telegram.ui import UICallbackData, CallbackData, MenuContextSnapshot
 
 
 class OpenMenu(UICallbackData, identifier='hubplatform.open_menu'):
