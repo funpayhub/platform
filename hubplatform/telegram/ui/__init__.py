@@ -11,6 +11,7 @@ __all__ = [
     'MenuRenderResult',
     'MenuContext',
     'MenuContextSnapshot',
+    'MenuRuntimeContext',
     # ---
     'UICallbackData',
     # ---
@@ -21,6 +22,7 @@ __all__ = [
     'MenuBuildingSpec',
     'MenuBuildingState',
     'MenuModificationMeta',
+    'global_ui_registry',
 ]
 
 from .types import (
@@ -30,6 +32,7 @@ from .types import (
     MenuContext,
     MenuRenderResult,
     KeyboardBlockSpec,
+    MenuRuntimeContext,
     MenuContextSnapshot,
     KeyboardBuildingState,
     KeyboardModificationMeta,
@@ -42,5 +45,6 @@ from .registry import (
     MenuFinalizerType,
     MenuModificationMeta,
     MenuModificationType,
+    global_ui_registry,
 )
 from .callback_data import UICallbackData

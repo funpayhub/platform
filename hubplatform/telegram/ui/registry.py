@@ -9,6 +9,7 @@ __all__ = [
     'MenuBuildingSpec',
     'MenuBuildingState',
     'MenuModificationMeta',
+    'global_ui_registry',
 ]
 
 import inspect
@@ -293,7 +294,7 @@ class UIRegistry:
         self._hash_service = hash_service
 
     def get_menu_context_type(self, menu_id: str) -> type[MenuContext]:
-        if menu_id not in self._context:
+        if menu_id not in self._menus:
             raise KeyError(f'Menu {menu_id!r} not registered.')
 
         return self._menus[menu_id].context_type

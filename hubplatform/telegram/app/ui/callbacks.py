@@ -12,13 +12,13 @@ from hubplatform.telegram.ui import MenuContext, UICallbackData, MenuContextSnap
 
 
 class OpenMenu(UICallbackData, identifier='hubplatform.open_menu'):
-    context: MenuContextSnapshot
+    snapshot: MenuContextSnapshot
     new_message: bool = False
 
     @classmethod
     def from_context(cls, menu_context: MenuContext, new_message: bool = False) -> OpenMenu:
         return OpenMenu(
-            context=menu_context.snapshot(),
+            snapshot=menu_context.snapshot(),
             new_message=new_message,
         )
 

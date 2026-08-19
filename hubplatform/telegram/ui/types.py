@@ -11,6 +11,7 @@ __all__ = [
     'MenuRenderResult',
     'MenuContext',
     'MenuContextSnapshot',
+    'MenuRuntimeContext',
 ]
 
 from typing import Any, Self, Union, Literal, ParamSpec, Concatenate
@@ -18,8 +19,13 @@ from dataclasses import field as dataclass_field, dataclass
 from collections.abc import Mapping, Callable, Awaitable, MutableSequence
 
 from pydantic import Field, BaseModel, ConfigDict
-from aiogram.types import LoginUrl, WebAppInfo, CallbackGame, CopyTextButton, InlineKeyboardButton, \
-    Message, CallbackQuery, InaccessibleMessage
+from aiogram.types import (
+    LoginUrl,
+    WebAppInfo,
+    CallbackGame,
+    CopyTextButton,
+    InlineKeyboardButton,
+)
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
@@ -32,7 +38,6 @@ from hubplatform.telegram.ui.exceptions import (
 )
 from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
 from hubplatform.telegram.callback_data.hash import HashService
-from aiogram import Bot
 
 
 logger = _logger.ui
@@ -448,15 +453,21 @@ class MenuRenderResult:
     render_errors: list[ButtonRenderError] = Field(default_factory=list)
 
 
+@pydantic_dataclass
+class MenuRuntimeContext:
+    chat_id: int | None = None
+    thread_id: int | None = None
+    message_id: int | None = None
+    user_id: int | None = None
+
+
 class MenuContext(BaseModel):
     menu_id: str
     keyboard_page: int = 0
     text_page: int = 0
     ui_history: list[MenuContextSnapshot]
     data: dict[str, Any] = Field(default_factory=dict)
-    chat_id: int | None = None
-    thread_id: int | None = None
-    message_id: int | None = None
+    runtime: MenuRuntimeContext = Field(default_factory=MenuRuntimeContext)
     trigger_meta: dict[str, Any] = Field(default_factory=dict, exclude=True)
 
     def _dump_context_fields(self) -> dict[str, Any]:
@@ -482,11 +493,8 @@ class MenuContext(BaseModel):
         cls,
         snapshot: MenuContextSnapshot,
         ui_history: list[MenuContextSnapshot] | None = None,
-        chat_id: int | None | Ellipsis = ...,
-        thread_id: int | None | Ellipsis = ...,
-        message_id: int | None | Ellipsis = ...,
+        runtime: MenuRuntimeContext | None = None,
     ) -> Self:
-
         return cls.model_validate(
             snapshot.fields
             | {
@@ -495,6 +503,7 @@ class MenuContext(BaseModel):
                 'text_page': snapshot.text_page,
                 'ui_history': snapshot.ui_history if ui_history is None else ui_history,
                 'data': snapshot.data,
+                'runtime': runtime if runtime is not None else MenuRuntimeContext(),
             }
         )
 
@@ -502,20 +511,13 @@ class MenuContext(BaseModel):
     def from_ui_history(
         cls,
         ui_history: list[MenuContextSnapshot],
-        trigger: Any = None,
-        chat_id: int | None | Ellipsis = ...,
-        thread_id: int | None | Ellipsis = ...,
-        message_id: int | None | Ellipsis = ...,
+        runtime: MenuRuntimeContext | None = None,
     ) -> Self:
         if not ui_history:
             raise ValueError('UI history cannot be empty.')
 
         return cls.from_snapshot(
-            snapshot=ui_history[-1],
-            ui_history=ui_history[:-1],
-            chat_id=chat_id,
-            thread_id=thread_id,
-            message_id=message_id,
+            snapshot=ui_history[-1], ui_history=ui_history[:-1], runtime=runtime
         )
 
 

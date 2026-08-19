@@ -12,5 +12,8 @@ from .types import MenuContextSnapshot
 
 class UICallbackData(CallbackData, identifier='hubplatform_ui_callback_data'):
     ui_history: list[MenuContextSnapshot] = Field(default_factory=list)
+
+
+class PageableUICallbackData(UICallbackData, identifier='hubplatform.pageable_callback_data'):
     keyboard_page: int = 0
     text_page: int = 0
