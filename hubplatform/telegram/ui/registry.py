@@ -381,7 +381,7 @@ class UIRegistry:
             di_context=self._context,
         )
 
-        return await menu_spec.render(
+        result = await menu_spec.render(
             di_context=self._context,
             hash_service=hash_service if hash_service is not None else self._hash_service,
         )

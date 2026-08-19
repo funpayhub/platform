@@ -437,6 +437,9 @@ class MenuSpec:
                 text += self.header_footer_sep
             text += self.footer_text
 
+        if hash_service is not None:
+            hash_service.save()
+
         return MenuRenderResult(
             text=text,
             keyboard=converted_keyboard,
