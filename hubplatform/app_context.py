@@ -9,7 +9,10 @@ __all__ = [
 from typing import Any, Self
 from collections.abc import Callable, Iterator, MutableMapping
 
+from pyconfigtree import Properties
+
 from hubplatform.telegram.callback_data.hash import HashService
+from hubplatform.telegram.ui import UIRegistry
 
 
 class AppContext(MutableMapping[str, Any]):
@@ -82,8 +85,11 @@ def setup_default_app_context(app_context: AppContext | None) -> AppContext:
 
     app_context.check_items.update(
         {
-            'hash_service': lambda i: isinstance(i, HashService),  # todo: add is_ready check
             'app_context': lambda i: i is app_context,
+            'hash_service': lambda i: isinstance(i, HashService),  # todo: add is_ready check
+            'tg_ui_registry': lambda i: isinstance(i, UIRegistry),
+            'properties': lambda i: isinstance(i, Properties),
+            'props': lambda i: i is app_context['properties'],
         }
     )
     return app_context
