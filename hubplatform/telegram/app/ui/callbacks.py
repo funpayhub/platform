@@ -4,9 +4,10 @@ from __future__ import annotations
 __all__ = [
     'OpenMenu',
     'ChangePageTo',
-    'GoBack',
     'Dummy',
 ]
+
+from typing import Literal
 
 from hubplatform.telegram.ui import MenuContext, UICallbackData, MenuContextSnapshot
 
@@ -28,8 +29,8 @@ class ChangePageTo(UICallbackData, identifier='hubplatform.change_page_to'):
     text_page: int | None = None
 
 
-class GoBack(UICallbackData, identifier='hubplatform.go_back'):
-    pass
+class ClearState(UICallbackData, identifier='hubplatform.clear_state'):
+    mode: Literal['delete', 'go_back'] = 'delete'
 
 
 class Dummy(UICallbackData, identifier='hubplatform.dummy'):

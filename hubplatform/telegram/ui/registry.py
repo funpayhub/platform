@@ -24,6 +24,7 @@ from eventry.asyncio.callable_wrappers import CallableWrapper
 
 from hubplatform.logging.loggers import telegram as _logger
 from hubplatform.telegram.callback_data.hash.service import HashService, global_hash_service
+from . import MenuContextSnapshot, MenuRuntimeContext
 
 from .types import MenuSpec, MenuContext, MenuRenderResult
 from .exceptions import MenuBuildingError, MenuFinalizingError, MenuModificationError
@@ -298,6 +299,17 @@ class UIRegistry:
             raise KeyError(f'Menu {menu_id!r} not registered.')
 
         return self._menus[menu_id].context_type
+
+    def context_from_snapshot(self, snapshot: MenuContextSnapshot, *, runtime: MenuRuntimeContext | None = None) -> MenuContext:
+        ctx = self.get_menu_context_type(snapshot.menu_id)
+        return ctx.from_snapshot(snapshot, runtime=runtime)
+
+    def context_from_history(self, ui_history: list[MenuContextSnapshot], *, runtime: MenuRuntimeContext | None = None) -> MenuContext:
+        if not ui_history:
+            raise ValueError('ui_history cannot be empty.')
+        snapshot, history = ui_history[-1], ui_history[:-1]
+        ctx = self.get_menu_context_type(snapshot.menu_id)
+        return ctx.from_snapshot(snapshot, ui_history=history, runtime=runtime)
 
     def add_menu_builder(
         self, menu_id: str, context_type: type[MenuContext] = MenuContext
