@@ -23,8 +23,8 @@ async def open_menu(q: Query, cbd: cbs.OpenMenu, tg_ui_registry: UIRegistry) -> 
 
 
 @router.callback_query(cbs.ChangePageTo.filter())
-async def change_menu_page(q: Query, cbd: cbs.ChangePageTo, tg_ui_registry: UIRegistry) -> None:
-    context = tg_ui_registry.context_from_history(cbd.ui_history, runtime=utils.extract_runtime(q))
+async def change_page(q: Query, cbd: cbs.ChangePageTo, tg_ui_registry: UIRegistry) -> None:
+    context = tg_ui_registry.context_from_snapshot(cbd.snapshot, runtime=utils.extract_runtime(q))
     if cbd.keyboard_page is not None:
         context.keyboard_page = cbd.keyboard_page
     if cbd.text_page is not None:

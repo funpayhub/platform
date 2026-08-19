@@ -11,8 +11,8 @@ from collections.abc import Callable, Iterator, MutableMapping
 
 from pyconfigtree import Properties
 
-from hubplatform.telegram.callback_data.hash import HashService
 from hubplatform.telegram.ui import UIRegistry
+from hubplatform.telegram.callback_data.hash import HashService
 
 
 class AppContext(MutableMapping[str, Any]):
@@ -86,15 +86,12 @@ def setup_default_app_context(app_context: AppContext | None) -> AppContext:
     app_context.check_items.update(
         {
             'app_context': lambda i: i is app_context,
-
             # todo: move it to app
             'props': lambda i: i is app_context['properties'],
-
             # todo: move it to telegram app
             'hash_service': lambda i: isinstance(i, HashService),  # todo: add is_ready check
             'tg_ui_registry': lambda i: isinstance(i, UIRegistry),
             'properties': lambda i: isinstance(i, Properties),
-
         }
     )
     return app_context

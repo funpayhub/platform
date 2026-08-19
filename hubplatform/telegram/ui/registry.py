@@ -385,10 +385,42 @@ class UIRegistry:
             di_context=self._context,
         )
 
-        return await menu_spec.render(
+        result = await menu_spec.render(
             di_context=self._context,
             hash_service=hash_service if hash_service is not None else self._hash_service,
         )
+
+        if result.building_errors:
+            logger.warning(
+                'Menu %s build completed with %d errors.',
+                menu_context.menu_id,
+                len(result.building_errors),
+            )
+
+        if result.render_errors:
+            logger.warning(
+                'Menu %s render completed with %d errors.',
+                menu_context.menu_id,
+                len(result.render_errors),
+            )
+
+        for index, error in enumerate(result.building_errors):
+            logger.warning(
+                '%d. An error occurred while building keyboard block %s.',
+                index + 1,
+                error.block_id,
+                exc_info=error,
+            )
+
+        for index, error in enumerate(result.render_errors):
+            logger.warning(
+                '%d. An error occurred while rendering button %s.',
+                index + 1,
+                error.button_id,
+                exc_info=error,
+            )
+
+        return result
 
 
 _UI_REGISTRY: UIRegistry | None = None

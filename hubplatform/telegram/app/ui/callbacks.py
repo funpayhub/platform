@@ -38,7 +38,8 @@ class OpenMenu(UICallbackData, identifier='hubplatform.open_menu'):
         )
 
 
-class ChangePageTo(UICallbackData, identifier='hubplatform.change_page_to'):
+class ChangePageTo(CallbackData, identifier='hubplatform.change_page_to'):
+    snapshot: MenuContextSnapshot
     keyboard_page: int | None = None
     text_page: int | None = None
 

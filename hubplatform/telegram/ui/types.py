@@ -37,7 +37,7 @@ from hubplatform.telegram.ui.exceptions import (
     KeyboardBlockModificationError,
 )
 from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
-from hubplatform.telegram.callback_data.hash import HashService
+from hubplatform.telegram.callback_data.hash import HashService, global_hash_service
 
 
 logger = _logger.ui
@@ -397,6 +397,7 @@ class MenuSpec:
     ) -> MenuRenderResult:
         building_errors: list[KeyboardBlockBuildingError] = []
         keyboard: Keyboard = []
+        hash_service = hash_service if hash_service is not None else global_hash_service()
 
         for block in self.total_blocks:
             try:
@@ -437,8 +438,7 @@ class MenuSpec:
                 text += self.header_footer_sep
             text += self.footer_text
 
-        if hash_service is not None:
-            hash_service.save()
+        hash_service.save()
 
         return MenuRenderResult(
             text=text,

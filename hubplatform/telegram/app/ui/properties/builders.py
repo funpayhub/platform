@@ -15,6 +15,7 @@ from hubplatform.telegram.ui import (
     KeyboardBlockSpec,
 )
 from hubplatform.telegram.app.ui import callbacks as ui_cbs
+from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
 
 from . import callbacks as cbs
 
@@ -29,7 +30,7 @@ class NodeMenuContext(MenuContext):
     node_path: list[str]
 
 
-@registry.add_menu_builder(menu_id='hubplatform.pyconfigtree_node', context_type=NodeMenuContext)
+@registry.add_menu_builder(menu_id='hubplatform.pyconfigtree:node', context_type=NodeMenuContext)
 async def build_node_menu(
     ctx: NodeMenuContext, properties: Properties, tr: Translator, app_context: Mapping[str, Any]
 ) -> MenuBuildingSpec:
@@ -48,7 +49,9 @@ async def build_node_menu(
         builder = BUTTON_BUILDERS[type(i)]
         menu_spec.main_keyboard.append(await builder(args=[i, tr, ctx], data=app_context))
 
-    return MenuBuildingSpec(menu=menu_spec)
+    menu_spec.body_text = "<b>sun' hui v chai!"
+
+    return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
 
 async def toggle_button_builder(
