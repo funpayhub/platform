@@ -464,6 +464,15 @@ class MenuRuntimeContext:
     user_id: int | None = None
 
 
+class MenuContextSnapshot(BaseModel):
+    menu_id: str
+    keyboard_page: int
+    text_page: int
+    data: dict[str, Any]
+    fields: dict[str, Any]
+    ui_history: list[MenuContextSnapshot]
+
+
 class MenuContext(BaseModel):
     menu_id: str
     keyboard_page: int = 0
@@ -525,12 +534,3 @@ class MenuContext(BaseModel):
     def as_ui_history(self) -> list[MenuContextSnapshot]:
         snapshot = self.snapshot(drop_history=True)
         return [*self.ui_history, snapshot]
-
-
-class MenuContextSnapshot(BaseModel):
-    menu_id: str
-    keyboard_page: int
-    text_page: int
-    data: dict[str, Any]
-    fields: dict[str, Any]
-    ui_history: list[MenuContextSnapshot]
