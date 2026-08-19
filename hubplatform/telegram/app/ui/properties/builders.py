@@ -16,6 +16,7 @@ from hubplatform.telegram.ui import (
 )
 from hubplatform.telegram.app.ui import callbacks as ui_cbs
 from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
+from collections.abc import Sequence
 
 from . import callbacks as cbs
 
@@ -26,8 +27,15 @@ registry = UIRegistry()
 BUTTON_BUILDERS: dict[type[Node], CallableWrapper[KeyboardBlockSpec]] = {}
 
 
+def _get_node_builder(node: Node) -> CallableWrapper[KeyboardBlockSpec] | None:
+    for node_type in reversed(list(BUTTON_BUILDERS.keys())):
+        if isinstance(node, node_type):
+            return BUTTON_BUILDERS[node_type]
+    return None
+
+
 class NodeMenuContext(MenuContext):
-    node_path: list[str]
+    node_path: Sequence[str]
 
 
 @registry.add_menu_builder(menu_id='hubplatform.pyconfigtree:node', context_type=NodeMenuContext)
@@ -36,8 +44,8 @@ async def build_node_menu(
 ) -> MenuBuildingSpec:
     node = properties.get_node(path=ctx.node_path)
     menu_spec = MenuSpec()
-    for i in node.subnodes.values():
-        if type(i) not in BUTTON_BUILDERS:
+    for subnode in node.subnodes.values():
+        if (builder := _get_node_builder(subnode)) is None:
             menu_spec.main_keyboard.append(
                 KeyboardBlockSpec.callback_button(
                     block_id='hubplatform.pyconfigtree:unknown_node',
@@ -46,12 +54,28 @@ async def build_node_menu(
                 )
             )
             continue
-        builder = BUTTON_BUILDERS[type(i)]
-        menu_spec.main_keyboard.append(await builder(args=[i, tr, ctx], data=app_context))
-
+        menu_spec.main_keyboard.append(await builder(args=[subnode, tr, ctx], data=app_context))
     menu_spec.body_text = "<b>sun' hui v chai!"
 
     return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
+
+
+async def properties_button_builder(
+    node: Properties, i18n: Translator, menu_ctx: MenuContext
+) -> KeyboardBlockSpec:
+    ctx = NodeMenuContext(
+        menu_id='hubplatform.pyconfigtree:node',
+        node_path=node.path,
+        ui_history=menu_ctx.as_ui_history()
+    )
+
+    return KeyboardBlockSpec.callback_button(
+        block_id='hubplatform.pyconfigtree:properties',
+        text=i18n.translate(node.name),
+        callback_data=ui_cbs.OpenMenu(snapshot=ctx.snapshot())
+    )
+
+BUTTON_BUILDERS[Properties] = CallableWrapper(properties_button_builder)
 
 
 async def toggle_button_builder(
