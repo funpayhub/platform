@@ -2,6 +2,8 @@ from __future__ import annotations
 
 
 __all__ = [
+    'UICallbackData',
+    'PageableUICallbackData',
     'OpenMenu',
     'ChangePageTo',
     'Dummy',
@@ -9,7 +11,19 @@ __all__ = [
 
 from typing import Literal
 
-from hubplatform.telegram.ui import MenuContext, UICallbackData, MenuContextSnapshot
+from pydantic import Field
+
+from hubplatform.telegram.ui import MenuContext, MenuContextSnapshot
+from hubplatform.telegram.callback_data import CallbackData
+
+
+class UICallbackData(CallbackData, identifier='hubplatform_ui_callback_data'):
+    ui_history: list[MenuContextSnapshot] = Field(default_factory=list)
+
+
+class PageableUICallbackData(UICallbackData, identifier='hubplatform.pageable_callback_data'):
+    keyboard_page: int = 0
+    text_page: int = 0
 
 
 class OpenMenu(UICallbackData, identifier='hubplatform.open_menu'):

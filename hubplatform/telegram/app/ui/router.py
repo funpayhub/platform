@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from aiogram.types import CallbackQuery as Query, Message
+from aiogram.types import Message, CallbackQuery as Query
 from aiogram.fsm.context import FSMContext
+
 from hubplatform.telegram.router import Router
 from hubplatform.telegram.ui.registry import UIRegistry
-from . import callbacks as cbs, utils
+
+from . import utils, callbacks as cbs
 
 
 router = Router(name='hubplatform.ui_router')
@@ -31,7 +33,9 @@ async def change_menu_page(q: Query, cbd: cbs.ChangePageTo, tg_ui_registry: UIRe
 
 
 @router.callback_query(cbs.ClearState.filter())
-async def clear_state(q: Query, cbd: cbs.ClearState, tg_ui_registry: UIRegistry, state: FSMContext) -> None:
+async def clear_state(
+    q: Query, cbd: cbs.ClearState, tg_ui_registry: UIRegistry, state: FSMContext
+) -> None:
     await state.clear()
     if cbd.mode == 'delete' and isinstance(q.message, Message):
         await q.message.delete()

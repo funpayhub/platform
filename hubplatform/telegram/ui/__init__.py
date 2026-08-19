@@ -13,8 +13,6 @@ __all__ = [
     'MenuContextSnapshot',
     'MenuRuntimeContext',
     # ---
-    'UICallbackData',
-    # ---
     'UIRegistry',
     'MenuBuilderType',
     'MenuModificationType',
@@ -47,4 +45,3 @@ from .registry import (
     MenuModificationType,
     global_ui_registry,
 )
-from .callback_data import UICallbackData

@@ -523,6 +523,10 @@ class MenuContext(BaseModel):
             snapshot=ui_history[-1], ui_history=ui_history[:-1], runtime=runtime
         )
 
+    def as_ui_history(self) -> list[MenuContextSnapshot]:
+        snapshot = self.snapshot(drop_history=True)
+        return [*self.ui_history, snapshot]
+
 
 class MenuContextSnapshot(BaseModel):
     menu_id: str
