@@ -471,7 +471,6 @@ class MenuContext(BaseModel):
     ui_history: list[MenuContextSnapshot]
     data: dict[str, Any] = Field(default_factory=dict)
     runtime: MenuRuntimeContext = Field(default_factory=MenuRuntimeContext)
-    trigger_meta: dict[str, Any] = Field(default_factory=dict, exclude=True)
 
     def _dump_context_fields(self) -> dict[str, Any]:
         return self.model_dump(
