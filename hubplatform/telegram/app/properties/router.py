@@ -14,6 +14,7 @@ from hubplatform.i18n import Translator
 from hubplatform.telegram import Router
 from hubplatform.telegram.ui import UIRegistry
 from hubplatform.telegram.app.ui import utils
+from hubplatform.telegram.app.ui_names import TelegramAppUINames as ui_names
 
 from . import states, builders, callbacks as cbs
 
@@ -42,7 +43,7 @@ async def change_value_state(
 ) -> None:
     node = properties.get_parameter(cbd.node_path)
     ctx = builders.ManualValueInputContext(
-        menu_id='hubplatform.pyconfigtree.value_manual_input',
+        menu_id=ui_names.properties.value_manual_input_menu,
         node_path=cbd.node_path,
         open_next=cbd.open_next,
         runtime=utils.extract_runtime(q),

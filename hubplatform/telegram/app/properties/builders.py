@@ -28,6 +28,7 @@ from hubplatform.telegram.ui import (
 )
 from hubplatform.telegram.app.ui import callbacks as ui_cbs
 from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
+from hubplatform.telegram.app.ui_names import TelegramAppUINames as ui_names
 
 from . import callbacks as cbs
 
@@ -70,9 +71,7 @@ class ManualValueInputContext(NodeMenuContext):
     open_next: MenuContextSnapshot
 
 
-@registry.add_menu_builder(
-    menu_id='hubplatform.pyconfigtree.properties', context_type=NodeMenuContext
-)
+@registry.add_menu_builder(menu_id=ui_names.properties.properties_menu, context_type=NodeMenuContext)
 async def properties_menu_builder(
     ctx: NodeMenuContext, properties: Properties, tr: Translator, app_context: Mapping[str, Any]
 ) -> MenuBuildingSpec:
@@ -95,7 +94,7 @@ async def properties_menu_builder(
 
 
 @registry.add_menu_builder(
-    menu_id='hubplatform.pyconfigtree.list_param', context_type=ListNodeMenuContext
+    menu_id=ui_names.properties.list_param_menu, context_type=ListNodeMenuContext
 )
 class ListParamMenuBuilder:
     async def __call__(
@@ -219,7 +218,7 @@ class ListParamMenuBuilder:
 
 
 @registry.add_menu_builder(
-    menu_id='hubplatform.pyconfigtree.value_manual_input', context_type=ManualValueInputContext
+    menu_id=ui_names.properties.value_manual_input_menu, context_type=ManualValueInputContext
 )
 async def build_value_manual_input_menu(
     ctx: ManualValueInputContext,
@@ -246,7 +245,7 @@ async def properties_button_builder(
     node: Properties, i18n: Translator, menu_ctx: MenuContext
 ) -> KeyboardBlockSpec:
     ctx = NodeMenuContext(
-        menu_id='hubplatform.pyconfigtree:node',
+        menu_id=ui_names.properties.properties_menu,
         node_path=list(node.path),
         ui_history=menu_ctx.as_ui_history(),
     )
@@ -313,7 +312,7 @@ async def list_parameter_button_builder(
     menu_ctx: MenuContext,
 ) -> KeyboardBlockSpec:
     ctx = ListNodeMenuContext(
-        menu_id='hubplatform.pyconfigtree.list_param',
+        menu_id=ui_names.properties.list_param_menu,
         node_path=list(node.path),
         selected_indexes=set(),
         ui_history=menu_ctx.as_ui_history(),
