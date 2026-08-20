@@ -1,6 +1,7 @@
-__all__ = [
-    'TelegramAppUINames'
-]
+from __future__ import annotations
+
+
+__all__ = ['TelegramAppUINames']
 
 
 class PropertiesUINames:

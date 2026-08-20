@@ -27,13 +27,13 @@ from hubplatform.telegram.ui import (
     MenuContextSnapshot,
 )
 from hubplatform.telegram.app.ui import callbacks as ui_cbs
-from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
 from hubplatform.telegram.app.ui_names import TelegramAppUINames as ui_names
+from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
 
 from . import callbacks as cbs
 
 
-registry = UIRegistry()
+properties_ui_registry = UIRegistry()
 
 
 BUTTON_BUILDERS: dict[type[Node], CallableWrapper[KeyboardBlockSpec]] = {}
@@ -71,7 +71,9 @@ class ManualValueInputContext(NodeMenuContext):
     open_next: MenuContextSnapshot
 
 
-@registry.add_menu_builder(menu_id=ui_names.properties.properties_menu, context_type=NodeMenuContext)
+@properties_ui_registry.add_menu_builder(
+    menu_id=ui_names.properties.properties_menu, context_type=NodeMenuContext
+)
 async def properties_menu_builder(
     ctx: NodeMenuContext, properties: Properties, tr: Translator, app_context: Mapping[str, Any]
 ) -> MenuBuildingSpec:
@@ -93,7 +95,7 @@ async def properties_menu_builder(
     return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
 
-@registry.add_menu_builder(
+@properties_ui_registry.add_menu_builder(
     menu_id=ui_names.properties.list_param_menu, context_type=ListNodeMenuContext
 )
 class ListParamMenuBuilder:
@@ -171,21 +173,33 @@ class ListParamMenuBuilder:
             Button(
                 button_id='hubplatform.pyconfigtree.list_param.control.move_up',
                 text='⬆️',
-                callback_data=ui_cbs.Dummy(),
+                callback_data=cbs.ListAction(
+                    node_path=ctx.node_path,
+                    action='move_up',
+                    selected=ctx.selected_indexes,
+                ),
             )
         )
         buttons.append(
             Button(
                 button_id='hubplatform.pyconfigtree.list_param.control.move_down',
                 text='⬇️',
-                callback_data=ui_cbs.Dummy(),
+                callback_data=cbs.ListAction(
+                    node_path=ctx.node_path,
+                    action='move_down',
+                    selected=ctx.selected_indexes
+                ),
             )
         )
         buttons.append(
             Button(
                 button_id='hubplatform.pyconfigtree.list_param.control.remove',
                 text='🗑️',
-                callback_data=ui_cbs.Dummy(),
+                callback_data=cbs.ListAction(
+                    node_path=ctx.node_path,
+                    action='remove',
+                    selected=ctx.selected_indexes
+                ),
             )
         )
         buttons.append(
@@ -217,7 +231,7 @@ class ListParamMenuBuilder:
         return [[button]]
 
 
-@registry.add_menu_builder(
+@properties_ui_registry.add_menu_builder(
     menu_id=ui_names.properties.value_manual_input_menu, context_type=ManualValueInputContext
 )
 async def build_value_manual_input_menu(
@@ -262,11 +276,6 @@ async def toggle_button_builder(
     node: BoolParameter, i18n: Translator, menu_ctx: MenuContext
 ) -> KeyboardBlockSpec:
     prefix = {True: '🟢 ', False: '🔴 '}
-    for i in node.flags:
-        if isinstance(i, TelegramToggleUIEmojiFlag):
-            prefix[True] = i.on_emoji.emoji if i.on_emoji is not None else prefix[True]
-            prefix[False] = i.off_emoji.emoji if i.off_emoji else prefix[False]
-            break
 
     return KeyboardBlockSpec.callback_button(
         block_id='hubplatform.pyconfigtree:bool_param',

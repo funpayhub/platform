@@ -56,7 +56,10 @@ async def change_value_state(
 
 @properties_router.message(states.ChangingParameterValueState.filter())
 async def change_value(
-    m: Message, state: FSMContext, translator: Translator, tg_ui_registry: UIRegistry
+    m: Message,
+    state: FSMContext,
+    translator: Translator,
+    tg_ui_registry: UIRegistry,
 ) -> None:
     data = await states.ChangingParameterValueState.get(state)
     value = m.text if m.text != '-' else ''
@@ -74,3 +77,6 @@ async def change_value(
     )
     with suppress(Exception):
         await m.bot.delete_message(chat_id=m.chat.id, message_id=data.state_message_id)
+
+
+# list operations

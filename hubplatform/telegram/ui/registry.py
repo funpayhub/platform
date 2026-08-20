@@ -347,16 +347,20 @@ class UIRegistry:
             raise TypeError('modification_id must be a string.')
         if not modification_id:
             raise ValueError('modification_id cannot be empty.')
-        if (
-            menu_id in self._menu_modifications
-            and modification_id in self._menu_modifications[menu_id]
-        ):
+
+        if menu_id == '*':
+            storage = self._global_modifications
+        else:
+            storage = self._menu_modifications[menu_id]
+
+        if modification_id in storage:
             raise RuntimeError(
                 f'Menu modification {modification_id!r} for menu {menu_id!r} already registered.'
             )
 
         def inner(modification: _MM) -> _MM:
-            self._menu_modifications[menu_id][modification_id] = MenuModificationMeta(
+
+            storage[modification_id] = MenuModificationMeta(
                 modification_id=modification_id,
                 menu_id=menu_id,
                 filter=filter,
@@ -365,6 +369,72 @@ class UIRegistry:
             return modification
 
         return inner
+
+    def merge_from(self, *registries: UIRegistry, skip_existing: bool = False) -> None:
+        if not registries:
+            return
+
+        if len(registries) == 1:
+            self._merge_single(registries[0], skip_existing=skip_existing)
+            return
+
+        temp_registry = UIRegistry()
+        for registry in registries:
+            temp_registry.merge_from(registry, skip_existing=skip_existing)
+
+        self._merge_single(temp_registry, skip_existing=skip_existing)
+
+    def _merge_single(self, ui_registry: 'UIRegistry', *, skip_existing: bool = False) -> None:
+        if not isinstance(ui_registry, UIRegistry):
+            raise TypeError('ui_registry must be an instance of `UIRegistry`.')
+
+        if ui_registry is self:
+            return
+
+        if not skip_existing:
+            if conflicting_menus := self._menus.keys() & ui_registry._menus.keys():
+                raise RuntimeError(f'Menus {", ".join(conflicting_menus)} already registered.')
+
+            conflicting_global_modifications = (
+                self._global_modifications.keys() & ui_registry._global_modifications.keys()
+            )
+            if conflicting_global_modifications:
+                raise RuntimeError(
+                    f'Global menu modifications {", ".join(conflicting_global_modifications)} '
+                    f'already registered.'
+                )
+
+            for menu_id, modifications in ui_registry._menu_modifications.items():
+                current = self._menu_modifications.get(menu_id)
+                if not current:
+                    continue
+
+                conflicts = current.keys() & modifications.keys()
+                if conflicts:
+                    raise RuntimeError(
+                        f'Menu modifications {", ".join(conflicts)} '
+                        f'for menu {menu_id!r} already registered.'
+                    )
+
+        if skip_existing:
+            for menu_id, menu in ui_registry._menus.items():
+                self._menus.setdefault(menu_id, menu)
+
+            for modification_id, modification in ui_registry._global_modifications.items():
+                self._global_modifications.setdefault(modification_id, modification)
+
+            for menu_id, modifications in ui_registry._menu_modifications.items():
+                current = self._menu_modifications[menu_id]
+
+                for modification_id, modification in modifications.items():
+                    current.setdefault(modification_id, modification)
+
+        else:
+            self._menus |= ui_registry._menus
+            self._global_modifications |= ui_registry._global_modifications
+
+            for menu_id, modifications in ui_registry._menu_modifications.items():
+                self._menu_modifications[menu_id] |= modifications
 
     async def build_menu(
         self,

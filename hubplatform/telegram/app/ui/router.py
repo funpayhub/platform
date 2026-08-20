@@ -9,10 +9,10 @@ from hubplatform.telegram.ui.registry import UIRegistry
 from . import utils, callbacks as cbs
 
 
-router = Router(name='hubplatform.ui_router')
+ui_router = Router(name='hubplatform.ui_router')
 
 
-@router.callback_query(cbs.OpenMenu.filter())
+@ui_router.callback_query(cbs.OpenMenu.filter())
 async def open_menu(q: Query, cbd: cbs.OpenMenu, tg_ui_registry: UIRegistry) -> None:
     await utils.apply_menu_snapshot(
         snapshot=cbd.snapshot,
@@ -22,7 +22,7 @@ async def open_menu(q: Query, cbd: cbs.OpenMenu, tg_ui_registry: UIRegistry) -> 
     )
 
 
-@router.callback_query(cbs.ChangePageTo.filter())
+@ui_router.callback_query(cbs.ChangePageTo.filter())
 async def change_page(q: Query, cbd: cbs.ChangePageTo, tg_ui_registry: UIRegistry) -> None:
     context = tg_ui_registry.context_from_snapshot(cbd.snapshot, runtime=utils.extract_runtime(q))
     if cbd.keyboard_page is not None:
@@ -32,7 +32,7 @@ async def change_page(q: Query, cbd: cbs.ChangePageTo, tg_ui_registry: UIRegistr
     await utils.apply_menu_context(context=context, target=q, ui_registry=tg_ui_registry)
 
 
-@router.callback_query(cbs.ClearState.filter())
+@ui_router.callback_query(cbs.ClearState.filter())
 async def clear_state(
     q: Query, cbd: cbs.ClearState, tg_ui_registry: UIRegistry, state: FSMContext
 ) -> None:
