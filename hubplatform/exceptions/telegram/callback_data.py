@@ -6,7 +6,6 @@ __all__ = [
     'InvalidCallbackDataFormatError',
     'CallbackDataPackError',
     'NotSerializableValueError',
-    'PositionalContextNotSupportedError',
     'CallbackIdentifierMismatchError',
     'BadCallbackIdentifierError',
     'CallbackDataTooLongError',
@@ -44,10 +43,6 @@ class BadCallbackIdentifierError(CallbackDataError):
 # Packing exceptions
 class NotSerializableValueError(CallbackDataPackError):
     """Raised when a value is unsupported by the positional serializer."""
-
-
-class PositionalContextNotSupportedError(CallbackDataPackError):
-    """Raised when a positional envelope would discard callback context."""
 
 
 class CallbackDataTooLongError(CallbackDataPackError):

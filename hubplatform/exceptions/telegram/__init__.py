@@ -7,7 +7,6 @@ __all__ = [
     'InvalidCallbackDataFormatError',
     'CallbackDataPackError',
     'NotSerializableValueError',
-    'PositionalContextNotSupportedError',
     'CallbackIdentifierMismatchError',
     'BadCallbackIdentifierError',
     'CallbackDataTooLongError',
@@ -22,5 +21,4 @@ from .callback_data import (
     BadCallbackIdentifierError,
     InvalidCallbackDataFormatError,
     CallbackIdentifierMismatchError,
-    PositionalContextNotSupportedError,
 )

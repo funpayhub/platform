@@ -29,7 +29,6 @@ from hubplatform.exceptions.telegram.callback_data import (
     BadCallbackIdentifierError,
     InvalidCallbackDataFormatError,
     CallbackIdentifierMismatchError,
-    PositionalContextNotSupportedError,
 )
 
 from .compress import CompressionCodecsRegistry, ZLibBase85CompressionCodec
@@ -136,7 +135,6 @@ class KeywordCallbackDataEnvelope(_CallbackDataEnvelope):
     """Envelope that stores named payload fields and context."""
 
     fields: dict[str, Any] = Field(default_factory=dict)
-    context: dict[str, Any] = Field(default_factory=dict)
 
     def _pack(
         self,
@@ -145,7 +143,7 @@ class KeywordCallbackDataEnvelope(_CallbackDataEnvelope):
         fallback_reserved: bool,
     ) -> str:
         data = self.model_dump(mode='json', fallback=pydantic_fallback_serializer)
-        data_str = dumps_compact([data['fields'], data['context']], root=False)
+        data_str = dumps_compact(data['fields'], root=False)
         result = '!' + self.identifier + data_str
         if not compress:
             return result
@@ -167,11 +165,9 @@ class KeywordCallbackDataEnvelope(_CallbackDataEnvelope):
 
         data = _GLOBAL_COMPRESSION_CODECS_REGISTRY.decompress(data)
 
-        identifier, sep, data = data.partition('[')
-        fields, context = loads_compact(sep + data)
-        return KeywordCallbackDataEnvelope(
-            identifier=identifier[1:], fields=fields, context=context
-        )
+        identifier, sep, data = data.partition('{')
+        fields = loads_compact(sep + data)
+        return KeywordCallbackDataEnvelope(identifier=identifier[1:], fields=fields)
 
 
 class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
@@ -292,14 +288,11 @@ class CallbackData(BaseModel):
 
     Each subclass must declare a non-empty identifier in its class definition, for
     example ``class SelectItem(CallbackData, identifier='select_item')``. Fields added
-    by the subclass form the callback payload; ``context`` is auxiliary data available
-    only in keyword envelopes.
+    by the subclass form the callback payload.
 
-    :param context: Additional data carried alongside the callback payload.
     """
 
     identifier: ClassVar[str] = ''
-    context: dict[str, Any] = Field(default_factory=dict)
 
     def model_post_init(self, context: Any, /) -> None:
         """Validate the class-level identifier after Pydantic initialization."""
@@ -327,7 +320,7 @@ class CallbackData(BaseModel):
     def _dump_callback_fields(self) -> dict[str, Any]:
         """Dump concrete payload fields in JSON-compatible form.
 
-        Fields defined by :class:`CallbackData`, such as ``context``, are excluded.
+        Fields defined by :class:`CallbackData`, are excluded.
 
         :return: Serialized payload fields in model declaration order.
         """
@@ -338,16 +331,15 @@ class CallbackData(BaseModel):
         )
 
     def to_keyword_envelope(self) -> KeywordCallbackDataEnvelope:
-        """Convert the payload to a keyword envelope, preserving its context.
+        """Convert the payload to a keyword envelope.
 
-        :return: An envelope containing named payload fields and context.
+        :return: An envelope containing named payload fields.
         :raises CallbackDataPackError: If the payload cannot be converted.
         """
         try:
             return KeywordCallbackDataEnvelope(
                 identifier=self.identifier,
                 fields=self._dump_callback_fields(),
-                context=self.context,
             )
         except Exception as e:
             raise CallbackDataPackError(
@@ -355,24 +347,12 @@ class CallbackData(BaseModel):
                 f'to keyword envelope: {e}'
             ) from e
 
-    def to_positional_envelope(
-        self, *, drop_context: bool = False
-    ) -> PositionalCallbackDataEnvelope:
+    def to_positional_envelope(self) -> PositionalCallbackDataEnvelope:
         """Convert the payload to a compact positional envelope.
 
-        :param drop_context: Discard non-empty context. Positional envelopes cannot
-            carry context.
         :return: An envelope containing payload values in model field order.
-        :raises PositionalContextNotSupportedError: If context is present and
-            ``drop_context`` is false.
         :raises CallbackDataPackError: If the payload cannot be converted.
         """
-        if self.context and not drop_context:
-            raise PositionalContextNotSupportedError(
-                'Packing to positional query with non-empty context is not allowed. '
-                'Pass `drop_context=True` to not include context in packed query.'
-            )
-
         try:
             return PositionalCallbackDataEnvelope(
                 identifier=self.identifier, fields=list(self._dump_callback_fields().values())
@@ -403,7 +383,7 @@ class CallbackData(BaseModel):
 
         try:
             if isinstance(envelope, KeywordCallbackDataEnvelope):
-                return cls.model_validate(envelope.fields | {'context': envelope.context})
+                return cls.model_validate(envelope.fields)
 
             base_field_names = set(CallbackData.model_fields.keys())
             field_names = [k for k in cls.model_fields.keys() if k not in base_field_names]
@@ -421,7 +401,7 @@ class CallbackData(BaseModel):
         compression_version: str | None = None,
         fallback_reserved: bool = True,
     ) -> str:
-        """Serialize the payload in keyword format, preserving context.
+        """Serialize the payload in keyword format.
 
         :return: Packed callback data.
         :raises CallbackDataPackError: If serialization fails.
@@ -435,20 +415,16 @@ class CallbackData(BaseModel):
     def pack_compact(
         self,
         *,
-        drop_context: bool = False,
         compress: bool = True,
         compression_version: str | None = None,
         fallback_reserved: bool = True,
     ) -> str:
         """Serialize the payload in compact positional format.
 
-        :param drop_context: Discard non-empty context before serialization.
         :return: Packed positional callback data.
-        :raises PositionalContextNotSupportedError: If context is present and
-            ``drop_context`` is false.
         :raises CallbackDataPackError: If serialization fails.
         """
-        return self.to_positional_envelope(drop_context=drop_context).pack(
+        return self.to_positional_envelope().pack(
             compress=compress,
             compression_version=compression_version,
             fallback_reserved=fallback_reserved,
