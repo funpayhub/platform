@@ -477,7 +477,7 @@ class MenuContext(BaseModel):
     menu_id: str
     keyboard_page: int = 0
     text_page: int = 0
-    ui_history: list[MenuContextSnapshot]
+    ui_history: list[MenuContextSnapshot] = Field(default_factory=list)
     data: dict[str, Any] = Field(default_factory=dict)
     runtime: MenuRuntimeContext = Field(default_factory=MenuRuntimeContext)
 

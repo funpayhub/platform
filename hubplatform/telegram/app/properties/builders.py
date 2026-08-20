@@ -24,6 +24,7 @@ from hubplatform.telegram.ui import (
     MenuContext,
     MenuBuildingSpec,
     KeyboardBlockSpec,
+    MenuContextSnapshot,
 )
 from hubplatform.telegram.app.ui import callbacks as ui_cbs
 from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
@@ -63,6 +64,10 @@ class NodeMenuContext(MenuContext):
 class ListNodeMenuContext(NodeMenuContext):
     selected_indexes: set[int]
     editing: bool = False
+
+
+class ManualValueInputContext(NodeMenuContext):
+    open_next: MenuContextSnapshot
 
 
 @registry.add_menu_builder(
@@ -211,6 +216,29 @@ class ListParamMenuBuilder:
             callback_data=ui_cbs.OpenMenu(snapshot=new_ctx.snapshot()),
         )
         return [[button]]
+
+
+@registry.add_menu_builder(
+    menu_id='hubplatform.pyconfigtree.value_manual_input', context_type=ManualValueInputContext
+)
+async def build_value_manual_input_menu(
+    ctx: ManualValueInputContext,
+    properties: Properties,
+    translator: Translator,
+) -> MenuBuildingSpec:
+    menu_spec = MenuSpec()
+    entry = properties.get_parameter(ctx.node_path)
+    menu_spec.body_text = translator.translate('edit-parameter-value-text')
+
+    menu_spec.footer_keyboard.append(
+        KeyboardBlockSpec.callback_button(
+            block_id='hubplatform.clear_state',
+            text=translator.translate('cancel'),
+            callback_data=ui_cbs.ClearState(open_next=ctx.open_next),
+        )
+    )
+
+    return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
 
 @register_node_button_builder(Properties)

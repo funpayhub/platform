@@ -37,8 +37,8 @@ async def clear_state(
     q: Query, cbd: cbs.ClearState, tg_ui_registry: UIRegistry, state: FSMContext
 ) -> None:
     await state.clear()
-    if cbd.mode == 'delete' and isinstance(q.message, Message):
-        await q.message.delete()
-    elif cbd.mode == 'go_back':
-        ctx = tg_ui_registry.context_from_history(cbd.ui_history, runtime=utils.extract_runtime(q))
-        await utils.apply_menu_context(context=ctx, target=q, ui_registry=tg_ui_registry)
+    if cbd.open_next is None:
+        if isinstance(q.message, Message):
+            await q.message.delete()
+    else:
+        await utils.apply_menu_snapshot(cbd.open_next, q, ui_registry=tg_ui_registry)

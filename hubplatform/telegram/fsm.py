@@ -7,7 +7,6 @@ __all__ = [
     'StateFilter',
 ]
 
-
 from typing import Any, Self, Final, Literal, overload
 
 from aiogram.filters import StateFilter as AiogramStateFilter
@@ -103,33 +102,6 @@ class State:
     @classmethod
     def filter(cls) -> StateFilter:
         return StateFilter(cls)
-
-
-# @dataclass
-# class StateFromQuery(State, identifier='StateFromQuery'):
-#     query: CallbackQuery
-#
-#     def __init_subclass__(cls, **kwargs: Any) -> None:
-#         if kwargs.get('identifier') == 'StateFromQuery':
-#             kwargs.pop('identifier')
-#
-#         super().__init_subclass__(**kwargs)
-#
-#     @property
-#     def message(self) -> Message:
-#         return self.query.message
-#
-#     @property
-#     def callback_data(self) -> UnknownCallback:
-#         if hasattr(self.query, '__parsed__'):
-#             return getattr(self.query, '__parsed__')
-#         cb = UnknownCallback.parse(self.query.data)
-#         setattr(cb, '__parsed__', cb)
-#         return cb
-#
-#     @property
-#     def ui_history(self) -> list[MenuHistoryNode]:
-#         return self.callback_data.ui_history
 
 
 class StateFilter(AiogramStateFilter):

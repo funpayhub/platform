@@ -9,7 +9,6 @@ __all__ = [
     'Dummy',
 ]
 
-from typing import Literal
 
 from pydantic import Field
 
@@ -44,8 +43,8 @@ class ChangePageTo(CallbackData, identifier='hubplatform.change_page_to'):
     text_page: int | None = None
 
 
-class ClearState(UICallbackData, identifier='hubplatform.clear_state'):
-    mode: Literal['delete', 'go_back'] = 'delete'
+class ClearState(CallbackData, identifier='hubplatform.clear_state'):
+    open_next: MenuContextSnapshot | None = None
 
 
 class Dummy(CallbackData, identifier='hubplatform.dummy'):
