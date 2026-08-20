@@ -33,33 +33,34 @@ from .exceptions import MenuBuildingError, MenuFinalizingError, MenuModification
 logger = _logger.ui
 
 _P = ParamSpec('_P', default=...)
+_C = TypeVar('_C', bound=MenuContext, default=Any, contravariant=True)
 
 
 @runtime_checkable
-class MenuBuilderProto(Protocol[_P]):
+class MenuBuilderProto(Protocol[_P, _C]):
     async def __call__(
-        self, _c: MenuContext, /, *_a: _P.args, **_k: _P.kwargs
+        self, _c: _C, /, *_a: _P.args, **_k: _P.kwargs
     ) -> MenuSpec | MenuBuildingSpec: ...
 
 
 @runtime_checkable
-class MenuModificationProto(Protocol[_P]):
+class MenuModificationProto(Protocol[_P, _C]):
     async def __call__(
-        self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
+        self, _c: _C, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
     ) -> MenuSpec | MenuBuildingState: ...
 
 
 @runtime_checkable
-class MenuModificationFilterProto(Protocol[_P]):
+class MenuModificationFilterProto(Protocol[_P, _C]):
     async def __call__(
-        self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
+        self, _c: _C, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
     ) -> bool: ...
 
 
 @runtime_checkable
-class MenuModificationWithFilterProto(MenuModificationProto[_P], Protocol[_P]):
+class MenuModificationWithFilterProto(MenuModificationProto[_P, _C], Protocol[_P, _C]):
     async def filter(
-        self, _c: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
+        self, _C: MenuContext, _s: MenuBuildingState, /, *_a: _P.args, **_k: _P.kwargs
     ) -> bool: ...
 
 
@@ -404,20 +405,20 @@ class UIRegistry:
                 len(result.render_errors),
             )
 
-        for index, error in enumerate(result.building_errors):
+        for index, building_error in enumerate(result.building_errors):
             logger.warning(
                 '%d. An error occurred while building keyboard block %s.',
                 index + 1,
-                error.block_id,
-                exc_info=error,
+                building_error.block_id,
+                exc_info=building_error,
             )
 
-        for index, error in enumerate(result.render_errors):
+        for index, render_error in enumerate(result.render_errors):
             logger.warning(
                 '%d. An error occurred while rendering button %s.',
                 index + 1,
-                error.button_id,
-                exc_info=error,
+                render_error.button_id,
+                exc_info=render_error,
             )
 
         return result

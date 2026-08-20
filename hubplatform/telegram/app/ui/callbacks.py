@@ -26,7 +26,7 @@ class PageableUICallbackData(UICallbackData, identifier='hubplatform.pageable_ca
     text_page: int = 0
 
 
-class OpenMenu(UICallbackData, identifier='hubplatform.open_menu'):
+class OpenMenu(CallbackData, identifier='hubplatform.open_menu'):
     snapshot: MenuContextSnapshot
     new_message: bool = False
 
@@ -48,5 +48,5 @@ class ClearState(UICallbackData, identifier='hubplatform.clear_state'):
     mode: Literal['delete', 'go_back'] = 'delete'
 
 
-class Dummy(UICallbackData, identifier='hubplatform.dummy'):
+class Dummy(CallbackData, identifier='hubplatform.dummy'):
     pass
