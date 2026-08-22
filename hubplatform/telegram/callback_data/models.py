@@ -18,9 +18,9 @@ import string
 from typing import TYPE_CHECKING, Any, Self, ClassVar, Annotated
 from abc import ABC, abstractmethod
 
-from aiogram import MagicFilter
 from pydantic import Field, BaseModel, AfterValidator
 from aiogram.types import CallbackQuery
+from aiogram.utils.magic_filter import MagicFilter
 
 from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
 from hubplatform.exceptions.telegram.callback_data import (

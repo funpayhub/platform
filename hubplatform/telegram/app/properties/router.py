@@ -51,7 +51,10 @@ async def change_value_state(
         environment=q,
     )
 
-    await states.ChangingParameterValueState(node=node, open_session=cbd.session_id).set(state)
+    await states.ChangingParameterValueState(
+        node=node,  # type: ignore[arg-type]
+        open_session=cbd.session_id,
+    ).set(state)
 
 
 @props_router.message(states.ChangingParameterValueState.filter())
@@ -82,7 +85,7 @@ async def remove_selected_items(
     properties: Properties,
     ui_manager: UIManager,
     cbd: cbs.ListAction,
-):
+) -> None:
     node = properties.get_parameter(cbd.node_path)
     if not isinstance(node, ListParameter):
         raise ValueError(f'{node.path} is not a ListParameter.')
@@ -112,7 +115,7 @@ async def move_selected_items(
     properties: Properties,
     ui_manager: UIManager,
     cbd: cbs.ListAction,
-):
+) -> None:
     node = properties.get_parameter(cbd.node_path)
     if not isinstance(node, ListParameter):
         raise ValueError(f'{node.path} is not a ListParameter.')
@@ -137,4 +140,4 @@ async def move_selected_items(
 
         await node.save()
         new_selected = [i + (-1 if cbd.action == 'move_up' else +1) for i in selected]
-        s.current.context_fields['selected_indexes'] = new_selected
+        s.current.context_fields['selected_indexes'] = new_selected  # type: ignore[assignment]

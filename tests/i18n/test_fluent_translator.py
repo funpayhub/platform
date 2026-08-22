@@ -36,7 +36,7 @@ def test_translates_messages_and_substitutes_variables(
     translator.add_translations(tmp_path)
 
     assert translator.translate('hello') == 'Hello!'
-    assert translator.translate('welcome', {'name': 'Alice'}) == 'Welcome, Alice!'
+    assert translator.translate('welcome', name='Alice') == 'Welcome, Alice!'
 
 
 def test_returns_message_id_when_translation_is_missing(
@@ -87,9 +87,9 @@ def test_change_language_reloads_added_sources(tmp_path: Path) -> None:
     translator = FluentTranslator()
     translator.add_translations(tmp_path)
 
-    assert translator.translate('greeting', {'name': 'Alice'}) == 'Hello, Alice!'
+    assert translator.translate('greeting', name='Alice') == 'Hello, Alice!'
 
     translator.change_language('ru_RU')
 
     assert translator.current_lang == 'ru_RU'
-    assert translator.translate('greeting', {'name': 'Алиса'}) == 'Привет, Алиса!'
+    assert translator.translate('greeting', name='Alice') == 'Привет, Алиса!'

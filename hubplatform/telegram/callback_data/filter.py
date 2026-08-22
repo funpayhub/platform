@@ -7,9 +7,9 @@ __all__ = [
 
 from typing import Any, Literal
 
-from aiogram import MagicFilter
 from aiogram.types import CallbackQuery
 from aiogram.filters import Filter
+from aiogram.utils.magic_filter import MagicFilter
 
 from hubplatform.exceptions.telegram import CallbackIdentifierMismatchError
 from hubplatform.telegram.callback_data.hash import HashService
