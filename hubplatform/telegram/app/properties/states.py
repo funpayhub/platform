@@ -8,7 +8,6 @@ from dataclasses import dataclass
 
 from pyconfigtree import MutableParameter
 
-from hubplatform.telegram.ui import MenuContextSnapshot
 from hubplatform.telegram.fsm import State
 
 
@@ -17,5 +16,4 @@ class ChangingParameterValueState(
     State, identifier='hubplatform.pyconfigtree.changing_parameter_value'
 ):
     node: MutableParameter[Any]
-    open_next: MenuContextSnapshot
-    state_message_id: int
+    open_session: str

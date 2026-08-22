@@ -2,21 +2,26 @@ from __future__ import annotations
 
 from typing import Literal
 
-from hubplatform.telegram.ui import MenuContextSnapshot
-from hubplatform.telegram.callback_data import CallbackData
+from pydantic import Field
+
+from hubplatform.telegram.ui.session_callback_data import (
+    SessionCallbackData,
+    session_id_from_context,
+)
 
 
-class NextValue(CallbackData, identifier='hubplatform.properties.next_value'):
+class NextValue(SessionCallbackData, identifier='hubplatform.properties.next_value'):
     node_path: list[str]
-    open_next: MenuContextSnapshot
 
 
-class ManualValueInput(CallbackData, identifier='hubplatform.properties.manual_value_input'):
+class ManualValueInput(
+    SessionCallbackData, identifier='hubplatform.properties.manual_value_input'
+):
     node_path: list[str]
-    open_next: MenuContextSnapshot
+    open_next_session_id: str = Field(default_factory=session_id_from_context)
 
 
-class ListAction(CallbackData, identifier='hubplatform.properties.list_action'):
+class ListAction(SessionCallbackData, identifier='hubplatform.properties.list_action'):
     node_path: list[str]
     action: Literal['move_up', 'move_down', 'remove']
     selected: set[int]

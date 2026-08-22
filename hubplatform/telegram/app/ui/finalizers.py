@@ -2,127 +2,77 @@ from __future__ import annotations
 
 from math import ceil
 from functools import partial
-from collections.abc import MutableSequence
 
 from hubplatform.i18n import Translator
 from hubplatform.telegram.ui import (
     Button,
     MenuSpec,
-    MenuContext,
+    MenuBuildContext,
     KeyboardBlockSpec,
     MenuBuildingState,
-    MenuContextSnapshot,
 )
+from hubplatform.telegram.ui.keyboard import Keyboard
 
-from .callbacks import Dummy, OpenMenu, ChangePageTo
+from .callbacks import Dummy, GoBack, ChangePageTo
 
 
 class StripAndNavigationFinalizer:
     def __init__(
         self,
         back_button: bool = True,
-        max_blocks_in_keyboard: int = 6,
+        max_blocks_in_keyboard: int = 3,
     ) -> None:
         self.back_button = back_button
         self.max_blocks_in_keyboard = max_blocks_in_keyboard
 
     async def __call__(
         self,
-        ctx: MenuContext,
+        ctx: MenuBuildContext,
         state: MenuBuildingState,
         translator: Translator,
     ) -> MenuSpec:
         keyboard = state.menu.main_keyboard
-        max_pages = ceil(len(keyboard) / self.max_blocks_in_keyboard)
 
+        pages = ceil(len(keyboard) / self.max_blocks_in_keyboard)
         state.menu.footer_keyboard.append(
             KeyboardBlockSpec(
                 block_id='hubplatform.navigation',
-                builder=partial(
-                    build_navigation,
-                    ctx=ctx,
-                    tr=translator,
-                    max_pages=max_pages,
-                    back_button=self.back_button,
-                ),
+                builder=partial(_nav, ctx=ctx, tr=translator, pages=pages, back=self.back_button),
             )
         )
 
-        start = ctx.keyboard_page * self.max_blocks_in_keyboard
+        start = ctx.view_state.keyboard_page * self.max_blocks_in_keyboard
         state.menu.main_keyboard = keyboard[start : start + self.max_blocks_in_keyboard]
 
         return state.menu
 
 
-def _nav_button(
-    button_id: str,
-    text: str,
-    enabled: bool,
-    snapshot: MenuContextSnapshot,
-    page: int,
-) -> Button:
+def _nav_button(button_id: str, text: str, enabled: bool, page: int) -> Button:
     return Button(
         button_id=button_id,
         text=text if enabled else ' ',
-        callback_data=(
-            ChangePageTo(snapshot=snapshot, keyboard_page=page) if enabled else Dummy()
-        ),
+        callback_data=ChangePageTo(keyboard_page=page) if enabled else Dummy(),
     )
 
 
-async def build_navigation(
-    *,
-    ctx: MenuContext,
-    tr: Translator,
-    max_pages: int,
-    back_button: bool,
-) -> MutableSequence[MutableSequence[Button]]:
-    kb: MutableSequence[MutableSequence[Button]] = []
+async def _nav(ctx: MenuBuildContext, tr: Translator, pages: int, back: bool) -> Keyboard:
+    kb: Keyboard = []
 
-    if ctx.ui_history and back_button:
-        prev = ctx.ui_history[-1]
-        prev.ui_history = ctx.ui_history[:-1]
+    if ctx.history and back:
+        kb.append([Button(button_id='back', text=tr.translate('◀️ Назад'), callback_data=GoBack())])
 
-        kb.append(
-            [
-                Button(
-                    button_id='hubplatform.navigation.go_back',
-                    text=tr.translate('◀️ Назад'),
-                    callback_data=OpenMenu(snapshot=prev),
-                )
-            ]
-        )
-
-    if max_pages < 2:
+    if pages < 2:
         return kb
 
-    page = ctx.keyboard_page
-    snapshot = ctx.snapshot()
-
+    page = ctx.view_state.keyboard_page
     kb.insert(
         0,
         [
-            _nav_button('first_kb_page', '⏪', page > 0, snapshot, 0),
-            _nav_button('prev_kb_page', '◀️', page > 0, snapshot, page - 1),
-            Button(
-                button_id='menu_page_counter',
-                text=f'{page + 1} / {max_pages}',
-                callback_data=Dummy(),
-            ),
-            _nav_button(
-                'next_kb_page',
-                '▶️',
-                page < max_pages - 1,
-                snapshot,
-                page + 1,
-            ),
-            _nav_button(
-                'last_kb_page',
-                '⏩',
-                page < max_pages - 1,
-                snapshot,
-                max_pages - 1,
-            ),
+            _nav_button('first', '⏪', page > 0, 0),
+            _nav_button('prev', '◀️', page > 0, page - 1),
+            Button(button_id='counter', text=f'{page + 1} / {pages}', callback_data=Dummy()),
+            _nav_button('next', '▶️', page < pages - 1, page + 1),
+            _nav_button('last', '⏩', page < pages - 1, pages - 1),
         ],
     )
 
