@@ -29,11 +29,11 @@ from hubplatform.telegram.callback_data.hash import HashService
 )
 class MenuSpec:
     header_text: str = ''
-    header_body_sep: str = '\n\n'
+    header_body_sep: str = '<hr/>\n'
     body_text: str = ''
-    body_footer_sep: str = '\n\n'
+    body_footer_sep: str = '\n<hr/>'
     footer_text: str = ''
-    header_footer_sep: str = '\n\n'
+    header_footer_sep: str = '\n<hr/>\n'
     header_keyboard: MutableSequence[KeyboardBlockSpec] = dataclass_field(default_factory=list)
     main_keyboard: MutableSequence[KeyboardBlockSpec] = dataclass_field(default_factory=list)
     footer_keyboard: MutableSequence[KeyboardBlockSpec] = dataclass_field(default_factory=list)

@@ -53,7 +53,7 @@ class Localization(FluentLocalization):
 
 
 class FluentTranslator(Translator):
-    def __init__(self, current_lang: str = 'en_US') -> None:
+    def __init__(self, current_lang: str = 'ru_RU') -> None:
         super().__init__(current_lang=current_lang)
         self._localizers: list[Localization] = []
         self._sources: set[Path] = set()
@@ -66,7 +66,7 @@ class FluentTranslator(Translator):
         self._sources.add(path)
         self._localizers.append(self._localizer_from_source(path))
 
-    def translate(self, text: str, variables: dict[str, Any] | None = None) -> str:
+    def translate(self, text: str, **variables: str) -> str:
         for i in self._localizers:
             try:
                 return i.format_value(text, variables)

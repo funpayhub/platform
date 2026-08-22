@@ -22,8 +22,6 @@ class ManualValueInput(
 
 
 class ListAction(SessionCallbackData, identifier='hubplatform.properties.list_action'):
+    node_path: list[str]
+    selected: set[int] = Field(default_factory=set)
     action: Literal['move_up', 'move_down', 'remove']
-
-
-class SelectListItem(SessionCallbackData, identifier='hubplatform.properties.select_list_item'):
-    index: int

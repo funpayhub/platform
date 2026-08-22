@@ -5,13 +5,13 @@ __all__ = ['Translator', 'FluentTranslator', 'global_translator']
 
 from .base import Translator
 from .fluent import FluentTranslator
+from importlib.resources import files, as_file
+from functools import cache
 
 
-_global_translator: Translator | None = None
-
-
+@cache
 def global_translator() -> Translator:
-    global _global_translator
-    if _global_translator is None:
-        _global_translator = FluentTranslator()
-    return _global_translator
+    translator = FluentTranslator()
+    with as_file(files(__package__).joinpath("locales")) as path:
+        translator.add_translations(path)
+    return translator

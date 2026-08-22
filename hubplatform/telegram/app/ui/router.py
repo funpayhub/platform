@@ -50,6 +50,7 @@ async def clear_state(
     await state.clear()
     if cbd.open_session_id is not None:
         await ui_manager.clone_session(session_id=cbd.open_session_id, environment=q)
+    await q.message.delete()
 
 
 @ui_router.callback_query(cbs.GoBack.filter())

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from html import escape
 from typing import Any, TypeVar
 from functools import partial
 from collections.abc import Mapping, Callable, Awaitable
@@ -94,7 +95,8 @@ async def properties_menu_builder(
             )
             continue
         menu_spec.main_keyboard.append(await builder(args=[subnode, tr, ctx], data=app_context))
-    menu_spec.body_text = 'Properties node'
+    menu_spec.header_text = f'<h2>{escape(tr.translate(node.name or "Properties"))}</h2>'
+    menu_spec.body_text = f'<i>{escape(tr.translate(node.description))}</i>'
 
     return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
@@ -153,7 +155,8 @@ class ListParamMenuBuilder:
                 )
             )
 
-        menu_spec.body_text = 'List param'
+        menu_spec.header_text = f'<h2>{escape(tr.translate(node.name))}</h2>'
+        menu_spec.body_text = f'<i>{escape(tr.translate(node.description))}</i>'
         return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
     async def item_btn(self, index: int, val: Any, context: ListNodeMenuContext) -> Keyboard:
@@ -180,21 +183,27 @@ class ListParamMenuBuilder:
             Button(
                 button_id='hubplatform.pyconfigtree.list_param.control.move_up',
                 text='⬆️',
-                callback_data=cbs.ListAction(action='move_up'),
+                callback_data=cbs.ListAction(
+                    node_path=ctx.node_path, action='move_up', selected=ctx.selected_indexes
+                ),
             )
         )
         buttons.append(
             Button(
                 button_id='hubplatform.pyconfigtree.list_param.control.move_down',
                 text='⬇️',
-                callback_data=cbs.ListAction(action='move_down'),
+                callback_data=cbs.ListAction(
+                    node_path=ctx.node_path, action='move_down', selected=ctx.selected_indexes
+                ),
             )
         )
         buttons.append(
             Button(
                 button_id='hubplatform.pyconfigtree.list_param.control.remove',
                 text='🗑️',
-                callback_data=cbs.ListAction(action='remove'),
+                callback_data=cbs.ListAction(
+                    node_path=ctx.node_path, action='remove', selected=ctx.selected_indexes
+                ),
             )
         )
         buttons.append(
@@ -220,8 +229,15 @@ async def build_value_manual_input_menu(
     translator: Translator,
 ) -> MenuBuildingSpec:
     menu_spec = MenuSpec()
-    entry = properties.get_parameter(ctx.context.node_path)
-    menu_spec.body_text = translator.translate('edit-parameter-value-text')
+    node = properties.get_parameter(ctx.context.node_path)
+    menu_spec.header_text = translator.translate(
+        'hubplatform-telegram_ui-you-are-editing-parameter',
+        parameter_name=translator.translate(node.name)
+    )
+    menu_spec.body_text = f'<i>{escape(translator.translate(node.description))}</i>'
+    menu_spec.footer_text = translator.translate(
+        'hubplatform-telegram_ui-enter-new-parameter-value'
+    )
 
     menu_spec.footer_keyboard.append(
         KeyboardBlockSpec.callback_button(

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from aiogram import F
 from pyconfigtree import Properties, BoolParameter, ListParameter
 from aiogram.types import (
@@ -85,19 +83,19 @@ async def remove_selected_items(
     ui_manager: UIManager,
     cbd: cbs.ListAction,
 ):
+    node = properties.get_parameter(cbd.node_path)
+    if not isinstance(node, ListParameter):
+        raise ValueError(f'{node.path} is not a ListParameter.')
+    selected = list(sorted(cbd.selected))
+
     async with ui_manager.edit_session(
         session_id=cbd.session_id,
         trigger=q,
         expected_revision=cbd.revision,
         rerender=True,
     ) as s:
-        selected_indexes: list[int] = s.current.context_fields['selected_indexes']  # type: ignore
-        selected_indexes = sorted(selected_indexes)
-        path: list[str] = s.current.context_fields['node_path']  # type: ignore
-        node: ListParameter[Any] = properties.get_parameter(path)  # type: ignore
-
         removed = 0
-        for index in selected_indexes:
+        for index in selected:
             try:
                 node._value.pop(index - removed)
                 removed += 1
@@ -115,28 +113,28 @@ async def move_selected_items(
     ui_manager: UIManager,
     cbd: cbs.ListAction,
 ):
+    node = properties.get_parameter(cbd.node_path)
+    if not isinstance(node, ListParameter):
+        raise ValueError(f'{node.path} is not a ListParameter.')
+    selected = list(sorted(cbd.selected))
+
     async with ui_manager.edit_session(
         session_id=cbd.session_id,
         trigger=q,
         expected_revision=cbd.revision,
         rerender=True,
     ) as s:
-        selected_indexes: list[int] = s.current.context_fields['selected_indexes']  # type: ignore
-        selected_indexes = sorted(selected_indexes)
-        path: list[str] = s.current.context_fields['node_path']  # type: ignore
-        node: ListParameter[Any] = properties.get_parameter(path)  # type: ignore
-
-        if cbd.action == 'move_up' and selected_indexes[0] <= 0:
+        if cbd.action == 'move_up' and selected[0] <= 0:
             await q.answer()
             return
-        if cbd.action == 'move_down' and selected_indexes[-1] >= len(node.value):
+        if cbd.action == 'move_down' and selected[-1] >= len(node.value):
             await q.answer()
             return
 
-        for index in selected_indexes if cbd.action == 'move_up' else reversed(selected_indexes):
+        for index in selected if cbd.action == 'move_up' else reversed(selected):
             to = index - 1 if cbd.action == 'move_up' else index + 1
             node._value[index], node._value[to] = node._value[to], node._value[index]
 
         await node.save()
-        new_selected = [i + (-1 if cbd.action == 'move_up' else +1) for i in selected_indexes]
+        new_selected = [i + (-1 if cbd.action == 'move_up' else +1) for i in selected]
         s.current.context_fields['selected_indexes'] = new_selected
