@@ -7,6 +7,7 @@ __all__ = [
 
 from typing import Any, Literal
 
+from aiogram import MagicFilter
 from aiogram.types import CallbackQuery
 from aiogram.filters import Filter
 
@@ -19,8 +20,14 @@ from .models import CallbackData, parse_callback_data
 class CallbackQueryFilter(Filter):
     """Parse a callback query and validate it as a concrete callback model."""
 
-    def __init__(self, *, callback_data: type[CallbackData]) -> None:
+    def __init__(
+        self,
+        *,
+        callback_data: type[CallbackData],
+        rule: MagicFilter | None = None,
+    ) -> None:
         self.callback_data = callback_data
+        self.rule = rule
 
     async def __call__(
         self, query: CallbackQuery | str, hash_service: HashService
@@ -38,4 +45,6 @@ class CallbackQueryFilter(Filter):
         except CallbackIdentifierMismatchError:
             return False
 
-        return {'callback_data': callback_data, 'cbd': callback_data}
+        if self.rule is None or self.rule.resolve(callback_data):
+            return {'callback_data': callback_data, 'cbd': callback_data}
+        return False

@@ -18,6 +18,7 @@ import string
 from typing import TYPE_CHECKING, Any, Self, ClassVar, Annotated
 from abc import ABC, abstractmethod
 
+from aiogram import MagicFilter
 from pydantic import Field, BaseModel, AfterValidator
 from aiogram.types import CallbackQuery
 
@@ -442,11 +443,11 @@ class CallbackData(BaseModel):
         return cls.from_envelope(parse_callback_data(data))
 
     @classmethod
-    def filter(cls) -> CallbackQueryFilter:
+    def filter(cls, rule: MagicFilter | None = None) -> CallbackQueryFilter:
         """Create an aiogram filter for this callback model.
 
         :return: A filter that parses and validates matching callback queries.
         """
         from .filter import CallbackQueryFilter
 
-        return CallbackQueryFilter(callback_data=cls)
+        return CallbackQueryFilter(callback_data=cls, rule=rule)

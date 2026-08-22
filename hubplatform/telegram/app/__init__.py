@@ -11,13 +11,13 @@ from hubplatform.telegram.ui import UIRegistry
 from hubplatform.telegram.router import Router
 
 from .ui.router import ui_router
-from .properties.router import properties_router
+from .properties.router import props_router
 from .properties.builders import properties_ui_registry
 
 
 TELEGRAM_APP_ROUTER = Router(name='hubplatform.telegram_app')
 TELEGRAM_APP_ROUTER.include_routers(
-    properties_router,
+    props_router,
     ui_router,
 )
 

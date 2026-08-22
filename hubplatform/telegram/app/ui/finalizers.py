@@ -20,7 +20,7 @@ class StripAndNavigationFinalizer:
     def __init__(
         self,
         back_button: bool = True,
-        max_blocks_in_keyboard: int = 3,
+        max_blocks_in_keyboard: int = 10,
     ) -> None:
         self.back_button = back_button
         self.max_blocks_in_keyboard = max_blocks_in_keyboard
