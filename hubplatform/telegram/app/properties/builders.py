@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from html import escape
 from typing import Any, TypeVar
+from html import escape
 from functools import partial
 from collections.abc import Mapping, Callable, Awaitable
 
@@ -232,7 +232,7 @@ async def build_value_manual_input_menu(
     node = properties.get_parameter(ctx.context.node_path)
     menu_spec.header_text = translator.translate(
         'hubplatform-telegram_ui-you-are-editing-parameter',
-        parameter_name=translator.translate(node.name)
+        parameter_name=translator.translate(node.name),
     )
     menu_spec.body_text = f'<i>{escape(translator.translate(node.description))}</i>'
     menu_spec.footer_text = translator.translate(

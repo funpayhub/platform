@@ -86,7 +86,7 @@ async def remove_selected_items(
     node = properties.get_parameter(cbd.node_path)
     if not isinstance(node, ListParameter):
         raise ValueError(f'{node.path} is not a ListParameter.')
-    selected = list(sorted(cbd.selected))
+    selected = sorted(cbd.selected)
 
     async with ui_manager.edit_session(
         session_id=cbd.session_id,
@@ -116,7 +116,7 @@ async def move_selected_items(
     node = properties.get_parameter(cbd.node_path)
     if not isinstance(node, ListParameter):
         raise ValueError(f'{node.path} is not a ListParameter.')
-    selected = list(sorted(cbd.selected))
+    selected = sorted(cbd.selected)
 
     async with ui_manager.edit_session(
         session_id=cbd.session_id,

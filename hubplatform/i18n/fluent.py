@@ -15,27 +15,29 @@ from fluent.syntax import FluentParser
 from fluent.runtime import FluentLocalization, AbstractResourceLoader
 from fluent.syntax.ast import Resource
 
-from .base import Translator
+from .base import Translator, TranslationSource
 
 
 class ResourceLoader(AbstractResourceLoader):
-    def __init__(self, path: str | Path) -> None:
-        self.path = Path(path)
+    def __init__(self, source: TranslationSource) -> None:
+        if isinstance(source, str):
+            source = Path(source)
+        self.source = source
 
     def resources(
         self, locale: str, resource_ids: list[str]
     ) -> Generator[list[Resource], None, None]:
-        path = self.path / locale
-        if not path.exists() or not path.is_dir():
+        path = self.source / locale
+        if not path.is_dir():
             yield []
+            return
 
         resources = []
         for i in path.iterdir():
-            if not i.is_file() or i.suffix != '.ftl' or i.name.startswith('.'):
+            if not i.is_file() or not i.name.endswith('.ftl') or i.name.startswith('.'):
                 continue
 
-            with open(i, 'r', encoding='utf-8') as f:
-                resources.append(FluentParser().parse(f.read()))
+            resources.append(FluentParser().parse(i.read_text(encoding='utf-8')))
         yield resources
 
 
@@ -56,15 +58,17 @@ class FluentTranslator(Translator):
     def __init__(self, current_lang: str = 'ru_RU') -> None:
         super().__init__(current_lang=current_lang)
         self._localizers: list[Localization] = []
-        self._sources: set[Path] = set()
+        self._sources: set[TranslationSource] = set()
 
-    def add_translations(self, path: Path | str) -> None:
-        path = Path(path)
-        if path in self._sources:
+    def add_translations(self, source: TranslationSource) -> None:
+        if isinstance(source, str):
+            source = Path(source)
+
+        if source in self._sources:
             return
 
-        self._sources.add(path)
-        self._localizers.append(self._localizer_from_source(path))
+        self._sources.add(source)
+        self._localizers.append(self._localizer_from_source(source))
 
     def translate(self, text: str, **variables: str) -> str:
         for i in self._localizers:
@@ -78,7 +82,7 @@ class FluentTranslator(Translator):
         super().change_language(new_lang)
         self._localizers = [self._localizer_from_source(i) for i in self._sources]
 
-    def _localizer_from_source(self, source_path: Path) -> Localization:
+    def _localizer_from_source(self, source_path: TranslationSource) -> Localization:
         return Localization(
             locales=[self._current_lang],
             resource_ids=[],

@@ -3,11 +3,17 @@ from __future__ import annotations
 
 __all__ = [
     'Translator',
+    'TranslationSource',
 ]
+
 
 from typing import Any
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
+from importlib.resources.abc import Traversable
+
+
+type TranslationSource = str | Path | Traversable
 
 
 class Translator(metaclass=ABCMeta):
@@ -15,10 +21,10 @@ class Translator(metaclass=ABCMeta):
         self._current_lang = current_lang
 
     @abstractmethod
-    def add_translations(self, path: Path | str) -> None: ...
+    def add_translations(self, source: TranslationSource) -> None: ...
 
     @abstractmethod
-    def translate(self, text: str, **variables: str) -> str: ...
+    def translate(self, text: str, **variables: Any) -> str: ...
 
     @property
     def current_lang(self) -> str:
