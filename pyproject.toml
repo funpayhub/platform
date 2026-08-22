@@ -6,7 +6,7 @@ dependencies = [
     "aiogram>=3.30.0",
     "eventry>=0.6.0",
     "fluent-runtime>=0.4.0",
-    "pyconfigtree>=0.2.1",
+    "pyconfigtree>=0.2.2",
     "pydantic>=2.13.4",
 ]
 
