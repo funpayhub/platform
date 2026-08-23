@@ -29,7 +29,7 @@ from hubplatform.telegram.ui import (
     KeyboardBlockSpec,
 )
 from hubplatform.telegram.app.ui import callbacks as ui_cbs
-from hubplatform.telegram.app.ui_names import TelegramAppUINames, TelegramAppUINames as ui_names
+from hubplatform.telegram.app.ui_names import TelegramAppUINames, TelegramAppUINames as UINames
 from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
 
 from . import callbacks as cbs
@@ -41,8 +41,7 @@ properties_ui_registry = UIRegistry()
 BUTTON_BUILDERS: dict[type[Node], CallableWrapper[KeyboardBlockSpec]] = {}
 
 _N = TypeVar('_N', bound=Node, default=Any, contravariant=True)
-_C = TypeVar('_C', bound=MenuBuildContext, default=Any, contravariant=True)
-ButtonBuilderType = Callable[[_N, Translator, _C], Awaitable[KeyboardBlockSpec]]
+ButtonBuilderType = Callable[[_N, Translator], Awaitable[KeyboardBlockSpec]]
 
 
 def _get_node_builder(node: Node) -> CallableWrapper[KeyboardBlockSpec] | None:
@@ -74,7 +73,7 @@ class ManualValueInputContext(NodeMenuContext):
 
 
 @properties_ui_registry.add_menu_builder(
-    menu_id=ui_names.properties.properties_menu, context_type=NodeMenuContext
+    menu_id=UINames.properties.properties_menu, context_type=NodeMenuContext
 )
 async def properties_menu_builder(
     ctx: MenuBuildContext[NodeMenuContext],
@@ -94,7 +93,7 @@ async def properties_menu_builder(
                 )
             )
             continue
-        menu_spec.main_keyboard.append(await builder(args=[subnode, tr, ctx], data=app_context))
+        menu_spec.main_keyboard.append(await builder(args=[subnode, tr], data=app_context))
     menu_spec.header_text = f'<h2>{escape(tr.translate(node.name or "Properties"))}</h2>'
     menu_spec.body_text = f'<i>{escape(tr.translate(node.description))}</i>'
 
@@ -102,7 +101,7 @@ async def properties_menu_builder(
 
 
 @properties_ui_registry.add_menu_builder(
-    menu_id=ui_names.properties.list_param_menu, context_type=ListNodeMenuContext
+    menu_id=UINames.properties.list_param_menu, context_type=ListNodeMenuContext
 )
 class ListParamMenuBuilder:
     async def __call__(
@@ -121,7 +120,7 @@ class ListParamMenuBuilder:
                 menu_spec.main_keyboard.append(
                     KeyboardBlockSpec(
                         block_id=f'hubplatform.properties.list_param.select_item.{index}',
-                        builder=partial(self.item_btn, index, val, ctx.context),
+                        builder=partial(self.item_btn, index, val, ctx),
                     )
                 )
             else:
@@ -134,16 +133,9 @@ class ListParamMenuBuilder:
                 )
 
         menu_spec.footer_keyboard.append(
-            KeyboardBlockSpec.callback_button(
-                block_id='hubplatform.pyconfigtree.list_param.toggle_editing_mode',
-                text='✏️' if not ctx.context.editing else '⬅️🚪',
-                callback_data=ui_cbs.OpenMenu(
-                    menu_id=ui_names.properties.list_param_menu,
-                    context=ctx.context.model_copy(
-                        update={'editing': not ctx.context.editing}
-                    ).dump(),
-                    move_to_history=False,
-                ),
+            KeyboardBlockSpec(
+                block_id='hubplatform.properties.list_param.edit_panel',
+                builder=partial(self.edit_panel, ctx),
             )
         )
 
@@ -159,8 +151,30 @@ class ListParamMenuBuilder:
         menu_spec.body_text = f'<i>{escape(tr.translate(node.description))}</i>'
         return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
-    async def item_btn(self, index: int, val: Any, context: ListNodeMenuContext) -> Keyboard:
-        indexes = context.selected_indexes
+    async def edit_panel(self, ctx: MenuBuildContext[ListNodeMenuContext]) -> Keyboard:
+        edit_button = Button(
+            button_id='hubplatform.pyconfigtree.list_param.toggle_editing_mode',
+            text='✏️' if not ctx.context.editing else '⬅️🚪',
+            callback_data=ui_cbs.OpenMenu(
+                menu_id=UINames.properties.list_param_menu,
+                context=ctx.context.model_copy(update={'editing': not ctx.context.editing}).dump(),
+                move_to_history=False,
+                keyboard_page=ctx.view_state.keyboard_page,
+                text_page=ctx.view_state.text_page,
+            ),
+        )
+
+        add_button = Button(
+            button_id='hubplatform.pyconfigtree.list_param.add',
+            text='➕',
+            callback_data=cbs.AddListItem(node_path=ctx.context.node_path),
+        )
+        return [[edit_button, add_button]]
+
+    async def item_btn(
+        self, index: int, val: Any, ctx: MenuBuildContext[ListNodeMenuContext]
+    ) -> Keyboard:
+        indexes = ctx.context.selected_indexes
         selected = index in indexes
         new_indexes = indexes | {index} if not selected else indexes - {index}
 
@@ -168,9 +182,11 @@ class ListParamMenuBuilder:
             button_id='select_item',
             text=str(val),
             callback_data=ui_cbs.OpenMenu(
-                menu_id=ui_names.properties.list_param_menu,
-                context=context.model_copy(update={'selected_indexes': new_indexes}).dump(),
+                menu_id=UINames.properties.list_param_menu,
+                context=ctx.context.model_copy(update={'selected_indexes': new_indexes}).dump(),
                 move_to_history=False,
+                keyboard_page=ctx.view_state.keyboard_page,
+                text_page=ctx.view_state.text_page,
             ),
             style='success' if selected else None,
         )
@@ -211,7 +227,7 @@ class ListParamMenuBuilder:
                 button_id='hubplatform.pyconfigtree.list_param.control.cancel_selection',
                 text='❌',
                 callback_data=ui_cbs.OpenMenu(
-                    menu_id=ui_names.properties.list_param_menu,
+                    menu_id=UINames.properties.list_param_menu,
                     context=cancel_ctx.dump(),
                     move_to_history=False,
                 ),
@@ -221,7 +237,7 @@ class ListParamMenuBuilder:
 
 
 @properties_ui_registry.add_menu_builder(
-    menu_id=ui_names.properties.value_manual_input_menu, context_type=ManualValueInputContext
+    menu_id=UINames.properties.value_manual_input_menu, context_type=ManualValueInputContext
 )
 async def build_value_manual_input_menu(
     ctx: MenuBuildContext[ManualValueInputContext],
@@ -251,9 +267,7 @@ async def build_value_manual_input_menu(
 
 
 @register_node_button_builder(Properties)
-async def properties_button_builder(
-    node: Properties, i18n: Translator, menu_ctx: MenuBuildContext
-) -> KeyboardBlockSpec:
+async def props_btn_builder(node: Properties, i18n: Translator) -> KeyboardBlockSpec:
     return KeyboardBlockSpec.callback_button(
         block_id='hubplatform.pyconfigtree:properties',
         text=i18n.translate(node.name),
@@ -265,11 +279,7 @@ async def properties_button_builder(
 
 
 @register_node_button_builder(BoolParameter)
-async def toggle_button_builder(
-    node: BoolParameter,
-    i18n: Translator,
-    menu_ctx: MenuBuildContext,
-) -> KeyboardBlockSpec:
+async def bool_param_btn_builder(node: BoolParameter, i18n: Translator) -> KeyboardBlockSpec:
     prefix = {True: '🟢 ', False: '🔴 '}
 
     return KeyboardBlockSpec.callback_button(
@@ -289,10 +299,9 @@ _ids = {
 @register_node_button_builder(IntParameter)
 @register_node_button_builder(FloatParameter)
 @register_node_button_builder(StringParameter)
-async def manual_input_parameter_button_builder(
+async def manual_input_btn_builder(
     node: IntParameter | FloatParameter | StringParameter,
     i18n: Translator,
-    ctx: MenuBuildContext,
 ) -> KeyboardBlockSpec:
     for t, block_id in _ids.items():
         if isinstance(node, t):
@@ -308,11 +317,7 @@ async def manual_input_parameter_button_builder(
 
 
 @register_node_button_builder(ListParameter)
-async def list_parameter_button_builder(
-    node: ListParameter[Any],
-    i18n: Translator,
-    menu_ctx: MenuBuildContext,
-) -> KeyboardBlockSpec:
+async def list_param_btn_builder(node: ListParameter[Any], i18n: Translator) -> KeyboardBlockSpec:
     return KeyboardBlockSpec.callback_button(
         block_id='hubplatform.pyconfigtree.list_param',
         text=i18n.translate(node.name),

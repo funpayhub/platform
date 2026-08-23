@@ -17,6 +17,8 @@ from hubplatform.telegram.ui.session_callback_data import SessionCallbackData
 
 class OpenMenu(SessionCallbackData, identifier='hubplatform.open_menu'):
     menu_id: str
+    keyboard_page: int = 0
+    text_page: int = 0
     context: dict[str, JsonValue]
     new_message: bool = False
     move_to_history: bool = True

@@ -394,7 +394,7 @@ class UIManager:
                 session.history.append(session.current)
 
             session.current = MenuFrame.from_menu_context(
-                menu_id, context, view_state or MenuViewState()
+                menu_id, context, view_state if view_state is not None else MenuViewState()
             )
             return await self._rerender_session(
                 session=session,

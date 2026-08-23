@@ -3,7 +3,7 @@ from __future__ import annotations
 from aiogram.types import Message, CallbackQuery as Query
 from aiogram.fsm.context import FSMContext
 
-from hubplatform.telegram.ui import UIManager
+from hubplatform.telegram.ui import UIManager, MenuViewState
 from hubplatform.telegram.router import Router
 
 from . import callbacks as cbs
@@ -24,6 +24,7 @@ async def open_menu(q: Query, cbd: cbs.OpenMenu, ui_manager: UIManager) -> None:
         trigger=q,
         push_current_to_history=cbd.move_to_history,
         expected_revision=cbd.revision,
+        view_state=MenuViewState(keyboard_page=cbd.keyboard_page, text_page=cbd.text_page),
     )
 
 

@@ -41,7 +41,7 @@ class MenuFrame(BaseModel):
         )
 
         return MenuFrame(
-            menu_id=menu_id, keyboard_page=text, text_page=kb, context_fields=menu_context.dump()
+            menu_id=menu_id, keyboard_page=kb, text_page=text, context_fields=menu_context.dump()
         )
 
 
