@@ -87,9 +87,11 @@ def test_change_language_reloads_added_sources(tmp_path: Path) -> None:
     translator = FluentTranslator()
     translator.add_translations(tmp_path)
 
+    translator.change_language('en_US')
+
     assert translator.translate('greeting', name='Alice') == 'Hello, Alice!'
 
     translator.change_language('ru_RU')
 
     assert translator.current_lang == 'ru_RU'
-    assert translator.translate('greeting', name='Alice') == 'Привет, Алиса!'
+    assert translator.translate('greeting', name='Alice') == 'Привет, Alice!'
