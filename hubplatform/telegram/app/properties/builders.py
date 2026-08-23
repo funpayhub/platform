@@ -274,7 +274,7 @@ async def build_list_input_menu(
     ctx: MenuBuildContext[ManualValueInputContext],
     properties: Properties,
     translator: Translator,
-):
+) -> MenuBuildingSpec:
     menu_spec = MenuSpec()
     node = properties.get_parameter(ctx.context.node_path)
     menu_spec.header_text = translator.translate(
