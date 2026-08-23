@@ -266,6 +266,37 @@ async def build_value_manual_input_menu(
     return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
 
+@properties_ui_registry.add_menu_builder(
+    menu_id=UINames.properties.list_new_items_input_menu,
+    context_type=ManualValueInputContext,
+)
+async def build_list_input_menu(
+    ctx: MenuBuildContext[ManualValueInputContext],
+    properties: Properties,
+    translator: Translator,
+):
+    menu_spec = MenuSpec()
+    node = properties.get_parameter(ctx.context.node_path)
+    menu_spec.header_text = translator.translate(
+        'hubplatform-telegram_ui-you-are-editing-parameter',
+        parameter_name=translator.translate(node.name),
+    )
+    menu_spec.body_text = f'{escape(translator.translate(node.description))}'
+    menu_spec.footer_text = (
+        '<i>' + translator.translate('hubplatform-telegram_ui-enter-new_items') + '</i>'
+    )
+
+    menu_spec.footer_keyboard.append(
+        KeyboardBlockSpec.callback_button(
+            block_id='hubplatform.clear_state',
+            text=translator.translate('cancel'),
+            callback_data=ui_cbs.ClearState(open_session_id=ctx.context.open_next_session_id),
+        )
+    )
+
+    return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
+
+
 @register_node_button_builder(Properties)
 async def props_btn_builder(node: Properties, i18n: Translator) -> KeyboardBlockSpec:
     return KeyboardBlockSpec.callback_button(
