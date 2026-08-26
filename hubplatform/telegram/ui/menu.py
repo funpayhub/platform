@@ -15,7 +15,6 @@ from typing import Any, Mapping, MutableSequence
 from dataclasses import field as dataclass_field
 
 from pydantic import Field, BaseModel, JsonValue, ConfigDict
-from aiogram.types import InlineKeyboardButton
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from hubplatform.telegram.ui.session import MenuFrame
@@ -65,13 +64,13 @@ class MenuSpec:
                 new_building_e.__cause__ = e
                 building_errors.append(new_building_e)
 
-        converted_keyboard: list[list[InlineKeyboardButton]] = []
+        rendered_keyboard: list[list[str]] = []
         render_errors: list[ButtonRenderError] = []
         for line in keyboard:
             result_line = []
             for button in line:
                 try:
-                    result_line.append(button.render(hash_service=hash_service))
+                    result_line.append(button._to_html(hash_service=hash_service))
                 except ButtonRenderError as e:
                     render_errors.append(e)
                 except Exception as e:
@@ -79,7 +78,12 @@ class MenuSpec:
                     new_render_e.__cause__ = e
                     render_errors.append(new_render_e)
             if result_line:
-                converted_keyboard.append(result_line)
+                rendered_keyboard.append(result_line)
+
+        keyboard_htmls = []
+        for converted_line in rendered_keyboard:
+            keyboard_htmls.append(f'<tg-button-row>{'\n'.join(converted_line)}</tg-button-row>')
+        keyboard_html = '\n'.join(keyboard_htmls)
 
         text = self.header_text
         if self.body_text:
@@ -93,9 +97,11 @@ class MenuSpec:
                 text += self.header_footer_sep
             text += self.footer_text
 
+        if keyboard_html:
+            text += '\n' + keyboard_html
+
         return MenuRenderResult(
             text=text,
-            keyboard=converted_keyboard,
             building_errors=building_errors,
             render_errors=render_errors,
         )
@@ -104,7 +110,6 @@ class MenuSpec:
 @pydantic_dataclass(config=ConfigDict(arbitrary_types_allowed=True, validate_assignment=True))
 class MenuRenderResult:
     text: str
-    keyboard: list[list[InlineKeyboardButton]]
     building_errors: list[KeyboardBlockBuildingError] = Field(default_factory=list)
     render_errors: list[ButtonRenderError] = Field(default_factory=list)
 

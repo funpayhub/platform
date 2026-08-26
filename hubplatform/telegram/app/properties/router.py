@@ -29,6 +29,7 @@ async def next_value(
         raise ValueError('Not a bool param.')
     await param.set_value(not param.value, save=True)
     await ui_manager.rerender_session(session_id=cbd.session_id, trigger=q)
+    await q.answer()
 
 
 @props_router.callback_query(cbs.ManualValueInput.filter())
@@ -55,6 +56,7 @@ async def change_value_state(
         node=node,  # type: ignore[arg-type]
         open_session=cbd.session_id,
     ).set(state)
+    await q.answer()
 
 
 @props_router.message(states.ChangingParameterValueState.filter())

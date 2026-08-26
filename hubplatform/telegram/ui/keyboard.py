@@ -8,6 +8,7 @@ __all__ = [
     'KeyboardBlockSpec',
     'KeyboardModificationMeta',
     'KeyboardBuildingState',
+    'keyboard_to_html',
 ]
 
 from typing import (
@@ -23,7 +24,6 @@ from typing import (
 )
 from dataclasses import field as dataclass_field, dataclass
 
-from aiogram.types import CopyTextButton
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
@@ -33,6 +33,7 @@ from hubplatform.telegram.ui.exceptions import (
     KeyboardBlockBuildingError,
     KeyboardBlockModificationError,
 )
+from hubplatform.telegram.callback_data.hash import HashService
 
 
 _P = ParamSpec('_P', default=...)
@@ -167,7 +168,7 @@ class KeyboardBlockSpec:
                     Button(
                         button_id=button_id or block_id,
                         text=text,
-                        copy_text=CopyTextButton(text=copy_text),
+                        copy_text=copy_text,
                         style=style,
                     )
                 ]
@@ -235,3 +236,14 @@ class _KeyboardBuildingResult:
 
     def __post_init__(self) -> None:
         _validate_keyboard(self.keyboard)
+
+
+def keyboard_to_html(keyboard: Keyboard, hash_service: HashService | None = None) -> str:
+    result = []
+    for line in keyboard:
+        result.append(
+            '<tg-button-row align="center">\n'
+            + '\n'.join(i._to_html(hash_service=hash_service) for i in line)
+            + '\n</tg-button-row>'
+        )
+    return '\n'.join(result)

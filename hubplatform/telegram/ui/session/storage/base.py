@@ -57,9 +57,9 @@ class MenuSessionStorage(ABC):
         pass
 
     @abstractmethod
-    async def clear(self) -> int:
+    async def clear(self, force: bool = False) -> int:
         pass
 
     @abstractmethod
-    async def purge_expired(self) -> int:
+    async def purge_expired(self, force: bool = False) -> int:
         pass

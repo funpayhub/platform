@@ -311,12 +311,11 @@ async def props_btn_builder(node: Properties, i18n: Translator) -> KeyboardBlock
 
 @register_node_button_builder(BoolParameter)
 async def bool_param_btn_builder(node: BoolParameter, i18n: Translator) -> KeyboardBlockSpec:
-    prefix = {True: '🟢 ', False: '🔴 '}
-
     return KeyboardBlockSpec.callback_button(
         block_id='hubplatform.pyconfigtree:bool_param',
-        text=f'{prefix[node.value]}{i18n.translate(node.name)}',
+        text=f'{i18n.translate(node.name)}',
         callback_data=cbs.NextValue(node_path=list(node.path)),
+        style='danger' if not node.value else 'success',
     )
 
 

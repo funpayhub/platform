@@ -3,9 +3,9 @@ from __future__ import annotations
 
 __all__ = ['Button']
 
+import html
 
 from pydantic import BaseModel
-from aiogram.types import LoginUrl, WebAppInfo, CallbackGame, CopyTextButton, InlineKeyboardButton
 
 from hubplatform.telegram.callback_data import CallbackData
 from hubplatform.telegram.ui.exceptions import ButtonRenderError
@@ -18,13 +18,6 @@ class Button(BaseModel):
 
     text: str
     """Label text on the button"""
-
-    icon_custom_emoji_id: str | None = None
-    """Unique identifier of the custom emoji shown before the text of the button. 
-    Can only be used by bots that purchased additional usernames on 
-    `Fragment <https://fragment.com>`_ or in the messages directly sent by the bot to private, 
-    group and supergroup chats if the owner of the bot has a Telegram Premium subscription
-    """
 
     style: str | None = None
     """Style of the button. 
@@ -62,75 +55,65 @@ class Button(BaseModel):
     hash: bool = True
     """*Optional*. Whether to hash and store value into callback_data database or not."""
 
-    web_app: WebAppInfo | None = None
-    """Description of the `Web App <https://core.telegram.org/bots/webapps>`_ that will be 
-    launched when the user presses the button. The Web App will be able to send an arbitrary 
-    message on behalf of the user using the method 
-    :class:`aiogram.methods.answer_web_app_query.AnswerWebAppQuery`. 
-    Available only in private chats between a user and the bot. 
-    Not supported for messages sent on behalf of a business account
-    """
-
-    login_url: LoginUrl | None = None
-    """An HTTPS URL used to automatically authorize the user. 
-    Can be used as a replacement for the 
-    `Telegram Login Widget <https://core.telegram.org/widgets/login>`_
-    """
-
-    copy_text: CopyTextButton | None = None
+    copy_text: str | None = None
     """Description of the button that copies the specified text to the clipboard"""
 
-    callback_game: CallbackGame | None = None
-    """Description of the game that will be launched when the user presses the button"""
+    disabled: bool = False
 
-    pay: bool | None = None
-    """Specify :code:`True`, to send a `Pay button <https://core.telegram.org/bots/api#payments>`_. 
-    Substrings '⭐' and 'XTR' in the buttons's text will be replaced with a Telegram Star icon.
-    """
-
-    def render(self, hash_service: HashService | None = None) -> InlineKeyboardButton:
+    def to_html(self, hash_service: HashService | None = None) -> str:
         try:
-            return self._render(hash_service=hash_service)
+            return self._to_html(hash_service=hash_service)
         except ButtonRenderError:
             raise
         except Exception as e:
             raise ButtonRenderError(button_id=self.button_id) from e
 
-    def _render(self, hash_service: HashService | None = None) -> InlineKeyboardButton:
-        callback_data: str | None = None
-        if self.callback_data is not None:
-            if self.hash and hash_service is None:
-                raise ButtonRenderError(
-                    button_id=self.button_id,
-                    message=f'Cannot render button {self.button_id}. '
-                    'Button requires to hash its `callback_data`, '
-                    'but hash_service was not provided.',
-                )
+    def _to_html(self, hash_service: HashService | None = None) -> str:
+        attributes = {}
+        if self.disabled:
+            attributes['type'] = 'disabled'
+        elif self.callback_data is not None:
+            attributes['type'] = 'callback_data'
+            attributes['data'] = self._pack_callback(hash_service=hash_service)
+        elif self.copy_text is not None:
+            attributes['type'] = 'copy_text'
+            attributes['text'] = self.copy_text
+        elif self.url is not None:
+            attributes['type'] = 'url'
+            attributes['url'] = self.url
+        else:
+            raise ButtonRenderError(button_id=self.button_id, message='Unknown button type.')
 
-            if isinstance(self.callback_data, CallbackData):
-                method = (
-                    self.callback_data.pack_compact
-                    if self.pack_compact
-                    else self.callback_data.pack
-                )
-                cb = method(compress=self.compress, compression_version=self.compression_version)
-            else:
-                cb = self.callback_data
+        if self.style is not None:
+            attributes['style'] = self.style
 
-            if self.hash:
-                cb = hash_service.hash(cb)  # type: ignore[union-attr]  # check above
-
-            callback_data = cb
-
-        return InlineKeyboardButton(
-            text=self.text,
-            icon_custom_emoji_id=self.icon_custom_emoji_id,
-            style=self.style,
-            url=self.url,
-            callback_data=callback_data,
-            web_app=self.web_app,
-            login_url=self.login_url,
-            copy_text=self.copy_text,
-            callback_game=self.callback_game,
-            pay=self.pay,
+        return (
+            '<tg-button '
+            + ' '.join(f'{k}="{html.escape(v)}"' for k, v in attributes.items())
+            + f'>{self.text}</tg-button>'
         )
+
+    def _pack_callback(self, hash_service: HashService | None = None) -> str:
+        if self.callback_data is None:
+            raise Exception()  # todo
+
+        if self.hash and hash_service is None:
+            raise ButtonRenderError(
+                button_id=self.button_id,
+                message=f'Cannot render button {self.button_id}. '
+                'Button requires to hash its `callback_data`, '
+                'but hash_service was not provided.',
+            )
+
+        if isinstance(self.callback_data, CallbackData):
+            method = (
+                self.callback_data.pack_compact if self.pack_compact else self.callback_data.pack
+            )
+            cb = method(compress=self.compress, compression_version=self.compression_version)
+        else:
+            cb = self.callback_data
+
+        if self.hash:
+            cb = hash_service.hash(cb)  # type: ignore[union-attr]  # check above
+
+        return cb

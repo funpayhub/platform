@@ -50,8 +50,9 @@ class StripAndNavigationFinalizer:
 def _nav_button(button_id: str, text: str, enabled: bool, page: int) -> Button:
     return Button(
         button_id=button_id,
-        text=text if enabled else ' ',
+        text=text,
         callback_data=ChangePageTo(keyboard_page=page) if enabled else Dummy(),
+        disabled=not enabled,
     )
 
 
