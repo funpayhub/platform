@@ -105,8 +105,8 @@ async def _nav(ctx: MenuBuildContext, tr: Translator, pages: int, back: bool) ->
 #         page_amount_btn,
 #         _btn('next_view_page', '▶️', unknown_max_pages or ctx.view_page < total_pages - 1, ctx,
 #              None, ctx.view_page + 1),
-#         _btn('last_view_page', '⏩', not unknown_max_pages and ctx.view_page < total_pages - 1, ctx,
-#              None, total_pages - 1),
+#         _btn('last_view_page', '⏩', not unknown_max_pages and ctx.view_page < total_pages - 1,
+#               ctx, None, total_pages - 1),
 #     ]
 #
 #     kb.insert(0, nav_kb)
