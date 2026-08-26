@@ -9,7 +9,7 @@ from hubplatform.telegram.ui import (
     MenuBuildingSpec,
     KeyboardBlockSpec,
 )
-from hubplatform.expressions.registry import ExpressionsRegistry
+from hubplatform.expressions.registry import ArgDocs, ExpressionsRegistry
 from hubplatform.telegram.app.menu_ids import MenuIDs
 from hubplatform.telegram.app.ui.callbacks import OpenMenu
 from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
@@ -151,17 +151,54 @@ async def build_expressions_list_menu(
     menu_id=MenuIDs.expressions.expression_docs_menu,
     context_type=ExpressionDocsMenuContext,
 )
-async def build_expression_docs_menu(
-    ctx: MenuBuildContext[ExpressionDocsMenuContext],
-    expressions_registry: ExpressionsRegistry,
-    translator: Translator,
-):
-    expression = expressions_registry.expressions[ctx.context.expression_id]
-    menu_spec = MenuSpec()
-    menu_spec.header_text = translator.translate(
-        f'<h2>Выражение <code>${expression.id}()</code></h2>'
-    )
-    menu_spec.header_text += translator.translate(f'<h4>{expression.name}</h4>')
+class ExpressionDocsMenuBuilder:
+    async def __call__(
+        self,
+        ctx: MenuBuildContext[ExpressionDocsMenuContext],
+        expressions_registry: ExpressionsRegistry,
+        translator: Translator,
+    ):
+        expression = expressions_registry.expressions[ctx.context.expression_id]
+        menu_spec = MenuSpec()
+        menu_spec.header_text = translator.translate(
+            f'<h2>Выражение <code>${expression.id}()</code></h2>'
+        )
+        menu_spec.header_text += translator.translate(f'<h4>{expression.name}</h4>')
 
-    menu_spec.body_text = translator.translate(expression.description.overview)
-    return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
+        menu_spec.body_text = translator.translate(expression.description.overview)
+        for arg in expression.description.args_doc.values():
+            menu_spec.body_text += self.build_arg_doc(arg, translator)
+
+        return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
+
+    def build_arg_doc(self, arg_doc: ArgDocs, translator: Translator):
+        kinds = {
+            'normal': 'По порядку или по имени',
+            'positional_only': 'Только по порядку',
+            'keyword_only': 'Только по имени',
+        }
+        kind = kinds.get(arg_doc.kind, translator.translate(arg_doc.kind))
+        rows = [
+            f'<tr><td>Имя</td><td>{arg_doc.key}</td></tr>',
+            f'<tr><td>Обязательный</td><td>{"Нет" if arg_doc.default is not None else "Да"}</td></tr>',
+            f'<tr><td>Как передавать</td><td>{kind}</td></tr>',
+        ]
+        if isinstance(arg_doc.possible_values, str):
+            rows.append(
+                f'<tr><td>Возможные значения</td><td>{arg_doc.possible_values}</td></tr>',
+            )
+        if arg_doc.default is not None:
+            rows.append(f'<tr><td>По умолчанию</td><td>{arg_doc.default}</td></tr>')
+
+        total = f'<table bordered striped>{"".join(rows)}</table>'
+
+        if isinstance(arg_doc.possible_values, dict):
+            rows = [
+                f'<tr><td><code>{key}</code></td><td>{desc}</td></tr>'
+                for key, desc in arg_doc.possible_values.items()
+            ]
+            table = f'<table bordered striped>{"".join(rows)}</table>'
+            total += f'<hr /><h4>Параметры</h4>{table}'
+
+        total = f'<i>{arg_doc.overview}</i>\n{total}'
+        return f'<details><summary>{arg_doc.name}</summary>{total}</details>'
