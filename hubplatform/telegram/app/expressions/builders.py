@@ -166,8 +166,10 @@ class ExpressionDocsMenuBuilder:
         menu_spec.header_text += translator.translate(f'<h4>{expression.name}</h4>')
 
         menu_spec.body_text = translator.translate(expression.description.overview)
-        for arg in expression.description.args_doc.values():
-            menu_spec.body_text += self.build_arg_doc(arg, translator)
+        if expression.description.args_doc:
+            menu_spec.body_text += '<hr /><h3>Параметры</h3>'
+            for arg in expression.description.args_doc.values():
+                menu_spec.body_text += self.build_arg_doc(arg, translator)
 
         return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
@@ -179,16 +181,18 @@ class ExpressionDocsMenuBuilder:
         }
         kind = kinds.get(arg_doc.kind, translator.translate(arg_doc.kind))
         rows = [
-            f'<tr><td>Имя</td><td>{arg_doc.key}</td></tr>',
-            f'<tr><td>Обязательный</td><td>{"Нет" if arg_doc.default is not None else "Да"}</td></tr>',
-            f'<tr><td>Как передавать</td><td>{kind}</td></tr>',
+            f'<tr><td><b>Имя</b></td><td><code>{arg_doc.key}</code></td></tr>',
+            f'<tr><td><b>Обязательный</b></td><td>{"Нет" if arg_doc.default is not None else "Да"}</td></tr>',
+            f'<tr><td><b>Как передавать</b></td><td>{kind}</td></tr>',
         ]
         if isinstance(arg_doc.possible_values, str):
             rows.append(
-                f'<tr><td>Возможные значения</td><td>{arg_doc.possible_values}</td></tr>',
+                f'<tr><td><b>Возможные значения</b></td><td>{arg_doc.possible_values}</td></tr>',
             )
         if arg_doc.default is not None:
-            rows.append(f'<tr><td>По умолчанию</td><td>{arg_doc.default}</td></tr>')
+            rows.append(
+                f'<tr><td><b>По умолчанию</b></td><td><code>{arg_doc.default}</code></td></tr>'
+            )
 
         total = f'<table bordered striped>{"".join(rows)}</table>'
 
@@ -198,7 +202,12 @@ class ExpressionDocsMenuBuilder:
                 for key, desc in arg_doc.possible_values.items()
             ]
             table = f'<table bordered striped>{"".join(rows)}</table>'
-            total += f'<hr /><h4>Параметры</h4>{table}'
+            total += f'<hr /><h4>Возможные значения</h4>{table}'
 
         total = f'<i>{arg_doc.overview}</i>\n{total}'
-        return f'<details><summary>{arg_doc.name}</summary>{total}</details>'
+        return (
+            f'<details>'
+            f'<summary>{arg_doc.name} (<code>{arg_doc.key}</code>)</summary>'
+            f'{total}'
+            f'</details>'
+        )

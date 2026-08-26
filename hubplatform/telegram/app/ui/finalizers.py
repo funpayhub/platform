@@ -60,7 +60,7 @@ async def _nav(ctx: MenuBuildContext, tr: Translator, pages: int, back: bool) ->
     kb: Keyboard = []
 
     if ctx.history and back:
-        kb.append([Button(button_id='back', text=tr.translate('◀️ Назад'), callback_data=GoBack())])
+        kb.append([Button(button_id='back', text=tr.translate('← Назад'), callback_data=GoBack())])
 
     if pages < 2:
         return kb
@@ -69,11 +69,11 @@ async def _nav(ctx: MenuBuildContext, tr: Translator, pages: int, back: bool) ->
     kb.insert(
         0,
         [
-            _nav_button('first', '⏪', page > 0, 0),
-            _nav_button('prev', '◀️', page > 0, page - 1),
+            _nav_button('first', '⇤', page > 0, 0),
+            _nav_button('prev', '←', page > 0, page - 1),
             Button(button_id='counter', text=f'{page + 1} / {pages}', callback_data=Dummy()),
-            _nav_button('next', '▶️', page < pages - 1, page + 1),
-            _nav_button('last', '⏩', page < pages - 1, pages - 1),
+            _nav_button('next', '→', page < pages - 1, page + 1),
+            _nav_button('last', '⇥', page < pages - 1, pages - 1),
         ],
     )
 
