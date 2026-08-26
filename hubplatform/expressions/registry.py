@@ -83,21 +83,33 @@ class ExpressionEnvelope:
 
     @overload
     async def execute(
-        self, call: Call, di_context: Mapping[str, Any], render: Literal[True]
+        self,
+        call: Call,
+        context: ExpressionCallContext,
+        di_context: Mapping[str, Any],
+        render: Literal[True],
     ) -> str:
         pass
 
     @overload
     async def execute(
-        self, call: Call, di_context: Mapping[str, Any], render: bool = False
+        self,
+        call: Call,
+        context: ExpressionCallContext,
+        di_context: Mapping[str, Any],
+        render: bool = False,
     ) -> Any:
         pass
 
     async def execute(
-        self, call: Call, di_context: Mapping[str, Any], render: bool = False
+        self,
+        call: Call,
+        context: ExpressionCallContext,
+        di_context: Mapping[str, Any],
+        render: bool = False,
     ) -> str:
         try:
-            result = await self._execute(call, di_context, render=render)
+            result = await self._execute(call, context, di_context, render=render)
         except ExpressionError:
             raise
         except Exception as e:
@@ -115,36 +127,58 @@ class ExpressionEnvelope:
 
     @overload
     async def _execute(
-        self, call: Call, di_context: Mapping[str, Any], render: Literal[True]
+        self,
+        call: Call,
+        context: ExpressionCallContext,
+        di_context: Mapping[str, Any],
+        render: Literal[True],
     ) -> str:
         pass
 
     @overload
     async def _execute(
-        self, call: Call, di_context: Mapping[str, Any], render: Literal[False]
+        self,
+        call: Call,
+        context: ExpressionCallContext,
+        di_context: Mapping[str, Any],
+        render: Literal[False],
     ) -> Any:
         pass
 
     @overload
-    async def _execute(self, call: Call, di_context: Mapping[str, Any], render: bool) -> str | Any:
+    async def _execute(
+        self,
+        call: Call,
+        context: ExpressionCallContext,
+        di_context: Mapping[str, Any],
+        render: bool,
+    ) -> str | Any:
         pass
 
-    async def _execute(self, call: Call, di_context: Mapping[str, Any], render: bool) -> str:
+    async def _execute(
+        self,
+        call: Call,
+        context: ExpressionCallContext,
+        di_context: Mapping[str, Any],
+        render: bool,
+    ) -> str:
         if self._is_class:
             instance = object.__new__(self.call)
             call_args, call_kwargs = self._wrapped_init.collect_args(
                 args=[instance, *call.args], kwargs=call.kwargs
             )
             self.call.__init__(*call_args, **call_kwargs)
-            result = await self._wrapped(args=[instance], data=di_context, to_thread=False)
+            result = await self._wrapped(
+                args=[instance, context], data=di_context, to_thread=False
+            )
             if render:
                 if self._wrapped_render is None:
                     return str(result)
                 return await self._wrapped_render(
-                    args=[instance], data=di_context, to_thread=False
+                    args=[instance, result, context], data=di_context, to_thread=False
                 )
         return await self._wrapped(
-            args=call.args, data={**call.kwargs, **di_context}, to_thread=False
+            args=[context, *call.args], data={**call.kwargs, **di_context}, to_thread=False
         )
 
     def check_can_be_included(self, category: ExpressionsCategory) -> None:
@@ -468,7 +502,11 @@ class ExpressionsRegistry:
         return result
 
     async def format_text(
-        self, string: str, di_context: Mapping[str, Any], ignore_errors: bool = False
+        self,
+        string: str,
+        context: ExpressionCallContext,
+        di_context: Mapping[str, Any],
+        ignore_errors: bool = False,
     ) -> FormattingResult:
         decoded = call_decoder.extract_calls(string)
         if not decoded.call_spans:
@@ -483,7 +521,7 @@ class ExpressionsRegistry:
                 continue
 
             try:
-                result.append(await self.execute_call(i, di_context))
+                result.append(await self.execute_call(i, context, di_context, render=True))
             except Exception as err:
                 if not isinstance(err, ExpressionError):
                     new_e = ExpressionError(expression_id=i.name)
@@ -500,32 +538,49 @@ class ExpressionsRegistry:
             decoded=decoded,
         )
 
-    async def resolve_value(self, value: Any, di_context: Mapping[str, Any]) -> Any:
+    async def resolve_value(
+        self, value: Any, context: ExpressionCallContext, di_context: Mapping[str, Any]
+    ) -> Any:
         if isinstance(value, Call):
-            return await self.execute_call(value, di_context)
+            return await self.execute_call(value, context, di_context)
 
         if isinstance(value, list):
-            return [await self.resolve_value(item, di_context) for item in value]
+            return [await self.resolve_value(item, context, di_context) for item in value]
 
         if isinstance(value, dict):
-            return {key: await self.resolve_value(item, di_context) for key, item in value.items()}
+            return {
+                key: await self.resolve_value(item, context, di_context)
+                for key, item in value.items()
+            }
 
         return value
 
     @overload
     async def execute_call(
-        self, call: Call, di_context: Mapping[str, Any], render: Literal[True]
+        self,
+        call: Call,
+        context: ExpressionCallContext,
+        di_context: Mapping[str, Any],
+        render: Literal[True],
     ) -> str:
         pass
 
     @overload
     async def execute_call(
-        self, call: Call, di_context: Mapping[str, Any], render: bool = False
+        self,
+        call: Call,
+        context: ExpressionCallContext,
+        di_context: Mapping[str, Any],
+        render: bool = False,
     ) -> Any:
         pass
 
     async def execute_call(
-        self, call: Call, di_context: Mapping[str, Any], render: bool = False
+        self,
+        call: Call,
+        context: ExpressionCallContext,
+        di_context: Mapping[str, Any],
+        render: bool = False,
     ) -> Any:
         expression = self._expressions.get(call.name)
         if expression is None:
@@ -534,14 +589,15 @@ class ExpressionsRegistry:
                 message=f'Formatter {call.name!r} does not exist in registry.',
             )
 
-        args = [await self.resolve_value(arg, di_context) for arg in call.args]
+        args = [await self.resolve_value(arg, context, di_context) for arg in call.args]
 
         kwargs = {
-            key: await self.resolve_value(value, di_context) for key, value in call.kwargs.items()
+            key: await self.resolve_value(value, context, di_context)
+            for key, value in call.kwargs.items()
         }
 
         resolved_call = Call(name=call.name, args=args, kwargs=kwargs)
-        return await expression.execute(resolved_call, di_context, render=render)
+        return await expression.execute(resolved_call, context, di_context, render=render)
 
 
 @cache
