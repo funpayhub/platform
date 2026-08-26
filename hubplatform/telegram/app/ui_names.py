@@ -11,5 +11,11 @@ class PropertiesUINames:
     list_new_items_input_menu = 'hubplatform.properties.list_new_items_input_form'
 
 
+class ExpressionsUINames:
+    expressions_list_menu = 'hubplatform.expressions.list'
+    expression_docs_menu = 'hubplatform.expressions.docs'
+
+
 class TelegramAppUINames:
     properties = PropertiesUINames
+    expressions = ExpressionsUINames

@@ -472,33 +472,25 @@ class ExpressionsRegistry:
         candidate._validate_inclusions()
         self._replace_with(candidate)
 
-    def get_category_expressions(
-        self,
-        category_id: str,
-        expand_categories: bool = False,
-        existing_expressions_only: bool = True,
-        existing_categories_only: bool = True,
+    def get_expression(self, expression_id: str) -> ExpressionEnvelope | None:
+        return self._expressions.get(expression_id)
+
+    def get_expressions(
+        self, category_id: str, expand_subcategories: bool = False
     ) -> dict[str, ExpressionEnvelope]:
-        if existing_categories_only and category_id not in self._categories:
+        if category_id not in self._categories:
             return {}
 
-        included_expressions = self._included_expressions.get(category_id, set())
-        result = {}
-        for i in included_expressions:
-            if existing_expressions_only and i not in self._expressions:
-                continue
-            result[i] = self._expressions.get(i)
+        result = {
+            id: self._expressions[id]
+            for id in self._included_expressions[category_id]
+            if id in self._expressions
+        }
+        if not expand_subcategories:
+            return result
 
-        if expand_categories and self._included_categories.get(category_id):
-            for subcat in self._included_categories.get(category_id, set()):
-                result.update(
-                    self.get_category_expressions(
-                        subcat,
-                        expand_categories=expand_categories,
-                        existing_expressions_only=existing_expressions_only,
-                        existing_categories_only=existing_categories_only,
-                    )
-                )
+        for subcategory_id in self._included_categories[category_id]:
+            result.update(self.get_expressions(subcategory_id, expand_subcategories=True))
         return result
 
     async def format_text(

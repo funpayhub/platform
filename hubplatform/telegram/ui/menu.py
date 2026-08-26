@@ -82,7 +82,7 @@ class MenuSpec:
 
         keyboard_htmls = []
         for converted_line in rendered_keyboard:
-            keyboard_htmls.append(f'<tg-button-row>{'\n'.join(converted_line)}</tg-button-row>')
+            keyboard_htmls.append(f'<tg-button-row>{"\n".join(converted_line)}</tg-button-row>')
         keyboard_html = '\n'.join(keyboard_htmls)
 
         text = self.header_text
