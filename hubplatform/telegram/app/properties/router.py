@@ -12,7 +12,7 @@ from pyconfigtree.exceptions import PyConfigTreeError
 from hubplatform.i18n import Translator
 from hubplatform.telegram import Router
 from hubplatform.telegram.ui import UIManager
-from hubplatform.telegram.app.ui_names import TelegramAppUINames
+from hubplatform.telegram.app.menu_ids import MenuIDs
 
 from . import states, builders, callbacks as cbs
 
@@ -47,7 +47,7 @@ async def change_value_state(
     )
 
     await ui_manager.open_menu(
-        menu_id=TelegramAppUINames.properties.value_manual_input_menu,
+        menu_id=MenuIDs.properties.value_manual_input_menu,
         context=ctx,
         environment=q,
     )

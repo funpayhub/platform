@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import inspect
-from types import MappingProxyType
 from typing import (
     Any,
     Literal,
@@ -13,6 +12,7 @@ from typing import (
     runtime_checkable,
 )
 from dataclasses import field, dataclass
+from types import MappingProxyType
 from functools import cache
 from collections import defaultdict
 from collections.abc import Mapping, Callable, Iterator

@@ -29,7 +29,7 @@ from hubplatform.telegram.ui import (
     KeyboardBlockSpec,
 )
 from hubplatform.telegram.app.ui import callbacks as ui_cbs
-from hubplatform.telegram.app.ui_names import TelegramAppUINames, TelegramAppUINames as UINames
+from hubplatform.telegram.app.menu_ids import MenuIDs, MenuIDs as UINames
 from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
 
 from . import callbacks as cbs
@@ -303,7 +303,7 @@ async def props_btn_builder(node: Properties, i18n: Translator) -> KeyboardBlock
         block_id='hubplatform.pyconfigtree:properties',
         text=i18n.translate(node.name),
         callback_data=ui_cbs.OpenMenu(
-            menu_id=TelegramAppUINames.properties.properties_menu,
+            menu_id=MenuIDs.properties.properties_menu,
             context=NodeMenuContext(node_path=list(node.path)).dump(),
         ),
     )
@@ -352,7 +352,7 @@ async def list_param_btn_builder(node: ListParameter[Any], i18n: Translator) -> 
         block_id='hubplatform.pyconfigtree.list_param',
         text=i18n.translate(node.name),
         callback_data=ui_cbs.OpenMenu(
-            menu_id=TelegramAppUINames.properties.list_param_menu,
+            menu_id=MenuIDs.properties.list_param_menu,
             context=NodeMenuContext(node_path=list(node.path)).dump(),
         ),
     )
