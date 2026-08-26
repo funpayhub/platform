@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from types import MappingProxyType
 from typing import (
     Any,
     Literal,
@@ -246,6 +247,14 @@ class ExpressionsRegistry:
 
         self._included_categories: dict[str, set[str]] = defaultdict(set)
         self._included_expressions: dict[str, set[str]] = defaultdict(set)
+
+    @property
+    def expressions(self) -> Mapping[str, ExpressionEnvelope]:
+        return MappingProxyType(self._expressions)
+
+    @property
+    def categories(self) -> Mapping[str, ExpressionsCategory]:
+        return MappingProxyType(self._categories)
 
     def merge_from(self, *registries: ExpressionsRegistry, skip_existing: bool = True) -> None:
         if not registries:
