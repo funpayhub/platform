@@ -35,7 +35,7 @@ async def build_expression_categories_list_menu(
     ctx: MenuBuildContext[MenuContext],
     expressions_registry: ExpressionsRegistry,
     translator: Translator,
-) -> MenuBuildingSpec:
+):
     menu_spec = MenuSpec()
     for category_id, category in expressions_registry.categories.items():
         menu_spec.main_keyboard.append(
@@ -67,7 +67,7 @@ async def build_expression_categories_list_menu(
         'Выражения позволяют автоматически подставлять нужные данные в тексты, которые '
         'отправляются пользователям: в сообщения, ответы на заказы, ответы на отзывы и т.д.'
     )
-    return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
+    return menu_spec
 
 
 @expressions_ui_registry.add_menu_builder(
@@ -157,7 +157,7 @@ class ExpressionDocsMenuBuilder:
         ctx: MenuBuildContext[ExpressionDocsMenuContext],
         expressions_registry: ExpressionsRegistry,
         translator: Translator,
-    ) -> MenuBuildingSpec:
+    ):
         expression = expressions_registry.expressions[ctx.context.expression_id]
         menu_spec = MenuSpec()
         menu_spec.header_text = translator.translate(
@@ -173,7 +173,7 @@ class ExpressionDocsMenuBuilder:
 
         return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
-    def build_arg_doc(self, arg_doc: ArgDocs, translator: Translator) -> str:
+    def build_arg_doc(self, arg_doc: ArgDocs, translator: Translator):
         kinds = {
             'normal': 'По порядку или по имени',
             'positional_only': 'Только по порядку',
@@ -181,27 +181,27 @@ class ExpressionDocsMenuBuilder:
         }
         kind = kinds.get(arg_doc.kind, translator.translate(arg_doc.kind))
         rows = [
-            f'<tr><td><b>Имя</b></td><td><code>{arg_doc.key}</code></td></tr>',
-            f'<tr><td><b>Обязательный</b></td>'
-            f'<td>{"Нет" if arg_doc.default is not None else "Да"}</td></tr>',
-            f'<tr><td><b>Как передавать</b></td><td>{kind}</td></tr>',
+            f'<tr><th align="center">Свойство</th><th align="center">Значение</th></tr>'
+            f'<tr><td>Имя</td><td><code>{arg_doc.key}</code></td></tr>',
+            f'<tr><td>Обязательный</td><td>'
+            f'{"Нет" if arg_doc.default is not None else "Да"}</td></tr>',
+            f'<tr><td>Как передавать</td><td>{kind}</td></tr>',
         ]
         if isinstance(arg_doc.possible_values, str):
             rows.append(
-                f'<tr><td><b>Возможные значения</b></td><td>{arg_doc.possible_values}</td></tr>',
+                f'<tr><td>Возможные значения</td><td>{arg_doc.possible_values}</td></tr>',
             )
         if arg_doc.default is not None:
-            rows.append(
-                f'<tr><td><b>По умолчанию</b></td><td><code>{arg_doc.default}</code></td></tr>'
-            )
+            rows.append(f'<tr><td>По умолчанию</td><td><code>{arg_doc.default}</code></td></tr>')
 
         total = f'<table bordered striped>{"".join(rows)}</table>'
 
         if isinstance(arg_doc.possible_values, dict):
-            rows = [
+            rows = ['<tr><th align="center">Значение</th><th align="center">Описание</th></tr>']
+            rows.extend(
                 f'<tr><td><code>{key}</code></td><td>{desc}</td></tr>'
                 for key, desc in arg_doc.possible_values.items()
-            ]
+            )
             table = f'<table bordered striped>{"".join(rows)}</table>'
             total += f'<hr /><h4>Возможные значения</h4>{table}'
 
