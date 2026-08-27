@@ -27,6 +27,8 @@ class ListAction(SessionCallbackData, identifier='hubplatform.properties.list_ac
     action: Literal['move_up', 'move_down', 'remove']
 
 
-class AddListItem(SessionCallbackData, identifier='hubplatform.properties.add_list_item'):
+class InsertItemsInList(SessionCallbackData, identifier='hubplatform.properties.add_list_item'):
     node_path: list[str]
+    index: int | None = None
+    before: bool = False
     open_session_id: str = Field(default_factory=session_id_from_context)

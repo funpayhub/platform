@@ -154,7 +154,7 @@ class ListParamMenuBuilder:
     async def edit_panel(self, ctx: MenuBuildContext[ListNodeMenuContext]) -> Keyboard:
         edit_button = Button(
             button_id='hubplatform.pyconfigtree.list_param.toggle_editing_mode',
-            text='✏️' if not ctx.context.editing else '⬅️🚪',
+            text='Изменить' if not ctx.context.editing else 'Выход',
             callback_data=ui_cbs.OpenMenu(
                 menu_id=UINames.properties.list_param_menu,
                 context=ctx.context.model_copy(update={'editing': not ctx.context.editing}).dump(),
@@ -162,14 +162,36 @@ class ListParamMenuBuilder:
                 keyboard_page=ctx.view_state.keyboard_page,
                 text_page=ctx.view_state.text_page,
             ),
+            style='danger' if ctx.context.editing else None,
         )
 
-        add_button = Button(
-            button_id='hubplatform.pyconfigtree.list_param.add',
-            text='➕',
-            callback_data=cbs.AddListItem(node_path=ctx.context.node_path),
-        )
-        return [[edit_button, add_button]]
+        if not ctx.context.editing:
+            add_button = Button(
+                button_id='hubplatform.pyconfigtree.list_param.add',
+                text='Добавить',
+                callback_data=cbs.InsertItemsInList(node_path=ctx.context.node_path),
+            )
+            return [[edit_button, add_button]]
+
+        if len(ctx.context.selected_indexes) == 1:
+            selected = next(iter(ctx.context.selected_indexes))
+            up_button = Button(
+                button_id='hubplatform.properties.list_param.insert_items_upper',
+                text='Вставить ↑',
+                callback_data=cbs.InsertItemsInList(
+                    node_path=ctx.context.node_path, index=selected, before=True
+                ),
+            )
+            down_button = Button(
+                button_id='hubplatform.properties.list_param.insert_items_down',
+                text='Вставить ↓',
+                callback_data=cbs.InsertItemsInList(
+                    node_path=ctx.context.node_path, index=selected
+                ),
+            )
+            return [[edit_button, up_button, down_button]]
+
+        return [[edit_button]]
 
     async def item_btn(
         self, index: int, val: Any, ctx: MenuBuildContext[ListNodeMenuContext]
@@ -198,7 +220,7 @@ class ListParamMenuBuilder:
         buttons.append(
             Button(
                 button_id='hubplatform.pyconfigtree.list_param.control.move_up',
-                text='⬆️',
+                text='Выше',
                 callback_data=cbs.ListAction(
                     node_path=ctx.node_path, action='move_up', selected=ctx.selected_indexes
                 ),
@@ -207,7 +229,7 @@ class ListParamMenuBuilder:
         buttons.append(
             Button(
                 button_id='hubplatform.pyconfigtree.list_param.control.move_down',
-                text='⬇️',
+                text='Ниже',
                 callback_data=cbs.ListAction(
                     node_path=ctx.node_path, action='move_down', selected=ctx.selected_indexes
                 ),
@@ -216,7 +238,7 @@ class ListParamMenuBuilder:
         buttons.append(
             Button(
                 button_id='hubplatform.pyconfigtree.list_param.control.remove',
-                text='🗑️',
+                text='Удалить',
                 callback_data=cbs.ListAction(
                     node_path=ctx.node_path, action='remove', selected=ctx.selected_indexes
                 ),
@@ -225,7 +247,7 @@ class ListParamMenuBuilder:
         buttons.append(
             Button(
                 button_id='hubplatform.pyconfigtree.list_param.control.cancel_selection',
-                text='❌',
+                text='Отмена',
                 callback_data=ui_cbs.OpenMenu(
                     menu_id=UINames.properties.list_param_menu,
                     context=cancel_ctx.dump(),

@@ -49,11 +49,11 @@ async def clear_state(
     q: Query, cbd: cbs.ClearState, ui_manager: UIManager, state: FSMContext
 ) -> None:
     await state.clear()
-    if cbd.open_session_id is not None:
-        await ui_manager.clone_session(session_id=cbd.open_session_id, environment=q)
-
     if isinstance(q.message, Message):
         await q.message.delete()
+
+    if cbd.open_session_id is not None:
+        await ui_manager.clone_session(session_id=cbd.open_session_id, environment=q)
 
 
 @ui_router.callback_query(cbs.GoBack.filter())

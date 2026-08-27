@@ -35,7 +35,7 @@ async def build_expression_categories_list_menu(
     ctx: MenuBuildContext[MenuContext],
     expressions_registry: ExpressionsRegistry,
     translator: Translator,
-):
+) -> MenuBuildingSpec:
     menu_spec = MenuSpec()
     for category_id, category in expressions_registry.categories.items():
         menu_spec.main_keyboard.append(
@@ -67,7 +67,7 @@ async def build_expression_categories_list_menu(
         'Выражения позволяют автоматически подставлять нужные данные в тексты, которые '
         'отправляются пользователям: в сообщения, ответы на заказы, ответы на отзывы и т.д.'
     )
-    return menu_spec
+    return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
 
 @expressions_ui_registry.add_menu_builder(
@@ -157,7 +157,7 @@ class ExpressionDocsMenuBuilder:
         ctx: MenuBuildContext[ExpressionDocsMenuContext],
         expressions_registry: ExpressionsRegistry,
         translator: Translator,
-    ):
+    ) -> MenuBuildingSpec:
         expression = expressions_registry.expressions[ctx.context.expression_id]
         menu_spec = MenuSpec()
         menu_spec.header_text = translator.translate(
@@ -173,7 +173,7 @@ class ExpressionDocsMenuBuilder:
 
         return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
-    def build_arg_doc(self, arg_doc: ArgDocs, translator: Translator):
+    def build_arg_doc(self, arg_doc: ArgDocs, translator: Translator) -> str:
         kinds = {
             'normal': 'По порядку или по имени',
             'positional_only': 'Только по порядку',
@@ -182,7 +182,8 @@ class ExpressionDocsMenuBuilder:
         kind = kinds.get(arg_doc.kind, translator.translate(arg_doc.kind))
         rows = [
             f'<tr><td><b>Имя</b></td><td><code>{arg_doc.key}</code></td></tr>',
-            f'<tr><td><b>Обязательный</b></td><td>{"Нет" if arg_doc.default is not None else "Да"}</td></tr>',
+            f'<tr><td><b>Обязательный</b></td>'
+            f'<td>{"Нет" if arg_doc.default is not None else "Да"}</td></tr>',
             f'<tr><td><b>Как передавать</b></td><td>{kind}</td></tr>',
         ]
         if isinstance(arg_doc.possible_values, str):

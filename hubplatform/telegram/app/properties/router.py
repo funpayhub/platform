@@ -91,7 +91,6 @@ async def remove_selected_items(
     node = properties.get_parameter(cbd.node_path)
     if not isinstance(node, ListParameter):
         raise ValueError(f'{node.path} is not a ListParameter.')
-    selected = sorted(cbd.selected)
 
     async with ui_manager.edit_session(
         session_id=cbd.session_id,
@@ -99,15 +98,7 @@ async def remove_selected_items(
         expected_revision=cbd.revision,
         rerender=True,
     ) as s:
-        removed = 0
-        for index in selected:
-            try:
-                node._value.pop(index - removed)
-                removed += 1
-            except IndexError:
-                continue
-
-        await node.save()
+        await node.pop_items(*cbd.selected)
         s.current.context_fields['selected_indexes'] = []
 
 
@@ -129,6 +120,7 @@ async def move_selected_items(
         expected_revision=cbd.revision,
         rerender=True,
     ) as s:
+        value = node.value
         if cbd.action == 'move_up' and selected[0] <= 0:
             await q.answer()
             return
@@ -138,8 +130,70 @@ async def move_selected_items(
 
         for index in selected if cbd.action == 'move_up' else reversed(selected):
             to = index - 1 if cbd.action == 'move_up' else index + 1
-            node._value[index], node._value[to] = node._value[to], node._value[index]
-
-        await node.save()
+            value[index], value[to] = value[to], value[index]
+        await node.set_value(value)
         new_selected = [i + (-1 if cbd.action == 'move_up' else +1) for i in selected]
         s.current.context_fields['selected_indexes'] = new_selected  # type: ignore[assignment]
+
+
+@props_router.callback_query(cbs.InsertItemsInList.filter())
+async def inserting_value_state(
+    q: Query,
+    properties: Properties,
+    ui_manager: UIManager,
+    cbd: cbs.InsertItemsInList,
+    state: FSMContext,
+) -> None:
+    node = properties.get_parameter(cbd.node_path)
+    ctx = builders.ManualValueInputContext(
+        node_path=cbd.node_path,
+        open_next_session_id=cbd.session_id,
+    )
+
+    await ui_manager.open_menu(
+        menu_id=MenuIDs.properties.list_new_items_input_menu,
+        context=ctx,
+        environment=q,
+    )
+
+    await states.InsertingListItems(
+        node=node,  # type: ignore[arg-type]
+        index=cbd.index,
+        before=cbd.before,
+        open_session=cbd.session_id,
+    ).set(state)
+    await q.answer()
+
+
+@props_router.message(states.InsertingListItems.filter())
+async def insert_list_items(
+    m: Message,
+    state: FSMContext,
+    translator: Translator,
+    ui_manager: UIManager,
+) -> None:
+    if not m.text:
+        return
+    data = await states.InsertingListItems.get(state)
+    values = [i.replace('\\n', '\n') if i != '-' else '' for i in m.text.splitlines()]
+    try:
+        if data.index is None:
+            await data.node.add_items(*values)
+        else:
+            new_value = data.node.value
+            index = data.index if data.before else data.index + 1
+            new_value[index:index] = values
+            await data.node.set_value(new_value)
+        await state.clear()
+    except PyConfigTreeError:
+        await m.answer(
+            translator.translate('error-changing-parameter-value'),
+        )
+        return
+
+    if data.before:
+        async with ui_manager.edit_session(session_id=data.open_session) as s:
+            s.current.context_fields['selected_indexes'] = [data.index + len(values)]
+
+    await ui_manager.clone_session(session_id=data.open_session, environment=m)
+    await ui_manager.close_session(session_id=data.open_session, trigger=m)
