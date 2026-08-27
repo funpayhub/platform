@@ -17,6 +17,11 @@ class ExpressionsMenuIDs:
     expression_docs_menu = 'hubplatform.expressions.docs'
 
 
+class BasicUIMenuIDs:
+    manual_change_page_menu = 'hubplatform.basic_ui.manual_change_page_menu'
+
+
 class MenuIDs:
     properties = PropertiesMenuIDs
     expressions = ExpressionsMenuIDs
+    basic_ui = BasicUIMenuIDs

@@ -13,7 +13,7 @@ from hubplatform.telegram.ui import (
 )
 from hubplatform.telegram.ui.keyboard import Keyboard
 
-from .callbacks import Dummy, GoBack, ChangePageTo
+from .callbacks import Dummy, GoBack, ChangePageTo, ChangePageManually
 
 
 class StripAndNavigationFinalizer:
@@ -71,7 +71,11 @@ async def _nav(ctx: MenuBuildContext, tr: Translator, pages: int, back: bool) ->
         [
             _nav_button('first', '⇤', page > 0, 0),
             _nav_button('prev', '←', page > 0, page - 1),
-            Button(button_id='counter', text=f'{page + 1} / {pages}', callback_data=Dummy()),
+            Button(
+                button_id='counter',
+                text=f'{page + 1} / {pages}',
+                callback_data=ChangePageManually(),
+            ),
             _nav_button('next', '→', page < pages - 1, page + 1),
             _nav_button('last', '⇥', page < pages - 1, pages - 1),
         ],

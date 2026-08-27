@@ -6,6 +6,7 @@ __all__ = [
     'ChangePageTo',
     'GoBack',
     'ClearState',
+    'ChangePageManually',
     'Dummy',
 ]
 
@@ -27,6 +28,10 @@ class OpenMenu(SessionCallbackData, identifier='hubplatform.open_menu'):
 class ChangePageTo(SessionCallbackData, identifier='hubplatform.change_page_to'):
     keyboard_page: int | None = None
     text_page: int | None = None
+
+
+class ChangePageManually(SessionCallbackData, identifier='hubplatform.change_page_manually'):
+    max_pages: int | None = None
 
 
 class GoBack(SessionCallbackData, identifier='hubplatform.go_back'):

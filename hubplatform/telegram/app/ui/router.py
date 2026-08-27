@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from contextlib import suppress
+
 from aiogram.types import Message, CallbackQuery as Query
 from aiogram.fsm.context import FSMContext
 
-from hubplatform.telegram.ui import UIManager, MenuViewState
+from hubplatform.telegram.ui import UIManager, MenuContext, MenuViewState
 from hubplatform.telegram.router import Router
+from hubplatform.telegram.app.menu_ids import MenuIDs
 
-from . import callbacks as cbs
+from . import states, callbacks as cbs
 
 
 ui_router = Router(name='hubplatform.ui_router')
@@ -45,9 +48,7 @@ async def change_page(q: Query, cbd: cbs.ChangePageTo, ui_manager: UIManager) ->
 
 
 @ui_router.callback_query(cbs.ClearState.filter())
-async def clear_state(
-    q: Query, cbd: cbs.ClearState, ui_manager: UIManager, state: FSMContext
-) -> None:
+async def clear(q: Query, cbd: cbs.ClearState, ui_manager: UIManager, state: FSMContext) -> None:
     await state.clear()
     if isinstance(q.message, Message):
         await q.message.delete()
@@ -63,5 +64,42 @@ async def go_back(q: Query, ui_manager: UIManager, cbd: cbs.GoBack) -> None:
 
 
 @ui_router.callback_query(cbs.Dummy.filter())
-async def open_session(q: Query) -> None:
+async def dummy(q: Query) -> None:
     await q.answer()
+
+
+@ui_router.callback_query(cbs.ChangePageManually.filter())
+async def enter_changing_page_state(
+    q: Query, cbd: cbs.ChangePageTo, ui_manager: UIManager, state: FSMContext
+) -> None:
+    result = await ui_manager.open_menu(
+        menu_id=MenuIDs.basic_ui.manual_change_page_menu,
+        context=MenuContext(),
+        environment=q,
+    )
+
+    await states.ChangingMenuPage(
+        changing_in_session_id=cbd.session_id, state_session=result.session.id
+    ).set(state)
+    await q.answer()
+
+
+@ui_router.message(states.ChangingMenuPage.filter())
+async def change_page_from_state(m: Message, ui_manager: UIManager, state: FSMContext) -> None:
+    data = await states.ChangingMenuPage.get(state)
+    if not m.text or not m.text.isnumeric():
+        return
+    page = int(m.text) - 1
+    if page < 0:
+        return
+
+    with suppress(Exception):
+        async with ui_manager.edit_session(
+            data.changing_in_session_id, rerender=True, trigger=m
+        ) as session:
+            session.current.keyboard_page = page
+
+    with suppress(Exception):
+        await ui_manager.close_session(data.state_session, trigger=m)
+
+    await state.clear()
