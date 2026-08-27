@@ -157,7 +157,7 @@ class ExpressionDocsMenuBuilder:
         ctx: MenuBuildContext[ExpressionDocsMenuContext],
         expressions_registry: ExpressionsRegistry,
         translator: Translator,
-    ):
+    ) -> MenuBuildingSpec:
         expression = expressions_registry.expressions[ctx.context.expression_id]
         menu_spec = MenuSpec()
         menu_spec.header_text = translator.translate(
@@ -173,7 +173,7 @@ class ExpressionDocsMenuBuilder:
 
         return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
-    def build_arg_doc(self, arg_doc: ArgDocs, translator: Translator):
+    def build_arg_doc(self, arg_doc: ArgDocs, translator: Translator) -> str:
         kinds = {
             'normal': 'По порядку или по имени',
             'positional_only': 'Только по порядку',
