@@ -14,7 +14,6 @@ __all__ = [
     'global_compression_codecs_registry',
 ]
 
-import html
 import string
 from typing import TYPE_CHECKING, Any, Self, ClassVar, Annotated
 from abc import ABC, abstractmethod
@@ -39,6 +38,7 @@ from .compact_encoder import dumps_compact, loads_compact
 
 if TYPE_CHECKING:
     from .filter import CallbackQueryFilter
+
 
 _ALLOWED_IDENTIFIER_SYMBOLS = frozenset(string.ascii_lowercase + '_.')
 _GLOBAL_COMPRESSION_CODECS_REGISTRY = CompressionCodecsRegistry(
@@ -107,12 +107,11 @@ class _CallbackDataEnvelope(BaseModel, ABC):
         :raises CallbackDataPackError: If serialization fails.
         """
         try:
-            result = self._pack(
+            return self._pack(
                 compress=compress,
                 compression_version=compression_version,
                 fallback_reserved=fallback_reserved,
             )
-            return html.escape(result)
         except CallbackDataPackError:
             raise
         except Exception as e:
@@ -127,7 +126,7 @@ class _CallbackDataEnvelope(BaseModel, ABC):
         :raises CallbackDataUnpackError: If unpacking fails.
         """
         try:
-            return cls._unpack(html.unescape(data))
+            return cls._unpack(data)
         except CallbackDataUnpackError:
             raise
         except Exception as e:
