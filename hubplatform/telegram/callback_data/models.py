@@ -162,10 +162,10 @@ class KeywordCallbackDataEnvelope(_CallbackDataEnvelope):
 
     @classmethod
     def _unpack(cls, data: str) -> KeywordCallbackDataEnvelope:
-        data = _GLOBAL_COMPRESSION_CODECS_REGISTRY.decompress(data)
-
         if not is_keyword_callback_data(data):
             raise InvalidCallbackDataFormatError('Not a keyword callback data format.')
+
+        data = _GLOBAL_COMPRESSION_CODECS_REGISTRY.decompress(data)
 
         identifier, sep, data = data.partition('{')
         fields = loads_compact(sep + data)
@@ -208,10 +208,10 @@ class PositionalCallbackDataEnvelope(_CallbackDataEnvelope):
 
     @classmethod
     def _unpack(cls, data: str) -> PositionalCallbackDataEnvelope:
-        data = _GLOBAL_COMPRESSION_CODECS_REGISTRY.decompress(data)
-
         if not is_positional_callback_data(data):
             raise InvalidCallbackDataFormatError('Not a positional callback data format.')
+
+        data = _GLOBAL_COMPRESSION_CODECS_REGISTRY.decompress(data)
 
         identifier, sep, fields = data.partition(',')
         return PositionalCallbackDataEnvelope(
@@ -272,11 +272,13 @@ def parse_callback_data(data: str | CallbackQuery | CallbackDataEnvelope) -> Cal
     if not data_str:
         raise CallbackDataUnpackError('Callback data string is empty.')
 
+    data_str = _GLOBAL_COMPRESSION_CODECS_REGISTRY.decompress(data_str)
+
     envelope: CallbackDataEnvelope
-    try:
-        envelope = KeywordCallbackDataEnvelope.unpack(data_str)
-    except InvalidCallbackDataFormatError:
+    if is_positional_callback_data(data_str):
         envelope = PositionalCallbackDataEnvelope.unpack(data_str)
+    else:
+        envelope = KeywordCallbackDataEnvelope.unpack(data_str)
 
     if isinstance(data, CallbackQuery):
         setattr(data, '_hubplatform_parsed_callback_envelope', envelope)
