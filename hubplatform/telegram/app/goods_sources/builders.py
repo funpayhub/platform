@@ -120,7 +120,7 @@ class SourceMenuBuilder:
     ) -> MenuBuildingSpec:
         source = goods_manager.get(ctx.context.source_id)
         menu = MenuSpec()
-        menu.header_text = '<h2>Источник товаров</h2>'
+        menu.header_text = f'<h2>Источник товаров <code>{escape(str(source))}</code></h2>'
 
         if source is None:
             menu.body_text = '<p>Источник больше не существует.</p>'
@@ -143,15 +143,18 @@ class SourceMenuBuilder:
         start = page * GOODS_PER_PAGE
         goods = await source.get_goods(GOODS_PER_PAGE, start=start)
         rows = ['<tr><th>№</th><th>Товар</th></tr>']
-        for index, product in enumerate(goods, start=start + 1):
-            preview = product if len(product) <= 200 else product[:197] + '...'
-            rows.append(
-                f'<tr><td align="right">{index}</td><td><code>{escape(preview)}</code></td></tr>'
+        if not goods:
+            menu.body_text += '<h3><b>Товаров нет :(</b></h3>'
+        else:
+            for ind, product in enumerate(goods, start=start + 1):
+                preview = product if len(product) <= 200 else product[:197] + '...'
+                rows.append(
+                    f'<tr><td align="right">{ind}</td><td><code>{escape(preview)}</code></td></tr>'
+                )
+            menu.body_text += (
+                f'<h3>Товары {start + 1}–{start + len(goods)}</h3>'
+                f'<table bordered striped compact>{"".join(rows)}</table>'
             )
-        menu.body_text += (
-            f'<h3>Товары {start + 1}–{start + len(goods)}</h3>'
-            f'<table bordered striped compact>{"".join(rows)}</table>'
-        )
 
         buttons = text_navigation_buttons(id='goods_table', max_pages=pages, current_page=page)
         menu.body_text += (
