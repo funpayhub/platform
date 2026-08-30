@@ -217,11 +217,8 @@ class KeyboardBlockSpec:
             elif all(isinstance(item, Button) for item in block):
                 keyboard = [block]
 
-            elif all(
-                isinstance(row, list) and all(isinstance(button, Button) for button in row)
-                for row in block
-            ):
-                keyboard = block
+            elif all(isinstance(r, list) and all(isinstance(b, Button) for b in r) for r in block):
+                keyboard = block  # type: ignore[assignment]
             else:
                 raise TypeError('block must be Button, list[Button], or list[list[Button]].')
         else:

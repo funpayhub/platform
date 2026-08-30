@@ -173,12 +173,12 @@ class ExpressionEnvelope:
         di_context: Mapping[str, Any],
         render: bool,
     ) -> str:
-        if self._is_class:
-            instance = object.__new__(self.call)
+        if self._is_class and self._wrapped_init is not None:
+            instance = object.__new__(self.call)  # type: ignore[arg-type]
             call_args, call_kwargs = self._wrapped_init.collect_args(
                 args=[instance, *call.args], kwargs=call.kwargs
             )
-            self.call.__init__(*call_args, **call_kwargs)
+            self.call.__init__(*call_args, **call_kwargs)  # type: ignore[misc]
             result = await self._wrapped(
                 args=[instance, context], data=di_context, to_thread=False
             )
