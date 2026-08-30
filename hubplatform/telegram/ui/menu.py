@@ -131,7 +131,7 @@ class MenuEnvironment:
 @pydantic_dataclass(frozen=True)
 class MenuViewState:
     keyboard_page: int = 0
-    text_page: int = 0
+    text_page: dict[str, int] = dataclass_field(default_factory=dict)
 
 
 class MenuContext(BaseModel):

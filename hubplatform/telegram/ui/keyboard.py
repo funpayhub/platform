@@ -200,6 +200,38 @@ class KeyboardBlockSpec:
 
         return KeyboardBlockSpec(block_id, builder=build)
 
+    @classmethod
+    def prerendered_block(
+        cls,
+        block_id: str,
+        block: Button | list[Button] | Keyboard,
+    ) -> KeyboardBlockSpec:
+        keyboard: Keyboard
+        if isinstance(block, Button):
+            keyboard = [[block]]
+
+        elif isinstance(block, list):
+            if not block:
+                keyboard = []
+
+            elif all(isinstance(item, Button) for item in block):
+                keyboard = [block]
+
+            elif all(
+                isinstance(row, list) and all(isinstance(button, Button) for button in row)
+                for row in block
+            ):
+                keyboard = block
+            else:
+                raise TypeError('block must be Button, list[Button], or list[list[Button]].')
+        else:
+            raise TypeError('block must be Button, list[Button], or list[list[Button]].')
+
+        async def build() -> Keyboard:
+            return keyboard
+
+        return KeyboardBlockSpec(block_id, builder=build)
+
 
 @pydantic_dataclass(frozen=True)
 class KeyboardModificationMeta:

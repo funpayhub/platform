@@ -9,8 +9,10 @@ __all__ = [
 
 from typing import Any, Self, Final, Literal, overload
 
-from aiogram.filters import StateFilter as AiogramStateFilter
+from aiogram.types import TelegramObject
+from aiogram.filters import Filter, StateFilter as AiogramStateFilter
 from aiogram.fsm.context import FSMContext
+from aiogram.utils.magic_filter import MagicFilter
 
 
 class State:
@@ -100,10 +102,34 @@ class State:
         return obj
 
     @classmethod
-    def filter(cls) -> StateFilter:
-        return StateFilter(cls)
+    def filter(cls, rule: MagicFilter | None = None) -> StateFilter:
+        return StateFilter(cls, rule=rule)
 
 
-class StateFilter(AiogramStateFilter):
-    def __init__(self, state: State | type[State]) -> None:
-        super().__init__(state.identifier)
+class StateFilter(Filter):
+    def __init__(self, state: type[State], rule: MagicFilter | None = None) -> None:
+        self._aiogram_filter = AiogramStateFilter(state.identifier)
+        self._rule = rule
+        self._state = state
+
+    async def __call__(
+        self,
+        obj: TelegramObject,
+        state: FSMContext,
+        raw_state: str | None = None,
+    ) -> bool | dict[str, Any]:
+        result = await self._aiogram_filter(obj, raw_state)
+        if result is False:
+            return False
+
+        data = await state.get_data()
+        data_obj = data.get('data')
+        if not isinstance(data_obj, self._state):
+            return False
+
+        if self._rule is None:
+            return result
+
+        if not self._rule.resolve(data_obj):
+            return False
+        return result

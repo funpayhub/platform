@@ -17,6 +17,13 @@ class ExpressionsMenuIDs:
     expression_docs_menu = 'hubplatform.expressions.docs'
 
 
+class GoodsSourcesMenuIDs:
+    sources_list_menu = 'hubplatform.goods_sources.list'
+    source_menu = 'hubplatform.goods_sources.source'
+    file_source_input_menu = 'hubplatform.goods_sources.file_source_input'
+    source_input_menu = 'hubplatform.goods_sources.source_input'
+
+
 class BasicUIMenuIDs:
     manual_change_page_menu = 'hubplatform.basic_ui.manual_change_page_menu'
 
@@ -24,4 +31,5 @@ class BasicUIMenuIDs:
 class MenuIDs:
     properties = PropertiesMenuIDs
     expressions = ExpressionsMenuIDs
+    goods_sources = GoodsSourcesMenuIDs
     basic_ui = BasicUIMenuIDs

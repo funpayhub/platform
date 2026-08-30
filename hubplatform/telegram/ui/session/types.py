@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 class MenuFrame(BaseModel):
     menu_id: str
     keyboard_page: int = 0
-    text_page: int = 0
+    text_page: dict[str, int] = Field(default_factory=dict)
     context_fields: dict[str, JsonValue] = Field(default_factory=dict)
 
     @classmethod
@@ -29,9 +29,9 @@ class MenuFrame(BaseModel):
         view: MenuViewState | None = None,
         *,
         keyboard_page: int | None = None,
-        text_page: int | None = None,
+        text_page: dict[str, int] | None = None,
     ) -> MenuFrame:
-        text = text_page if text_page is not None else view.text_page if view is not None else 0
+        text = text_page if text_page is not None else view.text_page if view is not None else {}
         kb = (
             keyboard_page
             if keyboard_page is not None

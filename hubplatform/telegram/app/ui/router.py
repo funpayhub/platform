@@ -42,7 +42,7 @@ async def change_page(q: Query, cbd: cbs.ChangePageTo, ui_manager: UIManager) ->
         if cbd.keyboard_page is not None:
             session.current.keyboard_page = cbd.keyboard_page
         if cbd.text_page is not None:
-            session.current.text_page = cbd.text_page
+            session.current.text_page.update(cbd.text_page)
 
     await q.answer()
 
@@ -61,6 +61,28 @@ async def clear(q: Query, cbd: cbs.ClearState, ui_manager: UIManager, state: FSM
 async def go_back(q: Query, ui_manager: UIManager, cbd: cbs.GoBack) -> None:
     async with ui_manager.edit_session(session_id=cbd.session_id, rerender=True, trigger=q) as s:
         s.current = s.history.pop()
+
+
+@ui_router.callback_query(cbs.ToggleConfirmation.filter())
+async def toggle_confirmation(
+    q: Query, ui_manager: UIManager, cbd: cbs.ToggleConfirmation
+) -> None:
+    key = f'open_confirmation:{cbd.confirmation_id}'
+    async with ui_manager.edit_session(
+        session_id=cbd.session_id,
+        rerender=True,
+        trigger=q,
+        expected_revision=cbd.revision,
+    ) as s:
+        data = s.current.context_fields.get('data')
+        if not isinstance(data, dict):
+            data = {}
+            s.current.context_fields['data'] = data
+
+        if not data.pop(key, None):
+            data[key] = True
+
+    await q.answer()
 
 
 @ui_router.callback_query(cbs.Dummy.filter())

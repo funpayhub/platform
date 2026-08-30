@@ -167,10 +167,7 @@ async def inserting_value_state(
 
 @props_router.message(states.InsertingListItems.filter())
 async def insert_list_items(
-    m: Message,
-    state: FSMContext,
-    translator: Translator,
-    ui_manager: UIManager,
+    m: Message, state: FSMContext, translator: Translator, ui_manager: UIManager
 ) -> None:
     if not m.text:
         return
@@ -186,12 +183,10 @@ async def insert_list_items(
             await data.node.set_value(new_value)
         await state.clear()
     except PyConfigTreeError:
-        await m.answer(
-            translator.translate('error-changing-parameter-value'),
-        )
+        await m.answer(translator.translate('error-changing-parameter-value'))
         return
 
-    if data.before:
+    if data.before and data.index is not None:
         async with ui_manager.edit_session(session_id=data.open_session) as s:
             s.current.context_fields['selected_indexes'] = [data.index + len(values)]
 
