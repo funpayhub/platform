@@ -35,7 +35,7 @@ async def build_expression_categories_list_menu(
     ctx: MenuBuildContext[MenuContext],
     expressions_registry: ExpressionsRegistry,
     translator: Translator,
-):
+) -> MenuBuildingSpec:
     menu_spec = MenuSpec()
     for category_id, category in expressions_registry.categories.items():
         menu_spec.main_keyboard.append(
@@ -67,7 +67,7 @@ async def build_expression_categories_list_menu(
         'Выражения позволяют автоматически подставлять нужные данные в тексты, которые '
         'отправляются пользователям: в сообщения, ответы на заказы, ответы на отзывы и т.д.'
     )
-    return menu_spec
+    return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
 
 @expressions_ui_registry.add_menu_builder(
