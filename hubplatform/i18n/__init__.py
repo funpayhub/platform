@@ -16,8 +16,8 @@ from importlib.resources import files
 from importlib.resources.abc import Traversable
 
 from .base import Translator
-from .fluent import FluentTranslator
 from .types import I18nString, I18nException, TranslationResult, safe_formatter
+from .fluent import FluentTranslator
 
 
 def _locale_sources(root: Traversable) -> Iterator[Traversable]:

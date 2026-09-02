@@ -12,6 +12,7 @@ from typing import Literal
 from html import escape
 from math import ceil
 
+from hubplatform.i18n import Translator
 from hubplatform.telegram.ui import (
     Button,
     Keyboard,
@@ -32,7 +33,6 @@ from hubplatform.telegram.app.ui.widgets import (
 )
 from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
 from hubplatform.telegram.callback_data.hash import HashService
-from hubplatform.i18n import Translator
 
 from . import callbacks as cbs
 
@@ -65,9 +65,7 @@ def _short_button_title(value: str, limit: int = 52) -> str:
     context_type=MenuContext,
 )
 async def build_sources_list_menu(
-    ctx: MenuBuildContext[MenuContext],
-    goods_manager: GoodsSourcesManager,
-    translator: Translator
+    ctx: MenuBuildContext[MenuContext], goods_manager: GoodsSourcesManager, translator: Translator
 ) -> MenuBuildingSpec:
     menu = MenuSpec()
 
@@ -96,10 +94,10 @@ async def build_sources_list_menu(
     if goods_manager:
         menu.body_text = f"""
 <p>
-    {translator.translate("telegram-ui-goods_sources-sources_connected")}: 
+    {translator.translate('telegram-ui-goods_sources-sources_connected')}: 
     <b>{len(goods_manager)}</b>.
 </p>
-<i>{translator.translate("telegram-ui-goods_sources-select_source_to_control_it")}</i>"""
+<i>{translator.translate('telegram-ui-goods_sources-select_source_to_control_it')}</i>"""
     else:
         menu.body_text = translator.translate('telegram-ui-goods_sources-no_goods_sources')
 

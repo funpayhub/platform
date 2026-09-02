@@ -7,10 +7,10 @@ __all__ = [
     'FluentTranslator',
 ]
 
-from importlib.resources.abc import Traversable
 from typing import Any, cast
 from pathlib import Path
 from collections.abc import Generator
+from importlib.resources.abc import Traversable
 
 from fluent.syntax import FluentParser
 from fluent.runtime import FluentLocalization, AbstractResourceLoader
@@ -44,6 +44,7 @@ class ResourceLoader(AbstractResourceLoader):
                 continue
             resources.append(FluentParser().parse(i.read_text(encoding='utf-8')))
         return resources
+
 
 class Localization(FluentLocalization):
     def format_value(self, msg_id: str, args: dict[str, Any] | None = None) -> str:

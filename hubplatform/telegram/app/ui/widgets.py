@@ -7,6 +7,7 @@ __all__ = [
     'cancel_button',
 ]
 
+from hubplatform.i18n import I18nString, Translator
 from hubplatform.telegram.ui import Button, MenuContext
 from hubplatform.telegram.callback_data import CallbackData
 from hubplatform.telegram.app.ui.callbacks import (
@@ -15,7 +16,6 @@ from hubplatform.telegram.app.ui.callbacks import (
     ChangePageTo,
     ToggleConfirmation,
 )
-from hubplatform.i18n import Translator, I18nString
 
 
 def confirmable_button(

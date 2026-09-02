@@ -11,9 +11,9 @@ from hubplatform.telegram.ui import (
 )
 from hubplatform.telegram.app.menu_ids import MenuIDs
 
-from .callbacks import ClearState
-from .finalizers import StripAndNavigationFinalizer
 from .widgets import cancel_button
+from .finalizers import StripAndNavigationFinalizer
+
 
 basic_ui_registry = UIRegistry()
 
@@ -31,7 +31,7 @@ async def build_value_manual_input_menu(
     menu_spec.footer_keyboard.append(
         KeyboardBlockSpec.prerendered_block(
             block_id='hubplatform.clear_state',
-            block=cancel_button(open_session_id=None, translator=translator)
+            block=cancel_button(open_session_id=None, translator=translator),
         )
     )
 
