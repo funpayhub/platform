@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-__all__ = ['AppEnvironment']
+__all__ = ['AppEnvironment', 'app_environment']
 
 import os
 from dataclasses import field, dataclass
@@ -24,3 +24,6 @@ class AppEnvironment:
             )
         ),
     )
+
+
+app_environment = AppEnvironment()
