@@ -6,8 +6,8 @@ __all__ = [
     'FluentTranslator',
     'global_translator',
     'I18nString',
-    'I18nException',
     'safe_formatter',
+    'TranslationResult',
 ]
 
 from functools import cache
@@ -16,7 +16,7 @@ from importlib.resources import files
 from importlib.resources.abc import Traversable
 
 from .base import Translator
-from .types import I18nString, I18nException, TranslationResult, safe_formatter
+from .types import I18nString, TranslationResult, safe_formatter
 from .fluent import FluentTranslator
 
 

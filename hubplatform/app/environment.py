@@ -12,7 +12,7 @@ from pathlib import Path
 class AppEnvironment:
     logs_dir: Path = field(
         init=False,
-        default=Path(os.environ.get('HUBPLATFORM_LOGS_DIR', Path(os.getcwd()) / 'logs'))
+        default=Path(os.environ.get('HUBPLATFORM_LOGS_DIR', Path(os.getcwd()) / 'logs')),
     )
 
     file_goods_sources_dir: Path = field(

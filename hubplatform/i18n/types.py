@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 
-__all__ = ['I18nString', 'I18nException', 'TranslationResult', 'safe_formatter']
+__all__ = ['I18nString', 'TranslationResult', 'safe_formatter']
 
 from typing import TYPE_CHECKING, Any
 from string import Formatter
 from collections.abc import Mapping, Sequence
-
-from hubplatform.exceptions import HubPlatformError
 
 
 if TYPE_CHECKING:
@@ -91,20 +89,3 @@ class TranslationResult(str):
         result = str.__new__(cls, value)
         result.translated = translated
         return result
-
-
-class I18nException(HubPlatformError):  # noqa: N818
-    def __init__(self, message: I18nString) -> None:
-        super().__init__(message)
-        self.message = message
-
-    def translate(
-        self,
-        translator: Translator | None = None,
-        *,
-        lang: str | None = None,
-    ) -> TranslationResult:
-        return self.message.translate_(translator=translator, lang=lang)
-
-    def __str__(self) -> str:
-        return self.message.translate_(translator=None)

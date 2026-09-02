@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import logging
 import re
 import sys
-from collections.abc import Mapping, Sequence
-from numbers import Number
+import logging
 from typing import Any, TextIO
+from numbers import Number
+from collections.abc import Mapping, Sequence
 
 from hubplatform.i18n import I18nString, Translator
 
@@ -58,7 +58,7 @@ BRACKET_COLORS = (
 RESET_RE = re.compile(r'\$\$RESET|(?<!\$)\$RESET')
 
 ESC_RE = re.compile(
-    r'''
+    r"""
     \x1b
     (?:
         \[[0-?]*[ -/]*[@-~]
@@ -69,7 +69,7 @@ ESC_RE = re.compile(
         |
         [@-_]
     )
-    ''',
+    """,
     re.VERBOSE,
 )
 
@@ -113,7 +113,9 @@ def plain_message(record: logging.LogRecord, translator: Translator | None) -> s
 
 
 class ValueRenderer:
-    def render(self, v: Any, *, depth: int = 0, nested: bool = False, seen: set[int] | None = None) -> str:
+    def render(
+        self, v: Any, *, depth: int = 0, nested: bool = False, seen: set[int] | None = None
+    ) -> str:
         if seen is None:
             seen = set()
 
@@ -433,26 +435,16 @@ class ConsoleFormatter(BaseFormatter):
         plugin_name = self.format_plugin_name(record)
         if plugin_name:
             if self.supports_color:
-                plugin_name = (
-                    f' {RESET}{PLUGIN_COLOR}{BOLD}'
-                    f'[{plugin_name}]{RESET}'
-                )
+                plugin_name = f' {RESET}{PLUGIN_COLOR}{BOLD}[{plugin_name}]{RESET}'
             else:
                 plugin_name = f' [{plugin_name}]'
 
-        result = (
-            f'{prefix}{time} [{level}]'
-            f'{logger_name}{plugin_name} {message}'
-        )
+        result = f'{prefix}{time} [{level}]{logger_name}{plugin_name} {message}'
 
         result = self.append_exception(
             result,
             record,
-            color=(
-                f'{RESET}{ERROR_COLOR}{BOLD}'
-                if self.supports_color
-                else ''
-            ),
+            color=(f'{RESET}{ERROR_COLOR}{BOLD}' if self.supports_color else ''),
         )
 
         if self.supports_color:
@@ -472,10 +464,7 @@ class FileFormatter(BaseFormatter):
         if plugin_name:
             plugin_name = f' [{plugin_name}]'
 
-        result = (
-            f'{time} [{level_name:^6}]'
-            f' [{record.name}]{plugin_name} {message}'
-        )
+        result = f'{time} [{level_name:^6}] [{record.name}]{plugin_name} {message}'
 
         result = self.append_exception(result, record)
         return strip_control_sequences(result)

@@ -18,7 +18,7 @@ from pyconfigtree import (
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
 from hubplatform.i18n.base import Translator
-from hubplatform.i18n.types import I18nString, I18nException
+from hubplatform.i18n.types import I18nString
 from hubplatform.telegram.ui import (
     Button,
     Keyboard,
@@ -29,6 +29,7 @@ from hubplatform.telegram.ui import (
     MenuBuildingSpec,
     KeyboardBlockSpec,
 )
+from hubplatform.exceptions.base import I18nException
 from hubplatform.telegram.app.ui import callbacks as ui_cbs
 from hubplatform.telegram.app.menu_ids import MenuIDs, MenuIDs as UINames
 from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
