@@ -12,4 +12,4 @@ class _Telegram:
     ui = getLogger('hubplatform.telegram.ui')
 
 
-telegram = _Telegram()
+telegram = _Telegram
