@@ -32,6 +32,7 @@ from hubplatform.telegram.app.ui.widgets import (
 )
 from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
 from hubplatform.telegram.callback_data.hash import HashService
+from hubplatform.i18n import Translator
 
 from . import callbacks as cbs
 
@@ -66,16 +67,15 @@ def _short_button_title(value: str, limit: int = 52) -> str:
 async def build_sources_list_menu(
     ctx: MenuBuildContext[MenuContext],
     goods_manager: GoodsSourcesManager,
+    translator: Translator
 ) -> MenuBuildingSpec:
     menu = MenuSpec()
 
     for index, source in enumerate(list(goods_manager.values())):
-        amount = await source.len()
-        title = _short_button_title(str(source))
         menu.main_keyboard.append(
             KeyboardBlockSpec.callback_button(
                 block_id=f'hubplatform.goods_sources.open_source.{index}',
-                text=escape(f'{title} · {amount} шт.'),
+                text=escape(f'{_short_button_title(str(source))} · {await source.len()}'),
                 callback_data=ui_cbs.OpenMenu(
                     menu_id=MenuIDs.goods_sources.source_menu,
                     context=SourceMenuContext(source_id=source.source_id).dump(),
@@ -86,23 +86,22 @@ async def build_sources_list_menu(
     menu.footer_keyboard.append(
         KeyboardBlockSpec.callback_button(
             block_id='hubplatform.goods_sources.add_file_source',
-            text='＋ Добавить FileSource',
+            text=translator.translate('telegram-ui-goods_sources-add_file_source'),
             callback_data=cbs.StartFileSourceCreation(),
             style='success',
         )
     )
 
-    menu.header_text = '<h2>Источники товаров</h2>'
+    menu.header_text = f'<h2>{translator.translate("telegram-ui-goods_sources-list-title")}</h2>'
     if goods_manager:
-        menu.body_text = (
-            f'<p>Подключено источников: <b>{len(goods_manager)}</b>.</p>'
-            '<i>Выберите источник, чтобы просмотреть товары и управлять ими.</i>'
-        )
+        menu.body_text = f"""
+<p>
+    {translator.translate("telegram-ui-goods_sources-sources_connected")}: 
+    <b>{len(goods_manager)}</b>.
+</p>
+<i>{translator.translate("telegram-ui-goods_sources-select_source_to_control_it")}</i>"""
     else:
-        menu.body_text = (
-            '<p>Источников пока нет.</p>'
-            '<i>Создайте FileSource, чтобы хранить товары для автоматической выдачи.</i>'
-        )
+        menu.body_text = translator.translate('telegram-ui-goods_sources-no_goods_sources')
 
     return MenuBuildingSpec(menu=menu, finalizer=StripAndNavigationFinalizer())
 

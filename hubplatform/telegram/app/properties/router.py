@@ -41,16 +41,8 @@ async def change_value_state(
     state: FSMContext,
 ) -> None:
     node = properties.get_parameter(cbd.node_path)
-    ctx = builders.ManualValueInputContext(
-        node_path=cbd.node_path,
-        open_next_session_id=cbd.session_id,
-    )
-
-    await ui_manager.open_menu(
-        menu_id=MenuIDs.properties.value_manual_input_menu,
-        context=ctx,
-        environment=q,
-    )
+    ctx = builders.ManualValueInputContext(node_path=cbd.node_path, open_session_id=cbd.session_id)
+    await ui_manager.open_menu(MenuIDs.properties.value_manual_input_menu, ctx, q)
 
     await states.ChangingParameterValueState(
         node=node,  # type: ignore[arg-type]
@@ -72,9 +64,7 @@ async def change_value(
         await data.node.set_value(value)
         await state.clear()
     except PyConfigTreeError:
-        await m.answer(
-            translator.translate('error-changing-parameter-value'),
-        )
+        await m.answer(translator.translate('error-changing-parameter-value'))
         return
 
     await ui_manager.clone_session(session_id=data.open_session, environment=m)
@@ -147,7 +137,7 @@ async def inserting_value_state(
     node = properties.get_parameter(cbd.node_path)
     ctx = builders.ManualValueInputContext(
         node_path=cbd.node_path,
-        open_next_session_id=cbd.session_id,
+        open_session_id=cbd.session_id,
     )
 
     await ui_manager.open_menu(

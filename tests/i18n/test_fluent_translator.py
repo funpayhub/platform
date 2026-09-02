@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from hubplatform.i18n.types import I18nString
 from hubplatform.i18n.fluent import FluentTranslator
 
 
@@ -36,7 +37,7 @@ def test_translates_messages_and_substitutes_variables(
     translator.add_translations(tmp_path)
 
     assert translator.translate('hello') == 'Hello!'
-    assert translator.translate('welcome', name='Alice') == 'Welcome, Alice!'
+    assert translator.translate('welcome', {'name': 'Alice'}) == 'Welcome, Alice!'
 
 
 def test_returns_message_id_when_translation_is_missing(
@@ -81,7 +82,7 @@ def test_combines_multiple_translation_sources(
     assert translator.translate('second-message') == 'Second'
 
 
-def test_change_language_reloads_added_sources(tmp_path: Path) -> None:
+def test_change_language_selects_translations_from_added_sources(tmp_path: Path) -> None:
     write_translations(tmp_path, 'en_US', 'greeting = Hello, { $name }!\n')
     write_translations(tmp_path, 'ru_RU', 'greeting = Привет, { $name }!\n')
     translator = FluentTranslator()
@@ -89,9 +90,60 @@ def test_change_language_reloads_added_sources(tmp_path: Path) -> None:
 
     translator.change_language('en_US')
 
-    assert translator.translate('greeting', name='Alice') == 'Hello, Alice!'
+    assert translator.translate('greeting', {'name': 'Alice'}) == 'Hello, Alice!'
 
     translator.change_language('ru_RU')
 
     assert translator.current_lang == 'ru_RU'
-    assert translator.translate('greeting', name='Alice') == 'Привет, Alice!'
+    assert translator.translate('greeting', {'name': 'Alice'}) == 'Привет, Alice!'
+
+
+def test_can_override_language_without_changing_current_language(tmp_path: Path) -> None:
+    write_translations(tmp_path, 'en_US', 'greeting = Hello!\n')
+    write_translations(tmp_path, 'ru_RU', 'greeting = Привет!\n')
+    translator = FluentTranslator(current_lang='ru_RU')
+    translator.add_translations(tmp_path)
+
+    assert translator.translate('greeting', lang='en_US') == 'Hello!'
+    assert translator.current_lang == 'ru_RU'
+    assert translator.translate('greeting') == 'Привет!'
+
+
+def test_translation_variables_do_not_collide_with_function_arguments(tmp_path: Path) -> None:
+    write_translations(
+        tmp_path,
+        'en_US',
+        'collision = { $val }, { $variables }, { $lang }\n',
+    )
+    translator = FluentTranslator(current_lang='ru_RU')
+    translator.add_translations(tmp_path)
+
+    result = translator.translate(
+        'collision',
+        {'val': 'value', 'variables': 'variables', 'lang': 'language'},
+        lang='en_US',
+    )
+
+    assert result == 'value, variables, language'
+
+
+def test_language_override_is_used_for_nested_i18n_messages(tmp_path: Path) -> None:
+    write_translations(
+        tmp_path,
+        'en_US',
+        'outer = Outer: { $inner }\ninner = inner\n',
+    )
+    write_translations(
+        tmp_path,
+        'ru_RU',
+        'outer = Внешнее: { $inner }\ninner = внутреннее\n',
+    )
+    translator = FluentTranslator(current_lang='ru_RU')
+    translator.add_translations(tmp_path)
+    message = I18nString(
+        'outer',
+        'Fallback: {inner}',
+        {'inner': I18nString('inner', 'inner fallback', {})},
+    )
+
+    assert translator.translate(message, lang='en_US') == 'Outer: inner'

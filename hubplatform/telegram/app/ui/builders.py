@@ -13,7 +13,7 @@ from hubplatform.telegram.app.menu_ids import MenuIDs
 
 from .callbacks import ClearState
 from .finalizers import StripAndNavigationFinalizer
-
+from .widgets import cancel_button
 
 basic_ui_registry = UIRegistry()
 
@@ -27,13 +27,11 @@ async def build_value_manual_input_menu(
     translator: Translator,
 ) -> MenuBuildingSpec:
     menu_spec = MenuSpec()
-    menu_spec.body_text = translator.translate('hubplatform-telegram_ui-enter-new-page-number')
-
+    menu_spec.body_text = translator.translate('telegram-ui-basic-enter_new_page_number')
     menu_spec.footer_keyboard.append(
-        KeyboardBlockSpec.callback_button(
+        KeyboardBlockSpec.prerendered_block(
             block_id='hubplatform.clear_state',
-            text=translator.translate('cancel'),
-            callback_data=ClearState(),
+            block=cancel_button(open_session_id=None, translator=translator)
         )
     )
 

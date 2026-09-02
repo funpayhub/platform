@@ -1,0 +1,14 @@
+telegram-ui-properties-unknown_node_type = Невідомий тип параметра
+telegram-ui-properties-default_name = Параметри
+telegram-ui-properties-list_param-enter_edit_mode_btn = Змінити
+telegram-ui-properties-list_param-exit_edit_mode_btn = Вихід
+telegram-ui-properties-list_param-add_item = Додати
+telegram-ui-properties-list_param-insert_above = Вставити ↑
+telegram-ui-properties-list_param-insert_below = Вставити ↓
+telegram-ui-properties-list_param-move_up = Вгору
+telegram-ui-properties-list_param-move_down = Вниз
+telegram-ui-properties-list_param-delete = Видалити
+telegram-ui-properties-list_param-cancel_selection = Скасувати
+telegram-ui-properties-editing_param = Редагування параметра
+telegram-ui-properties-enter_new_param_value = Надішліть нове значення параметра.
+telegram-ui-properties-list_param-enter_new_items = Надішліть нові елементи, які потрібно додати до списку.

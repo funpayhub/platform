@@ -18,6 +18,7 @@ from pyconfigtree import (
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
 from hubplatform.i18n.base import Translator
+from hubplatform.i18n.types import I18nString, I18nException
 from hubplatform.telegram.ui import (
     Button,
     Keyboard,
@@ -33,7 +34,7 @@ from hubplatform.telegram.app.menu_ids import MenuIDs, MenuIDs as UINames
 from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
 
 from . import callbacks as cbs
-
+from ..ui.widgets import cancel_button
 
 properties_ui_registry = UIRegistry()
 
@@ -69,7 +70,7 @@ class ListNodeMenuContext(NodeMenuContext):
 
 
 class ManualValueInputContext(NodeMenuContext):
-    open_next_session_id: str
+    open_session_id: str
 
 
 @properties_ui_registry.add_menu_builder(
@@ -87,14 +88,16 @@ async def properties_menu_builder(
         if (builder := _get_node_builder(subnode)) is None:
             menu_spec.main_keyboard.append(
                 KeyboardBlockSpec.callback_button(
-                    block_id='hubplatform.pyconfigtree.unknown_node',
-                    text=tr.translate('hubplatform-telegram_ui-pyconfigtree-unknown_node_type'),
+                    block_id='hubplatform.properties.unknown_node',
+                    text=tr.translate('telegram-ui-properties-unknown_node_type'),
                     callback_data=ui_cbs.Dummy(),
                 )
             )
             continue
         menu_spec.main_keyboard.append(await builder(args=[subnode, tr], data=app_context))
-    menu_spec.header_text = f'<h2>{escape(tr.translate(node.name or "Properties"))}</h2>'
+    menu_spec.header_text = (
+        f'<h2>{escape(tr.translate(node.name or "telegram-ui-properties-default_name"))}</h2>'
+    )
     menu_spec.body_text = f'<i>{escape(tr.translate(node.description))}</i>'
 
     return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
@@ -108,13 +111,19 @@ class ListParamMenuBuilder:
         self,
         ctx: MenuBuildContext[ListNodeMenuContext],
         properties: Properties,
-        tr: Translator,
+        translator: Translator,
         app_context: Mapping[str, Any],
     ) -> MenuBuildingSpec:
         node = properties.get_parameter(ctx.context.node_path)
         menu_spec = MenuSpec()
         if not isinstance(node, ListParameter):
-            raise TypeError('Cannot build list param menu for not a ListParameter.')
+            raise I18nException(
+                I18nString(
+                    key='telegram-ui-properties-list_param-err-not_a_list_param',
+                    fallback='Cannot build list param menu for not a ListParameter.',
+                    kwargs={},
+                )
+            )
         for index, val in enumerate(node.value):
             if ctx.context.editing:
                 menu_spec.main_keyboard.append(
@@ -126,7 +135,7 @@ class ListParamMenuBuilder:
             else:
                 menu_spec.main_keyboard.append(
                     KeyboardBlockSpec.copy_text_button(
-                        block_id=f'hubplatform.pyconfigtree.list_param.item.{index}',
+                        block_id=f'hubplatform.properties.list_param.item.{index}',
                         text=str(val),
                         copy_text=str(val),
                     )
@@ -135,26 +144,33 @@ class ListParamMenuBuilder:
         menu_spec.footer_keyboard.append(
             KeyboardBlockSpec(
                 block_id='hubplatform.properties.list_param.edit_panel',
-                builder=partial(self.edit_panel, ctx),
+                builder=partial(self.edit_panel, ctx=ctx, translator=translator),
             )
         )
 
         if ctx.context.selected_indexes and ctx.context.editing:
             menu_spec.footer_keyboard.append(
                 KeyboardBlockSpec(
-                    block_id='hubplatform.pyconfigtree.list_param.control',
-                    builder=partial(self.control_panel, ctx.context),
+                    block_id='hubplatform.properties.list_param.control',
+                    builder=partial(self.control_panel, ctx=ctx.context, translator=translator),
                 )
             )
 
-        menu_spec.header_text = f'<h2>{escape(tr.translate(node.name))}</h2>'
-        menu_spec.body_text = f'<i>{escape(tr.translate(node.description))}</i>'
+        menu_spec.header_text = f'<h2>{escape(translator.translate(node.name))}</h2>'
+        menu_spec.body_text = f'<i>{escape(translator.translate(node.description))}</i>'
         return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
-    async def edit_panel(self, ctx: MenuBuildContext[ListNodeMenuContext]) -> Keyboard:
+    async def edit_panel(
+        self, ctx: MenuBuildContext[ListNodeMenuContext], translator: Translator
+    ) -> Keyboard:
+        edit_text = (
+            'telegram-ui-properties-list_param-enter_edit_mode_btn'
+            if not ctx.context.editing
+            else 'telegram-ui-properties-list_param-exit_edit_mode_btn'
+        )
         edit_button = Button(
-            button_id='hubplatform.pyconfigtree.list_param.toggle_editing_mode',
-            text='Изменить' if not ctx.context.editing else 'Выход',
+            button_id='hubplatform.properties.list_param.toggle_editing_mode',
+            text=translator.translate(edit_text),
             callback_data=ui_cbs.OpenMenu(
                 menu_id=UINames.properties.list_param_menu,
                 context=ctx.context.model_copy(update={'editing': not ctx.context.editing}).dump(),
@@ -168,7 +184,7 @@ class ListParamMenuBuilder:
         if not ctx.context.editing:
             add_button = Button(
                 button_id='hubplatform.pyconfigtree.list_param.add',
-                text='Добавить',
+                text=translator.translate('telegram-ui-properties-list_param-add_item'),
                 callback_data=cbs.InsertItemsInList(node_path=ctx.context.node_path),
             )
             return [[edit_button, add_button]]
@@ -177,14 +193,14 @@ class ListParamMenuBuilder:
             selected = next(iter(ctx.context.selected_indexes))
             up_button = Button(
                 button_id='hubplatform.properties.list_param.insert_items_upper',
-                text='Вставить ↑',
+                text=translator.translate('telegram-ui-properties-list_param-insert_above'),
                 callback_data=cbs.InsertItemsInList(
                     node_path=ctx.context.node_path, index=selected, before=True
                 ),
             )
             down_button = Button(
                 button_id='hubplatform.properties.list_param.insert_items_down',
-                text='Вставить ↓',
+                text=translator.translate('telegram-ui-properties-list_param-insert_below'),
                 callback_data=cbs.InsertItemsInList(
                     node_path=ctx.context.node_path, index=selected
                 ),
@@ -214,13 +230,13 @@ class ListParamMenuBuilder:
         )
         return [[button]]
 
-    async def control_panel(self, ctx: ListNodeMenuContext) -> Keyboard:
+    async def control_panel(self, ctx: ListNodeMenuContext, translator: Translator) -> Keyboard:
         buttons = []
         cancel_ctx = ctx.model_copy(update={'selected_indexes': set()})
         buttons.append(
             Button(
-                button_id='hubplatform.pyconfigtree.list_param.control.move_up',
-                text='Выше',
+                button_id='hubplatform.properties.list_param.control.move_up',
+                text=translator.translate('telegram-ui-properties-list_param-move_up'),
                 callback_data=cbs.ListAction(
                     node_path=ctx.node_path, action='move_up', selected=ctx.selected_indexes
                 ),
@@ -228,8 +244,8 @@ class ListParamMenuBuilder:
         )
         buttons.append(
             Button(
-                button_id='hubplatform.pyconfigtree.list_param.control.move_down',
-                text='Ниже',
+                button_id='hubplatform.properties.list_param.control.move_down',
+                text=translator.translate('telegram-ui-properties-list_param-move_down'),
                 callback_data=cbs.ListAction(
                     node_path=ctx.node_path, action='move_down', selected=ctx.selected_indexes
                 ),
@@ -237,8 +253,8 @@ class ListParamMenuBuilder:
         )
         buttons.append(
             Button(
-                button_id='hubplatform.pyconfigtree.list_param.control.remove',
-                text='Удалить',
+                button_id='hubplatform.properties.list_param.control.remove',
+                text=translator.translate('telegram-ui-properties-list_param-delete'),
                 callback_data=cbs.ListAction(
                     node_path=ctx.node_path, action='remove', selected=ctx.selected_indexes
                 ),
@@ -246,8 +262,8 @@ class ListParamMenuBuilder:
         )
         buttons.append(
             Button(
-                button_id='hubplatform.pyconfigtree.list_param.control.cancel_selection',
-                text='Отмена',
+                button_id='hubplatform.properties.list_param.control.cancel_selection',
+                text=translator.translate('telegram-ui-properties-list_param-cancel_selection'),
                 callback_data=ui_cbs.OpenMenu(
                     menu_id=UINames.properties.list_param_menu,
                     context=cancel_ctx.dump(),
@@ -268,20 +284,17 @@ async def build_value_manual_input_menu(
 ) -> MenuBuildingSpec:
     menu_spec = MenuSpec()
     node = properties.get_parameter(ctx.context.node_path)
-    menu_spec.header_text = translator.translate(
-        'hubplatform-telegram_ui-you-are-editing-parameter',
-        parameter_name=translator.translate(node.name),
-    )
+    menu_spec.header_text = f"""
+<h2>
+    {translator.translate('telegram-ui-properties-editing_param')} 
+    {escape(translator.translate(node.name))}
+</h2>"""
     menu_spec.body_text = f'<i>{escape(translator.translate(node.description))}</i>'
-    menu_spec.footer_text = translator.translate(
-        'hubplatform-telegram_ui-enter-new-parameter-value'
-    )
-
+    menu_spec.footer_text = translator.translate('telegram-ui-properties-enter_new_param_value')
     menu_spec.footer_keyboard.append(
-        KeyboardBlockSpec.callback_button(
-            block_id='hubplatform.clear_state',
-            text=translator.translate('cancel'),
-            callback_data=ui_cbs.ClearState(open_session_id=ctx.context.open_next_session_id),
+        KeyboardBlockSpec.prerendered_block(
+            block_id='hubplatform.cancel',
+            block=cancel_button(open_session_id=ctx.context.open_session_id, translator=translator)
         )
     )
 
@@ -299,20 +312,20 @@ async def build_list_input_menu(
 ) -> MenuBuildingSpec:
     menu_spec = MenuSpec()
     node = properties.get_parameter(ctx.context.node_path)
-    menu_spec.header_text = translator.translate(
-        'hubplatform-telegram_ui-you-are-editing-parameter',
-        parameter_name=translator.translate(node.name),
-    )
+    menu_spec.header_text = f"""
+<h2>
+    {translator.translate('telegram-ui-properties-editing_param')} 
+    {escape(translator.translate(node.name))}
+</h2>"""
     menu_spec.body_text = f'{escape(translator.translate(node.description))}'
-    menu_spec.footer_text = (
-        '<i>' + translator.translate('hubplatform-telegram_ui-enter-new_items') + '</i>'
+    menu_spec.footer_text = translator.translate(
+        'telegram-ui-properties-list_param-enter_new_items'
     )
 
     menu_spec.footer_keyboard.append(
-        KeyboardBlockSpec.callback_button(
-            block_id='hubplatform.clear_state',
-            text=translator.translate('cancel'),
-            callback_data=ui_cbs.ClearState(open_session_id=ctx.context.open_next_session_id),
+        KeyboardBlockSpec.prerendered_block(
+            block_id='hubplatform.cancel',
+            block=cancel_button(open_session_id=ctx.context.open_session_id, translator=translator)
         )
     )
 
@@ -322,7 +335,7 @@ async def build_list_input_menu(
 @register_node_button_builder(Properties)
 async def props_btn_builder(node: Properties, i18n: Translator) -> KeyboardBlockSpec:
     return KeyboardBlockSpec.callback_button(
-        block_id='hubplatform.pyconfigtree:properties',
+        block_id='hubplatform.properties:properties',
         text=i18n.translate(node.name),
         callback_data=ui_cbs.OpenMenu(
             menu_id=MenuIDs.properties.properties_menu,
@@ -334,7 +347,7 @@ async def props_btn_builder(node: Properties, i18n: Translator) -> KeyboardBlock
 @register_node_button_builder(BoolParameter)
 async def bool_param_btn_builder(node: BoolParameter, i18n: Translator) -> KeyboardBlockSpec:
     return KeyboardBlockSpec.callback_button(
-        block_id='hubplatform.pyconfigtree:bool_param',
+        block_id='hubplatform.properties:bool_param',
         text=f'{i18n.translate(node.name)}',
         callback_data=cbs.NextValue(node_path=list(node.path)),
         style='danger' if not node.value else 'success',
@@ -362,7 +375,7 @@ async def manual_input_btn_builder(
         raise ValueError('Unsupported node type.')
 
     return KeyboardBlockSpec.callback_button(
-        block_id=f'hubplatform.pyconfigtree.{block_id}',
+        block_id=f'hubplatform.properties.{block_id}',
         text=i18n.translate(node.name),
         callback_data=cbs.ManualValueInput(node_path=list(node.path)),
     )
@@ -371,7 +384,7 @@ async def manual_input_btn_builder(
 @register_node_button_builder(ListParameter)
 async def list_param_btn_builder(node: ListParameter[Any], i18n: Translator) -> KeyboardBlockSpec:
     return KeyboardBlockSpec.callback_button(
-        block_id='hubplatform.pyconfigtree.list_param',
+        block_id='hubplatform.properties.list_param',
         text=i18n.translate(node.name),
         callback_data=ui_cbs.OpenMenu(
             menu_id=MenuIDs.properties.list_param_menu,

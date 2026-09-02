@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from html import escape
+
 from hubplatform.i18n import Translator
 from hubplatform.telegram.ui import (
     MenuSpec,
@@ -52,7 +54,7 @@ async def build_expression_categories_list_menu(
     menu_spec.footer_keyboard.append(
         KeyboardBlockSpec.callback_button(
             block_id='show_expressions',
-            text=translator.translate('Показать выражения'),
+            text=translator.translate('telegram-ui-expressions-show_expressions_btn'),
             callback_data=OpenMenu(
                 menu_id=MenuIDs.expressions.expressions_list_menu,
                 context=ExpressionsListMenuContext().dump(),
@@ -62,11 +64,10 @@ async def build_expression_categories_list_menu(
         )
     )
 
-    menu_spec.header_text = translator.translate('<h2>Выражения</h2>')
-    menu_spec.body_text = translator.translate(
-        'Выражения позволяют автоматически подставлять нужные данные в тексты, которые '
-        'отправляются пользователям: в сообщения, ответы на заказы, ответы на отзывы и т.д.'
+    menu_spec.header_text = (
+        f'<h2>{translator.translate("telegram-ui-expressions-menu_title")}</h2>'
     )
+    menu_spec.body_text = translator.translate('telegram-ui-expressions-desc')
     return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
 
@@ -103,7 +104,7 @@ async def build_expressions_list_menu(
         menu_spec.footer_keyboard.append(
             KeyboardBlockSpec.callback_button(
                 block_id='show_categories',
-                text=translator.translate('Показать категории'),
+                text=translator.translate('telegram-ui-expressions-show_categories_btn'),
                 callback_data=OpenMenu(
                     menu_id=MenuIDs.expressions.expression_categories_list_menu,
                     context=MenuContext().dump(),
@@ -118,9 +119,9 @@ async def build_expressions_list_menu(
             KeyboardBlockSpec.callback_button(
                 block_id='toggle_expand_categories',
                 text=translator.translate(
-                    'Показать подкатегории'
+                    'telegram-ui-expressions-show_subcategories_btn'
                     if not ctx.context.expand_subcategories
-                    else 'Скрыть подкатегории'
+                    else 'telegram-ui-expressions-hide_subcategories_btn'
                 ),
                 callback_data=OpenMenu(
                     menu_id=MenuIDs.expressions.expressions_list_menu,
@@ -134,15 +135,13 @@ async def build_expressions_list_menu(
             )
         )
 
-    menu_spec.header_text = translator.translate('<h2>Выражения</h2>')
+    menu_spec.header_text = (
+        f'<h2>{translator.translate("telegram-ui-expressions-menu_title")}</h2>'
+    )
     if ctx.context.category_id is not None:
         category = expressions_registry.categories[ctx.context.category_id]
-        menu_spec.header_text += f'<h3>{translator.translate(category.name)}</h3>'
-
-    menu_spec.body_text = translator.translate(
-        'Выражения позволяют автоматически подставлять нужные данные в тексты, которые '
-        'отправляются пользователям: в сообщения, ответы на заказы, ответы на отзывы и т.д.'
-    )
+        menu_spec.header_text += f'<h3>{escape(translator.translate(category.name))}</h3>'
+    menu_spec.body_text = translator.translate('telegram-ui-expressions-desc')
 
     return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
@@ -161,13 +160,15 @@ class ExpressionDocsMenuBuilder:
         expression = expressions_registry.expressions[ctx.context.expression_id]
         menu_spec = MenuSpec()
         menu_spec.header_text = translator.translate(
-            f'<h2>Выражение <code>${expression.id}()</code></h2>'
+            f'<h2>Выражение <code>${escape(expression.id)}()</code></h2>'
         )
-        menu_spec.header_text += translator.translate(f'<h4>{expression.name}</h4>')
+        menu_spec.header_text += f'<h4>{escape(translator.translate(expression.name))}</h4>'
 
         menu_spec.body_text = translator.translate(expression.description.overview)
         if expression.description.args_doc:
-            menu_spec.body_text += '<hr /><h3>Параметры</h3>'
+            menu_spec.body_text += (
+                f'<hr /><h3>{translator.translate("telegram-ui-expressions-parameters")}</h3>'
+            )
             for arg in expression.description.args_doc.values():
                 menu_spec.body_text += self.build_arg_doc(arg, translator)
 
@@ -175,35 +176,75 @@ class ExpressionDocsMenuBuilder:
 
     def build_arg_doc(self, arg_doc: ArgDocs, translator: Translator) -> str:
         kinds = {
-            'normal': 'По порядку или по имени',
-            'positional_only': 'Только по порядку',
-            'keyword_only': 'Только по имени',
+            'normal': 'telegram-ui-expressions-parameter_kind-normal',
+            'positional_only': 'telegram-ui-expressions-parameter_kind-positional_only',
+            'keyword_only': 'telegram-ui-expressions-parameter_kind-kw_only',
         }
-        kind = kinds.get(arg_doc.kind, translator.translate(arg_doc.kind))
-        rows = [
-            f'<tr><th align="center">Свойство</th><th align="center">Значение</th></tr>'
-            f'<tr><td>Имя</td><td><code>{arg_doc.key}</code></td></tr>',
-            f'<tr><td>Обязательный</td><td>'
-            f'{"Нет" if arg_doc.default is not None else "Да"}</td></tr>',
-            f'<tr><td>Как передавать</td><td>{kind}</td></tr>',
-        ]
+        kind = kinds.get(arg_doc.kind, arg_doc.kind)
+        table = f"""
+<tr>
+    <th align="center">
+        {translator.translate('telegram-ui-expressions-params_table-property')}
+    </th>
+    <th align="center">
+        {translator.translate('telegram-ui-expressions-params_table-value')}
+    </th>
+</tr>
+<tr>
+    <td>{translator.translate('telegram-ui-expressions-params_table-name')}</td>
+    <td><code>{escape(arg_doc.key)}</code></td>
+</tr>
+<tr>
+    <td>{translator.translate('telegram-ui-expressions-params_table-is_required')}</td>
+    <td>
+        {
+            translator.translate('telegram-ui-expressions-params_table-not_required')
+            if arg_doc.default is not None
+            else translator.translate('telegram-ui-expressions-params_table-required')
+        }
+    </td>
+</tr>
+<tr>
+    <td>{translator.translate('telegram-ui-expressions-params_table-kind')}</td>
+    <td>{translator.translate(kind)}</td>
+</tr>"""
         if isinstance(arg_doc.possible_values, str):
-            rows.append(
-                f'<tr><td>Возможные значения</td><td>{arg_doc.possible_values}</td></tr>',
-            )
+            table += f"""
+<tr>
+    <td>{translator.translate('telegram-ui-expressions-params_table-possible_values')}</td>
+    <td>{arg_doc.possible_values}</td>
+</tr>"""
         if arg_doc.default is not None:
-            rows.append(f'<tr><td>По умолчанию</td><td><code>{arg_doc.default}</code></td></tr>')
+            table += f"""
+<tr>
+    <td>{translator.translate('telegram-ui-expressions-params_table-default')}</td>
+    <td><code>{escape(arg_doc.default)}</code></td>
+</tr>
+"""
 
-        total = f'<table bordered striped>{"".join(rows)}</table>'
+        total = f'<table bordered striped>{table}</table>'
 
         if isinstance(arg_doc.possible_values, dict):
-            rows = ['<tr><th align="center">Значение</th><th align="center">Описание</th></tr>']
-            rows.extend(
-                f'<tr><td><code>{key}</code></td><td>{desc}</td></tr>'
+            values_table = f"""
+<tr>
+    <th align="center">
+        {translator.translate('telegram-ui-expressions-possible_values_table-value')}
+    </th>
+    <th align="center">
+        {translator.translate('telegram-ui-expressions-possible_values_table-desc')}
+    </th>
+</tr>
+"""
+            values_table += ''.join(
+                f'<tr><td><code>{escape(key)}</code></td><td>{translator.translate(desc)}</td></tr>'
                 for key, desc in arg_doc.possible_values.items()
             )
-            table = f'<table bordered striped>{"".join(rows)}</table>'
-            total += f'<hr /><h4>Возможные значения</h4>{table}'
+            total += (
+                f'<hr /><h4>'
+                f'{translator.translate("telegram-ui-expressions-params_table-possible_values")}'
+                f'</h4>'
+                f'<table bordered striped>{values_table}</table>'
+            )
 
         total = f'<i>{arg_doc.overview}</i>\n{total}'
         return (

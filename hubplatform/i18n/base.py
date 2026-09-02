@@ -12,6 +12,8 @@ from abc import ABCMeta, abstractmethod
 from pathlib import Path
 from importlib.resources.abc import Traversable
 
+from hubplatform.i18n.types import I18nString, TranslationResult
+
 
 type TranslationSource = str | Path | Traversable
 
@@ -23,8 +25,25 @@ class Translator(metaclass=ABCMeta):
     @abstractmethod
     def add_translations(self, source: TranslationSource) -> None: ...
 
+    def translate(
+        self,
+        val: str | I18nString,
+        variables: dict[str, Any] | None = None,
+        *,
+        lang: str | None = None,
+    ) -> TranslationResult:
+        if isinstance(val, I18nString):
+            return val.translate_(self, lang=lang)
+        return self.translate_string(val, variables, lang=lang)
+
     @abstractmethod
-    def translate(self, text: str, **variables: Any) -> str: ...
+    def translate_string(
+        self,
+        string: str,
+        variables: dict[str, Any] | None = None,
+        *,
+        lang: str | None = None,
+    ) -> TranslationResult: ...
 
     @property
     def current_lang(self) -> str:

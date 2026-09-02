@@ -7,6 +7,7 @@ __all__ = [
     'FluentTranslator',
 ]
 
+from importlib.resources.abc import Traversable
 from typing import Any, cast
 from pathlib import Path
 from collections.abc import Generator
@@ -16,6 +17,7 @@ from fluent.runtime import FluentLocalization, AbstractResourceLoader
 from fluent.syntax.ast import Resource
 
 from .base import Translator, TranslationSource
+from .types import TranslationResult
 
 
 class ResourceLoader(AbstractResourceLoader):
@@ -27,19 +29,21 @@ class ResourceLoader(AbstractResourceLoader):
     def resources(
         self, locale: str, resource_ids: list[str]
     ) -> Generator[list[Resource], None, None]:
-        path = self.source / locale
+        yield self._get_resources(self.source / locale)
+
+    def _get_resources(self, path: Path | Traversable) -> list[Resource]:
         if not path.is_dir():
-            yield []
-            return
+            return []
 
         resources = []
         for i in path.iterdir():
-            if not i.is_file() or not i.name.endswith('.ftl') or i.name.startswith('.'):
+            if i.is_dir() and not i.name.startswith(('.', '_')):
+                resources.extend(self._get_resources(i))
                 continue
-
+            if not i.is_file() or not i.name.endswith('.ftl') or i.name.startswith(('.', '_')):
+                continue
             resources.append(FluentParser().parse(i.read_text(encoding='utf-8')))
-        yield resources
-
+        return resources
 
 class Localization(FluentLocalization):
     def format_value(self, msg_id: str, args: dict[str, Any] | None = None) -> str:
@@ -57,8 +61,8 @@ class Localization(FluentLocalization):
 class FluentTranslator(Translator):
     def __init__(self, current_lang: str = 'ru_RU') -> None:
         super().__init__(current_lang=current_lang)
-        self._localizers: list[Localization] = []
-        self._sources: set[TranslationSource] = set()
+        self._localizations: dict[str, list[Localization]] = {}
+        self._sources: list[TranslationSource] = []
 
     def add_translations(self, source: TranslationSource) -> None:
         if isinstance(source, str):
@@ -67,24 +71,35 @@ class FluentTranslator(Translator):
         if source in self._sources:
             return
 
-        self._sources.add(source)
-        self._localizers.append(self._localizer_from_source(source))
+        self._sources.append(source)
+        for lang, localizations in self._localizations.items():
+            localizations.append(self._localization_from_source(source, lang))
 
-    def translate(self, text: str, **variables: str) -> str:
-        for i in self._localizers:
+    def translate_string(
+        self,
+        string: str,
+        variables: dict[str, Any] | None = None,
+        *,
+        lang: str | None = None,
+    ) -> TranslationResult:
+        selected_lang = self._current_lang if lang is None else lang
+        for i in reversed(self._localizations_for(selected_lang)):
             try:
-                return i.format_value(text, variables)
+                return TranslationResult(i.format_value(string, variables), translated=True)
             except KeyError:
                 continue
-        return text
+        return TranslationResult(string, translated=False)
 
-    def change_language(self, new_lang: str) -> None:
-        super().change_language(new_lang)
-        self._localizers = [self._localizer_from_source(i) for i in self._sources]
+    def _localizations_for(self, lang: str) -> list[Localization]:
+        if lang not in self._localizations:
+            self._localizations[lang] = [
+                self._localization_from_source(source, lang) for source in self._sources
+            ]
+        return self._localizations[lang]
 
-    def _localizer_from_source(self, source_path: TranslationSource) -> Localization:
+    def _localization_from_source(self, source_path: TranslationSource, lang: str) -> Localization:
         return Localization(
-            locales=[self._current_lang],
+            locales=[lang],
             resource_ids=[],
             resource_loader=ResourceLoader(source_path),
         )
