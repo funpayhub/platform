@@ -37,7 +37,7 @@ class PipDependencyResolver(DependencyResolver):
             'install',
             '--dry-run',
             '--ignore-installed',
-            '--quite',
+            '--quiet',
             '--report',
             '-',
             *[str(i) for i in dependencies],
