@@ -3,9 +3,6 @@ from __future__ import annotations
 
 __all__ = ['DependencyManager', 'global_dependency_manager']
 
-
-__all__ = []
-
 from functools import cache
 from collections.abc import Iterable, Sequence
 

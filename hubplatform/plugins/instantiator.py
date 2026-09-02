@@ -1,5 +1,7 @@
-from collections.abc import Iterable, Callable, Awaitable
+from __future__ import annotations
+
 from typing import Any
+from collections.abc import Callable, Iterable, Awaitable
 
 
 STEP = Callable[[object], Awaitable[Any]]
@@ -26,5 +28,3 @@ class PluginSetupRunner:
 
             for plugin in plugins:
                 await self._steps[step_name](plugin)
-
-
