@@ -57,7 +57,6 @@ BRACKET_COLORS = (
 
 RESET_RE = re.compile(r'\$\$RESET|(?<!\$)\$RESET')
 
-# CSI, OSC, DCS и обычные двухбайтовые ESC-команды.
 ESC_RE = re.compile(
     r'''
     \x1b
@@ -114,68 +113,25 @@ def plain_message(record: logging.LogRecord, translator: Translator | None) -> s
 
 
 class ValueRenderer:
-    def render(
-        self,
-        value: object,
-        *,
-        depth: int = 0,
-        nested: bool = False,
-        ascii_strings: bool = False,
-        seen: set[int] | None = None,
-    ) -> str:
+    def render(self, v: Any, *, depth: int = 0, nested: bool = False, seen: set[int] | None = None) -> str:
         if seen is None:
             seen = set()
 
-        if isinstance(value, Mapping):
-            return self._render_mapping(
-                value,
-                depth=depth,
-                ascii_strings=ascii_strings,
-                seen=seen,
-            )
+        if isinstance(v, Mapping):
+            return self._render_mapping(v, depth=depth, seen=seen)
 
-        if self._is_sequence(value):
-            return self._render_sequence(
-                value,
-                depth=depth,
-                ascii_strings=ascii_strings,
-                seen=seen,
-            )
+        if self._is_sequence(v):
+            return self._render_sequence(v, depth=depth, seen=seen)
 
-        return self._render_scalar(
-            value,
-            nested=nested,
-            ascii_strings=ascii_strings,
-        )
+        return self._render_scalar(v, nested=nested)
 
-    def colorize_formatted(self, text: str, value: object) -> str:
+    def colorize_formatted(self, text: str, value: Any) -> str:
         return self._paint(text, self._value_color(value))
 
-    def _render_scalar(
-        self,
-        value: object,
-        *,
-        nested: bool,
-        ascii_strings: bool,
-    ) -> str:
-        if isinstance(value, str):
-            if nested:
-                text = ascii(value) if ascii_strings else repr(value)
-            else:
-                text = value
-        else:
-            text = repr(value) if nested else str(value)
+    def _render_scalar(self, value: Any, *, nested: bool) -> str:
+        return self.colorize_formatted(repr(value) if nested else str(value), value)
 
-        return self.colorize_formatted(text, value)
-
-    def _render_mapping(
-        self,
-        value: Mapping[object, object],
-        *,
-        depth: int,
-        ascii_strings: bool,
-        seen: set[int],
-    ) -> str:
+    def _render_mapping(self, value: Mapping[Any, Any], *, depth: int, seen: set[int]) -> str:
         object_id = id(value)
         if object_id in seen:
             return self._paint('...', UNKNOWN_COLOR)
@@ -184,21 +140,9 @@ class ValueRenderer:
 
         try:
             items = (
-                self.render(
-                    key,
-                    depth=depth + 1,
-                    nested=True,
-                    ascii_strings=ascii_strings,
-                    seen=seen,
-                )
+                self.render(key, depth=depth + 1, nested=True, seen=seen)
                 + ': '
-                + self.render(
-                    item,
-                    depth=depth + 1,
-                    nested=True,
-                    ascii_strings=ascii_strings,
-                    seen=seen,
-                )
+                + self.render(item, depth=depth + 1, nested=True, seen=seen)
                 for key, item in value.items()
             )
 
@@ -206,14 +150,7 @@ class ValueRenderer:
         finally:
             seen.remove(object_id)
 
-    def _render_sequence(
-        self,
-        value: Sequence[object],
-        *,
-        depth: int,
-        ascii_strings: bool,
-        seen: set[int],
-    ) -> str:
+    def _render_sequence(self, value: Sequence[object], *, depth: int, seen: set[int]) -> str:
         object_id = id(value)
         if object_id in seen:
             return self._paint('...', UNKNOWN_COLOR)
@@ -221,16 +158,7 @@ class ValueRenderer:
         seen.add(object_id)
 
         try:
-            items = [
-                self.render(
-                    item,
-                    depth=depth + 1,
-                    nested=True,
-                    ascii_strings=ascii_strings,
-                    seen=seen,
-                )
-                for item in value
-            ]
+            items = [self.render(i, depth=depth + 1, nested=True, seen=seen) for i in value]
 
             if isinstance(value, tuple):
                 if len(items) == 1:
@@ -269,12 +197,7 @@ class ValueRenderer:
         return f'{RESET}{color}{BOLD}{text}{RESET}'
 
     @staticmethod
-    def _wrap(
-        opening: str,
-        body: str,
-        closing: str,
-        depth: int,
-    ) -> str:
+    def _wrap(opening: str, body: str, closing: str, depth: int) -> str:
         color = BRACKET_COLORS[depth % len(BRACKET_COLORS)]
         opening = f'{RESET}{color}{BOLD}{opening}{RESET}'
         closing = f'{RESET}{color}{BOLD}{closing}{RESET}'
@@ -379,15 +302,9 @@ class ColoredPercentFormatter:
                 and match.group('width') is None
                 and match.group('precision') is None
             ):
-                formatted = self._renderer.render(
-                    value,
-                    ascii_strings=conversion == 'a',
-                )
+                formatted = self._renderer.render(value)
             else:
-                formatted = self._renderer.colorize_formatted(
-                    formatted,
-                    value,
-                )
+                formatted = self._renderer.colorize_formatted(formatted, value)
 
             output.append(formatted)
 
@@ -439,13 +356,7 @@ class BaseFormatter(logging.Formatter):
 
         return str(plugin.manifest.name)
 
-    def append_exception(
-        self,
-        text: str,
-        record: logging.LogRecord,
-        *,
-        color: str = '',
-    ) -> str:
+    def append_exception(self, text: str, record: logging.LogRecord, *, color: str = '') -> str:
         if record.exc_info is not None:
             exception = self.formatException(record.exc_info)
             text += f'\n{color}{exception}{RESET if color else ""}'
@@ -552,7 +463,6 @@ class ConsoleFormatter(BaseFormatter):
 
 class FileFormatter(BaseFormatter):
     def format(self, record: logging.LogRecord) -> str:
-        # translator=None — всегда fallback.
         message = plain_message(record, translator=None)
 
         time = self.formatTime(record, '%Y-%m-%d %H:%M:%S')
@@ -568,8 +478,6 @@ class FileFormatter(BaseFormatter):
         )
 
         result = self.append_exception(result, record)
-
-        # Удаляет и $RESET, и настоящие терминальные команды.
         return strip_control_sequences(result)
 
 
