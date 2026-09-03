@@ -24,14 +24,14 @@ from hubplatform.telegram.ui import (
     KeyboardBlockSpec,
 )
 from hubplatform.goods_source import GoodsSourcesManager
-from hubplatform.telegram.app.ui import callbacks as ui_cbs
-from hubplatform.telegram.app.menu_ids import MenuIDs
-from hubplatform.telegram.app.ui.widgets import (
+from hubplatform.app.telegram.ui import callbacks as ui_cbs
+from hubplatform.app.telegram.menu_ids import MenuIDs
+from hubplatform.app.telegram.ui.widgets import (
     cancel_button,
     confirmable_button,
     text_navigation_buttons,
 )
-from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
+from hubplatform.app.telegram.ui.finalizers import StripAndNavigationFinalizer
 from hubplatform.telegram.callback_data.hash import HashService
 
 from . import callbacks as cbs

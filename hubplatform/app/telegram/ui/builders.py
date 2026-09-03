@@ -9,7 +9,7 @@ from hubplatform.telegram.ui import (
     MenuBuildingSpec,
     KeyboardBlockSpec,
 )
-from hubplatform.telegram.app.menu_ids import MenuIDs
+from hubplatform.app.telegram.menu_ids import MenuIDs
 
 from .widgets import cancel_button
 from .finalizers import StripAndNavigationFinalizer

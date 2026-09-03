@@ -6,7 +6,8 @@ from packaging.version import Version
 from pyconfigtree import Properties
 
 from hubplatform.app.environment import app_environment, AppEnvironment
-from hubplatform.goods_source import GoodsSourcesManager
+from hubplatform.expressions.registry import ExpressionsRegistry, global_expressions_registry
+from hubplatform.goods_source import GoodsSourcesManager, global_sources_manager
 
 
 class HubPlatformApp:
@@ -15,12 +16,18 @@ class HubPlatformApp:
         version: Version | str,
         properties: Properties,
         *,
-        goods_manager: GoodsSourcesManager | None = None,
+        goods_manager: GoodsSourcesManager = global_sources_manager(),
+        expressions_registry: ExpressionsRegistry = global_expressions_registry(),
     ):
         self._version = version if isinstance(version, Version) else Version(version)
         self._properties = properties
-        self._goods_manager = goods_manager if goods_manager is not None else GoodsSourcesManager()
+        self._goods_manager = goods_manager
+        self._expressions_registry = expressions_registry
         self._env = app_environment()
+
+    @property
+    def version(self) -> Version:
+        return self._version
 
     @property
     def properties(self) -> Properties:
@@ -31,10 +38,14 @@ class HubPlatformApp:
         return self._goods_manager
 
     @property
+    def expressions_registry(self) -> ExpressionsRegistry:
+        return self._expressions_registry
+
+    @property
     def environment(self) -> AppEnvironment:
         return self._env
 
-    async def start(self) -> int:
+    async def run(self) -> int:
         ...
 
     async def stop(self) -> None:

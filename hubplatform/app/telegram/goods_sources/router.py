@@ -12,9 +12,9 @@ from aiogram.fsm.context import FSMContext
 from hubplatform.telegram import Router
 from hubplatform.telegram.ui import UIManager, MenuContext
 from hubplatform.goods_source import GoodsError, FileGoodsSource, GoodsSourcesManager
-from hubplatform.telegram.app.utils import abort_input, finish_input
+from hubplatform.app.telegram.utils import abort_input, finish_input
 from hubplatform.telegram.ui.session import MenuFrame
-from hubplatform.telegram.app.menu_ids import MenuIDs
+from hubplatform.app.telegram.menu_ids import MenuIDs
 
 from . import states, builders, callbacks as cbs
 from ._internal import (

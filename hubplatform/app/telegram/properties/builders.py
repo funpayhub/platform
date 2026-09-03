@@ -30,9 +30,9 @@ from hubplatform.telegram.ui import (
     KeyboardBlockSpec,
 )
 from hubplatform.exceptions.base import I18nException
-from hubplatform.telegram.app.ui import callbacks as ui_cbs
-from hubplatform.telegram.app.menu_ids import MenuIDs, MenuIDs as UINames
-from hubplatform.telegram.app.ui.finalizers import StripAndNavigationFinalizer
+from hubplatform.app.telegram.ui import callbacks as ui_cbs
+from hubplatform.app.telegram.menu_ids import MenuIDs, MenuIDs as UINames
+from hubplatform.app.telegram.ui.finalizers import StripAndNavigationFinalizer
 
 from . import callbacks as cbs
 from ..ui.widgets import cancel_button
