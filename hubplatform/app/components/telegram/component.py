@@ -9,6 +9,7 @@ from hubplatform.telegram.ui import UIManager, UIRegistry, global_ui_manager
 from hubplatform.app.app_component import HubPlatformAppComponent
 from hubplatform.telegram.commands import CommandsRegistry, global_commands_registry
 from hubplatform.telegram.callback_data.hash import HashService
+import asyncio
 
 from . import TELEGRAM_APP_ROUTER, TELEGRAM_APP_UI_REGISTRY
 
@@ -30,6 +31,10 @@ class TelegramComponent(HubPlatformAppComponent):
 
         self._dispatcher.include_router(TELEGRAM_APP_ROUTER)
         self._ui_manager.ui_registry.merge_from(TELEGRAM_APP_UI_REGISTRY)
+
+    @property
+    def component_name(self) -> str:
+        return 'hubplatform.telegram'
 
     @property
     def token(self) -> str:
@@ -59,14 +64,19 @@ class TelegramComponent(HubPlatformAppComponent):
     def commands_registry(self) -> CommandsRegistry:
         return self._commands_registry
 
-    async def run(self) -> None: ...
+    async def run(self) -> None:
+        await self._dispatcher.start_polling(self._bot)
 
-    async def stop(self) -> None: ...
+    async def stop(self) -> None:
+        if self._dispatcher._stop_signal is None:
+            self._dispatcher._stop_signal = asyncio.Event()
+        self._dispatcher._stop_signal.set()
 
-    async def wait_stop(self) -> None: ...
+    async def wait_stop(self) -> None:
+        await self._dispatcher._stopped_signal.wait()
 
     async def setup_context(self, context: AppContext) -> None:
-        name = 'telegram_component'
+        name = self.component_name
         context.require(name, 'properties', lambda v: isinstance(v, Properties))
         context.require(name, 'telegram', lambda v: v is self)
         context.require(name, 'telegram_dispatcher', lambda v: v is self.dispatcher)
