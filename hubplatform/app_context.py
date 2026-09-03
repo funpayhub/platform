@@ -3,12 +3,12 @@ from __future__ import annotations
 
 __all__ = ['AppContext']
 
-from collections import defaultdict
-
+import inspect
 from typing import Any, Self
 from dataclasses import dataclass
-from collections.abc import Callable, Iterator, Awaitable, Mapping
-import inspect
+from collections import defaultdict
+from collections.abc import Mapping, Callable, Iterator, Awaitable
+
 
 @dataclass(frozen=True)
 class _ProvidedValue:
@@ -65,9 +65,7 @@ class AppContext(Mapping[str, Any]):
                 raise RuntimeError(f'{required_by!r} already required a {key!r}.')
 
             self._requirements[key][required_by] = _Requirement(
-                required_by=required_by,
-                key=key,
-                check=check
+                required_by=required_by, key=key, check=check
             )
 
     def provide(self, provided_by: str, key: str, value: object) -> None:
@@ -105,5 +103,5 @@ class AppContext(Mapping[str, Any]):
 
                 if not result:
                     raise RuntimeError(
-                        f'{requested_by!r} didn\'t accept value of {key!r} ({provided_value!r}).'
+                        f"{requested_by!r} didn't accept value of {key!r} ({provided_value!r})."
                     )
