@@ -10,7 +10,7 @@ __all__ = [
 from hubplatform.i18n import I18nString, Translator
 from hubplatform.telegram.ui import Button, MenuContext
 from hubplatform.telegram.callback_data import CallbackData
-from hubplatform.app.telegram.ui.callbacks import (
+from hubplatform.app.components.telegram.ui.callbacks import (
     Dummy,
     ClearState,
     ChangePageTo,

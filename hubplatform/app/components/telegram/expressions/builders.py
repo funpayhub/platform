@@ -12,9 +12,9 @@ from hubplatform.telegram.ui import (
     KeyboardBlockSpec,
 )
 from hubplatform.expressions.registry import ArgDocs, ExpressionsRegistry
-from hubplatform.app.telegram.menu_ids import MenuIDs
-from hubplatform.app.telegram.ui.callbacks import OpenMenu
-from hubplatform.app.telegram.ui.finalizers import StripAndNavigationFinalizer
+from hubplatform.app.components.telegram.menu_ids import MenuIDs
+from hubplatform.app.components.telegram.ui.callbacks import OpenMenu
+from hubplatform.app.components.telegram.ui.finalizers import StripAndNavigationFinalizer
 
 
 expressions_ui_registry = UIRegistry()

@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 
 from hubplatform.telegram.ui import UIManager, MenuContext, MenuViewState
 from hubplatform.telegram.router import Router
-from hubplatform.app.telegram.menu_ids import MenuIDs
+from hubplatform.app.components.telegram.menu_ids import MenuIDs
 
 from . import states, callbacks as cbs
 

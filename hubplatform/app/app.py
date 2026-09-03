@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+
 __all__ = ['HubPlatformApp']
 
-from packaging.version import Version
 from pyconfigtree import Properties
+from packaging.version import Version
 
-from hubplatform.app.environment import app_environment, AppEnvironment
-from hubplatform.expressions.registry import ExpressionsRegistry, global_expressions_registry
 from hubplatform.goods_source import GoodsSourcesManager, global_sources_manager
+from hubplatform.app.environment import AppEnvironment, app_environment
+from hubplatform.expressions.registry import ExpressionsRegistry, global_expressions_registry
 
 
 class HubPlatformApp:
@@ -45,9 +46,6 @@ class HubPlatformApp:
     def environment(self) -> AppEnvironment:
         return self._env
 
-    async def run(self) -> int:
-        ...
+    async def run(self) -> int: ...
 
-    async def stop(self) -> None:
-        ...
-
+    async def stop(self) -> None: ...

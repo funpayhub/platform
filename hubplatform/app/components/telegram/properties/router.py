@@ -12,7 +12,7 @@ from pyconfigtree.exceptions import PyConfigTreeError
 from hubplatform.i18n import Translator
 from hubplatform.telegram import Router
 from hubplatform.telegram.ui import UIManager
-from hubplatform.app.telegram.menu_ids import MenuIDs
+from hubplatform.app.components.telegram.menu_ids import MenuIDs
 
 from . import states, builders, callbacks as cbs
 
