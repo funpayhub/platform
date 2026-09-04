@@ -144,21 +144,28 @@ class HubPlatformApp:
         self._stop_signal.clear()
         self._stopped_signal.clear()
 
-        tasks: list[asyncio.Task[Any]] = [
+        tasks: set[asyncio.Task[Any]] = {
             asyncio.create_task(
                 component.run(),
                 name=component.component_name
             )
             for component in self._components.values()
-        ]
+        }
         stop_task = asyncio.create_task(
             self._stop_signal.wait(),
             name='HubPlatformApp.StopSignalWaiter'
         )
-        tasks.append(stop_task)
+        tasks.add(stop_task)
 
         self._state = AppState.RUNNING
-        done, pending = await asyncio.wait(*tasks)
+        to_wait: set[asyncio.Future[Any]] = tasks
+        while True:
+            done, pending = await asyncio.wait(*to_wait)
+
+            if done and not self._stop_signal.is_set():
+                to_wait = pending
+                # todo: create log report for stopped component.
+                continue
 
         self._stopped_signal.set()
         self._state = AppState.READY
