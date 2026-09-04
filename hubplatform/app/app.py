@@ -4,6 +4,7 @@ from __future__ import annotations
 __all__ = ['HubPlatformApp']
 
 import asyncio
+from enum import Enum, auto
 from typing import Any
 from types import MappingProxyType
 from collections.abc import Mapping, Sequence
@@ -25,6 +26,14 @@ from .dispatching import (
     ParameterValueChangedEvent,
 )
 from .app_component import HubPlatformAppComponent
+
+
+class AppState(Enum):
+    INITIALIZED = auto()
+    SETTING_UP = auto()
+    READY = auto()
+    RUNNING = auto()
+    STOPPING = auto()
 
 
 class HubPlatformApp:
@@ -59,6 +68,8 @@ class HubPlatformApp:
             self._on_parameter_value_changed_hook
         )
 
+        self._state = AppState.INITIALIZED
+
     async def _on_node_attached_hook(self, attached_node: Node, attached_to: Node) -> None:
         event = NodeAttachedEvent(attached_node=attached_node, attached_to=attached_to)
         await self._dispatcher.propagate_event(event)
@@ -70,6 +81,16 @@ class HubPlatformApp:
     async def _on_parameter_value_changed_hook(self, parameter: MutableParameter[Any]) -> None:
         event = ParameterValueChangedEvent(parameter=parameter)
         await self._dispatcher.propagate_event(event)
+
+    def _check_state(self, state: AppState) -> None:
+        if self._state is not state:
+            raise RuntimeError(
+                f'This operation requires app state {state}, but current state is {self._state}'
+            )
+
+    @property
+    def state(self) -> AppState:
+        return self._state
 
     @property
     def version(self) -> Version:
@@ -108,11 +129,22 @@ class HubPlatformApp:
         return MappingProxyType(self._components)
 
     async def setup(self) -> None:
+        self._check_state(AppState.INITIALIZED)
+        self._state = AppState.SETTING_UP
+
         for component in self._components.values():
             await component.setup_context(self._app_context)
 
+        self._state = AppState.READY
+
     async def run(self) -> None:
+        self._check_state(AppState.READY)
+
         tasks = [component.run() for component in self._components.values()]
+
+        self._state = AppState.RUNNING
         finished, pending = await asyncio.wait(*tasks)
+
+        self._state = AppState.READY
 
     def stop(self) -> None: ...
