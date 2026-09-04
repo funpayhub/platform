@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from aiogram import Bot
 from pyconfigtree import Properties
 
@@ -9,7 +11,6 @@ from hubplatform.telegram.ui import UIManager, UIRegistry, global_ui_manager
 from hubplatform.app.app_component import HubPlatformAppComponent
 from hubplatform.telegram.commands import CommandsRegistry, global_commands_registry
 from hubplatform.telegram.callback_data.hash import HashService
-import asyncio
 
 from . import TELEGRAM_APP_ROUTER, TELEGRAM_APP_UI_REGISTRY
 

@@ -3,18 +3,28 @@ from __future__ import annotations
 
 __all__ = ['HubPlatformApp']
 
-from collections.abc import Sequence, Mapping
+import asyncio
+from typing import Any
+from types import MappingProxyType
+from collections.abc import Mapping, Sequence
 
-from pyconfigtree import Properties
+from pyconfigtree import Node, Properties, MutableParameter
 from packaging.version import Version
+from pyconfigtree.parameter.base import ParameterHookTypes
 
+from hubplatform.app_context import AppContext
 from hubplatform.goods_source import GoodsSourcesManager, global_sources_manager
 from hubplatform.app.environment import AppEnvironment, app_environment
 from hubplatform.expressions.registry import ExpressionsRegistry, global_expressions_registry
-from types import MappingProxyType
-import asyncio
+
+from .dispatching import (
+    Router,
+    Dispatcher,
+    NodeAttachedEvent,
+    NodeDetachedEvent,
+    ParameterValueChangedEvent,
+)
 from .app_component import HubPlatformAppComponent
-from hubplatform.app_context import AppContext
 
 
 class HubPlatformApp:
@@ -40,6 +50,26 @@ class HubPlatformApp:
         self._expressions_registry = expressions_registry
         self._app_context = AppContext()
         self._env = app_environment()
+        self._router = Router(name='HubPlatformApp')
+        self._dispatcher = Dispatcher(router=self._router, event_context=self._app_context)
+
+        self._properties.on_node_attached_hook = self._on_node_attached_hook
+        self._properties.on_node_detached_hook = self._on_node_detached_hook
+        self._properties._hooks[ParameterHookTypes.PARAMETER_VALUE_CHANGED] = (
+            self._on_parameter_value_changed_hook
+        )
+
+    async def _on_node_attached_hook(self, attached_node: Node, attached_to: Node) -> None:
+        event = NodeAttachedEvent(attached_node=attached_node, attached_to=attached_to)
+        await self._dispatcher.propagate_event(event)
+
+    async def _on_node_detached_hook(self, detached_node: Node, detached_from: Node) -> None:
+        event = NodeDetachedEvent(detached_node=detached_node, detached_from=detached_from)
+        await self._dispatcher.propagate_event(event)
+
+    async def _on_parameter_value_changed_hook(self, parameter: MutableParameter[Any]) -> None:
+        event = ParameterValueChangedEvent(parameter=parameter)
+        await self._dispatcher.propagate_event(event)
 
     @property
     def version(self) -> Version:
@@ -64,6 +94,14 @@ class HubPlatformApp:
     @property
     def app_context(self) -> AppContext:
         return self._app_context
+
+    @property
+    def dispatcher(self) -> Dispatcher:
+        return self._dispatcher
+
+    @property
+    def router(self) -> Router:
+        return self._router
 
     @property
     def components(self) -> Mapping[str, HubPlatformAppComponent]:

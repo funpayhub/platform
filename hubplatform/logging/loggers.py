@@ -8,5 +8,5 @@ __all__ = [
 from logging import getLogger
 
 
-class telegram:
+class telegram:  # noqa: N801
     ui = getLogger('hubplatform.telegram.ui')
