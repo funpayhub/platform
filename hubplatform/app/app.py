@@ -69,6 +69,8 @@ class HubPlatformApp:
         )
 
         self._state = AppState.INITIALIZED
+        self._stop_signal = asyncio.Event()
+        self._stopped_signal = asyncio.Event()
 
     async def _on_node_attached_hook(self, attached_node: Node, attached_to: Node) -> None:
         event = NodeAttachedEvent(attached_node=attached_node, attached_to=attached_to)
@@ -139,12 +141,32 @@ class HubPlatformApp:
 
     async def run(self) -> None:
         self._check_state(AppState.READY)
+        self._stop_signal.clear()
+        self._stopped_signal.clear()
 
-        tasks = [component.run() for component in self._components.values()]
+        tasks: list[asyncio.Task[Any]] = [
+            asyncio.create_task(
+                component.run(),
+                name=component.component_name
+            )
+            for component in self._components.values()
+        ]
+        stop_task = asyncio.create_task(
+            self._stop_signal.wait(),
+            name='HubPlatformApp.StopSignalWaiter'
+        )
+        tasks.append(stop_task)
 
         self._state = AppState.RUNNING
-        finished, pending = await asyncio.wait(*tasks)
+        done, pending = await asyncio.wait(*tasks)
 
+        self._stopped_signal.set()
         self._state = AppState.READY
 
-    def stop(self) -> None: ...
+    def stop(self) -> None:
+        self._check_state(state=AppState.RUNNING)
+        self._state = AppState.STOPPING
+        self._stop_signal.set()
+
+    async def wait_stopped(self) -> None:
+        await self._stop_signal.wait()
