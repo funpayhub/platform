@@ -12,7 +12,7 @@ class HubPlatformAppComponent(ABC):
     async def run(self) -> None:
         pass
 
-    async def stop(self) -> None:
+    def stop(self) -> None:
         pass
 
     async def wait_stop(self) -> None:

@@ -4,8 +4,8 @@ from __future__ import annotations
 __all__ = ['HubPlatformApp']
 
 import asyncio
-from enum import Enum, auto
 from typing import Any
+from enum import Enum, auto
 from types import MappingProxyType
 from collections.abc import Mapping, Sequence
 
@@ -16,6 +16,7 @@ from pyconfigtree.parameter.base import ParameterHookTypes
 from hubplatform.app_context import AppContext
 from hubplatform.goods_source import GoodsSourcesManager, global_sources_manager
 from hubplatform.app.environment import AppEnvironment, app_environment
+from hubplatform.logging.loggers import app
 from hubplatform.expressions.registry import ExpressionsRegistry, global_expressions_registry
 
 from .dispatching import (
@@ -145,30 +146,59 @@ class HubPlatformApp:
         self._stopped_signal.clear()
 
         tasks: set[asyncio.Task[Any]] = {
-            asyncio.create_task(
-                component.run(),
-                name=component.component_name
-            )
+            asyncio.create_task(component.run(), name=component.component_name)
             for component in self._components.values()
         }
-        stop_task = asyncio.create_task(
-            self._stop_signal.wait(),
-            name='HubPlatformApp.StopSignalWaiter'
-        )
+        stop_task = asyncio.create_task(self._stop_signal.wait(), name='HubPlatformApp.StopSignal')
         tasks.add(stop_task)
 
         self._state = AppState.RUNNING
-        to_wait: set[asyncio.Future[Any]] = tasks
+        to_wait: set[asyncio.Task[Any]] = tasks
         while True:
-            done, pending = await asyncio.wait(*to_wait)
+            done, pending = await asyncio.wait(to_wait, return_when=asyncio.FIRST_COMPLETED)
 
-            if done and not self._stop_signal.is_set():
+            if not self._stop_signal.is_set():
+                _process_done(done, stop_task)
                 to_wait = pending
-                # todo: create log report for stopped component.
                 continue
+            break
+
+        app.main.info('Stopping the app...')
+        _process_done(done, stop_task)
+        for i in pending:
+            try:
+                self._components[i.get_name()].stop()
+            except Exception as e:
+                app.main.error(
+                    'An unexpected error occurred while sending stop request to component %s. '
+                    'Cancelling it...',
+                    i.get_name(),
+                    exc_info=e,
+                )
+                i.cancel()
+
+        done, pending = await asyncio.wait(pending, timeout=30)
+        _process_done(done, stop_task)
+
+        for i in pending:
+            app.main.warning(
+                "Component %s hasn't been stopped in 30 seconds. Cancelling it ...", i.get_name()
+            )
+            i.cancel()
+
+        done, pending = await asyncio.wait(pending, timeout=30)
+        _process_done(done, stop_task)
+        for i in pending:
+            app.main.error("Component %s hasn't been cancelled in 30 seconds.", i.get_name())
+            # todo: return AppStopState(
+            #       stopped_components: set[component],
+            #       errored_components: set[component],
+            #       not_responding: set[component],
+            #   )
 
         self._stopped_signal.set()
         self._state = AppState.READY
+        return
 
     def stop(self) -> None:
         self._check_state(state=AppState.RUNNING)
@@ -176,4 +206,21 @@ class HubPlatformApp:
         self._stop_signal.set()
 
     async def wait_stopped(self) -> None:
-        await self._stop_signal.wait()
+        await self._stopped_signal.wait()
+
+
+def _process_done(done: set[asyncio.Task[Any]], stop_task: asyncio.Task[Any]) -> None:
+    for i in done:
+        if i is stop_task:
+            continue
+
+        try:
+            i.result()
+        except asyncio.CancelledError:
+            app.main.warning('Component %s has been unexpectedly cancelled.', i.get_name())
+        except NotImplementedError:
+            app.main.info('Component %s does not implement long-live service.', i.get_name())
+        except Exception as e:
+            app.main.error('Component %s has been unexpectedly failed.', i.get_name(), exc_info=e)
+        else:
+            app.main.info('Component %s has been stopped.', i.get_name())

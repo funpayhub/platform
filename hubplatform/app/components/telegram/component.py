@@ -68,7 +68,7 @@ class TelegramComponent(HubPlatformAppComponent):
     async def run(self) -> None:
         await self._dispatcher.start_polling(self._bot)
 
-    async def stop(self) -> None:
+    def stop(self) -> None:
         if self._dispatcher._stop_signal is None:
             self._dispatcher._stop_signal = asyncio.Event()
         self._dispatcher._stop_signal.set()
