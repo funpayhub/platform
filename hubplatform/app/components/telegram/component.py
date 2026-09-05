@@ -92,3 +92,5 @@ class TelegramComponent(HubPlatformAppComponent):
         context.provide(name, 'telegram_ui_manager', self.ui_manager)
         context.provide(name, 'telegram_ui_registry', self.ui_registry)
         context.provide(name, 'telegram_hash_service', self.hash_service)
+
+        self._dispatcher.workflow_data = context

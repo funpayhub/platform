@@ -19,6 +19,7 @@ from hubplatform.app.environment import AppEnvironment, app_environment
 from hubplatform.logging.loggers import app
 from hubplatform.expressions.registry import ExpressionsRegistry, global_expressions_registry
 
+from ..i18n import Translator, global_translator
 from .dispatching import (
     Router,
     Dispatcher,
@@ -45,6 +46,7 @@ class HubPlatformApp:
         *,
         goods_manager: GoodsSourcesManager = global_sources_manager(),
         expressions_registry: ExpressionsRegistry = global_expressions_registry(),
+        translator: Translator = global_translator(),
         components: Sequence[HubPlatformAppComponent] = (),
     ):
         self._version = version if isinstance(version, Version) else Version(version)
@@ -58,6 +60,7 @@ class HubPlatformApp:
 
         self._goods_manager = goods_manager
         self._expressions_registry = expressions_registry
+        self._translator = translator
         self._app_context = AppContext()
         self._env = app_environment()
         self._router = Router(name='HubPlatformApp')
@@ -112,6 +115,10 @@ class HubPlatformApp:
         return self._expressions_registry
 
     @property
+    def translator(self) -> Translator:
+        return self._translator
+
+    @property
     def environment(self) -> AppEnvironment:
         return self._env
 
@@ -134,6 +141,12 @@ class HubPlatformApp:
     async def setup(self) -> None:
         self._check_state(AppState.INITIALIZED)
         self._state = AppState.SETTING_UP
+
+        self.app_context.provide('App', 'translator', self.translator)
+        self.app_context.provide('App', 'tr', self.translator)
+        self.app_context.provide('App', 'properties', self.properties)
+        self.app_context.provide('App', 'expressions_registry', self.expressions_registry)
+        self.app_context.provide('App', 'goods_manager', self.goods_manager)
 
         for component in self._components.values():
             await component.setup_context(self._app_context)
