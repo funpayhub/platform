@@ -147,6 +147,7 @@ class HubPlatformApp:
         self.app_context.provide('App', 'properties', self.properties)
         self.app_context.provide('App', 'expressions_registry', self.expressions_registry)
         self.app_context.provide('App', 'goods_manager', self.goods_manager)
+        self.app_context.provide('App', 'app_context', self.app_context)
 
         for component in self._components.values():
             await component.setup_context(self._app_context)

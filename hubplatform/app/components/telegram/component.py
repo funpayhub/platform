@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+
+__all__ = [
+    'TelegramComponent',
+    'TelegramComponentExtension',
+]
+
+
 import asyncio
+from dataclasses import field, dataclass
 
 from aiogram import Bot
 from pyconfigtree import Properties
 
-from hubplatform.telegram import Dispatcher
+from hubplatform.telegram import Router, Dispatcher
 from hubplatform.app_context import AppContext
 from hubplatform.telegram.ui import UIManager, UIRegistry, global_ui_manager
-from hubplatform.app.app_component import HubPlatformAppComponent
-from hubplatform.telegram.commands import CommandsRegistry, global_commands_registry
+from hubplatform.app.app_component import ComponentExtension, HubPlatformAppComponent
+from hubplatform.telegram.commands import Command, CommandsRegistry, global_commands_registry
 from hubplatform.telegram.callback_data.hash import HashService
 
 from . import TELEGRAM_APP_ROUTER, TELEGRAM_APP_UI_REGISTRY
@@ -76,6 +84,22 @@ class TelegramComponent(HubPlatformAppComponent):
     async def wait_stop(self) -> None:
         await self._dispatcher._stopped_signal.wait()
 
+    async def setup_extension(self, extension: ComponentExtension) -> None:
+        if not isinstance(extension, TelegramComponentExtension):
+            raise TypeError(
+                f'Telegram component expects TelegramComponentExtension, '
+                f'not {type(extension).__name__!r}'
+            )
+
+        if extension.ui:
+            self.ui_registry.merge_from(*extension.ui)
+
+        if extension.routers:
+            self._dispatcher.include_routers(*extension.routers)
+
+        # todo: add commands
+        # todo: add checks
+
     async def setup_context(self, context: AppContext) -> None:
         name = self.component_name
         context.require(name, 'properties', lambda v: isinstance(v, Properties))
@@ -93,4 +117,17 @@ class TelegramComponent(HubPlatformAppComponent):
         context.provide(name, 'telegram_ui_registry', self.ui_registry)
         context.provide(name, 'telegram_hash_service', self.hash_service)
 
+        # tmp
+        context.provide(name, 'ui_manager', self.ui_manager)
+        context.provide(name, 'ui_registry', self.ui_registry)
+        context.provide(name, 'commands_registry', self.commands_registry)
+        context.provide(name, 'hash_service', self.hash_service)
+        self._ui_manager.ui_registry._context = context
         self._dispatcher.workflow_data = context
+
+
+@dataclass
+class TelegramComponentExtension(ComponentExtension):
+    ui: list[UIRegistry] = field(default_factory=list)
+    commands: list[Command] = field(default_factory=list)
+    routers: list[Router] = field(default_factory=list)

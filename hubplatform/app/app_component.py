@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-__all__ = ['HubPlatformAppComponent']
+__all__ = ['HubPlatformAppComponent', 'ComponentExtension']
 
 from abc import ABC, abstractmethod
 
@@ -25,3 +25,7 @@ class HubPlatformAppComponent(ABC):
     @abstractmethod
     def component_name(self) -> str:
         pass
+
+
+class ComponentExtension:
+    pass
