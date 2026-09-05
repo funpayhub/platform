@@ -7,19 +7,20 @@ import asyncio
 from typing import Any
 from enum import Enum, auto
 from types import MappingProxyType
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 
 from pyconfigtree import Node, Properties, MutableParameter
 from packaging.version import Version
 from pyconfigtree.parameter.base import ParameterHookTypes
 
+from hubplatform.i18n import Translator, global_translator
 from hubplatform.app_context import AppContext
 from hubplatform.goods_source import GoodsSourcesManager, global_sources_manager
 from hubplatform.app.environment import AppEnvironment, app_environment
 from hubplatform.logging.loggers import app
 from hubplatform.expressions.registry import ExpressionsRegistry, global_expressions_registry
 
-from ..i18n import Translator, global_translator
 from .dispatching import (
     Router,
     Dispatcher,
@@ -27,7 +28,7 @@ from .dispatching import (
     NodeDetachedEvent,
     ParameterValueChangedEvent,
 )
-from .app_component import HubPlatformAppComponent
+from .app_component import ComponentExtension, HubPlatformAppComponent
 
 
 class AppState(Enum):
@@ -57,6 +58,8 @@ class HubPlatformApp:
             if component.component_name in self._components:
                 raise RuntimeError(f'Component {component.component_name} already added.')
             self._components[component.component_name] = component
+
+        self._component_extensions: dict[str, list[ComponentExtension]] = defaultdict(list)
 
         self._goods_manager = goods_manager
         self._expressions_registry = expressions_registry
@@ -137,6 +140,24 @@ class HubPlatformApp:
     @property
     def components(self) -> Mapping[str, HubPlatformAppComponent]:
         return MappingProxyType(self._components)
+
+    def add_component(self, component: HubPlatformAppComponent) -> None:
+        self._check_state(AppState.INITIALIZED)
+        if not isinstance(component, HubPlatformAppComponent):
+            raise TypeError(
+                f'Component must be an instance of HubPlatformAppComponent, '
+                f'not {type(component).__name__!r}'
+            )
+
+        if component.component_name in self._components:
+            raise ValueError(f'Component {component.component_name!r} already added.')
+
+        self._components[component.component_name] = component
+
+    def add_component_extension(
+        self, component_name: str, component_extension: ComponentExtension
+    ) -> None:
+        self._component_extensions[component_name].append(component_extension)
 
     async def setup(self) -> None:
         self._check_state(AppState.INITIALIZED)
