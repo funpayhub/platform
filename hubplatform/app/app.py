@@ -14,13 +14,15 @@ from pyconfigtree import Node, Properties, MutableParameter
 from packaging.version import Version
 from pyconfigtree.parameter.base import ParameterHookTypes
 
-from hubplatform.i18n import Translator, global_translator
+from hubplatform.core import convert_exceptions
+from hubplatform.i18n import Translator, FluentTranslator
 from hubplatform.app_context import AppContext
-from hubplatform.goods_source import GoodsSourcesManager, global_sources_manager
+from hubplatform.goods_source import GoodsSourcesManager
 from hubplatform.app.environment import AppEnvironment, app_environment
 from hubplatform.logging.loggers import app
-from hubplatform.expressions.registry import ExpressionsRegistry, global_expressions_registry
+from hubplatform.expressions.registry import ExpressionsRegistry
 
+from .exceptions import AppSetupError, ComponentExtensionInstallError
 from .dispatching import (
     Router,
     Dispatcher,
@@ -45,9 +47,9 @@ class HubPlatformApp:
         version: Version | str,
         properties: Properties,
         *,
-        goods_manager: GoodsSourcesManager = global_sources_manager(),
-        expressions_registry: ExpressionsRegistry = global_expressions_registry(),
-        translator: Translator = global_translator(),
+        goods_manager: GoodsSourcesManager | None = None,
+        expressions_registry: ExpressionsRegistry | None = None,
+        translator: Translator | None = None,
         components: Sequence[HubPlatformAppComponent] = (),
     ):
         self._version = version if isinstance(version, Version) else Version(version)
@@ -61,9 +63,11 @@ class HubPlatformApp:
 
         self._component_extensions: dict[str, list[ComponentExtension]] = defaultdict(list)
 
-        self._goods_manager = goods_manager
-        self._expressions_registry = expressions_registry
-        self._translator = translator
+        self._goods_manager = goods_manager if goods_manager is not None else GoodsSourcesManager()
+        self._expressions_registry = (
+            expressions_registry if expressions_registry is not None else ExpressionsRegistry()
+        )
+        self._translator = translator if translator is not None else FluentTranslator()
         self._app_context = AppContext()
         self._env = app_environment()
         self._router = Router(name='HubPlatformApp')
@@ -75,9 +79,9 @@ class HubPlatformApp:
             self._on_parameter_value_changed_hook
         )
 
-        self._state = AppState.INITIALIZED
         self._stop_signal = asyncio.Event()
         self._stopped_signal = asyncio.Event()
+        self._state = AppState.INITIALIZED
 
     async def _on_node_attached_hook(self, attached_node: Node, attached_to: Node) -> None:
         event = NodeAttachedEvent(attached_node=attached_node, attached_to=attached_to)
@@ -99,14 +103,17 @@ class HubPlatformApp:
 
     @property
     def state(self) -> AppState:
+        """Current app state."""
         return self._state
 
     @property
     def version(self) -> Version:
+        """App version."""
         return self._version
 
     @property
     def properties(self) -> Properties:
+        """App properties."""
         return self._properties
 
     @property
@@ -159,6 +166,12 @@ class HubPlatformApp:
     ) -> None:
         self._component_extensions[component_name].append(component_extension)
 
+    @convert_exceptions(
+        except_=AppSetupError,
+        exception_factory=lambda: AppSetupError(
+            'An unexpected error occurred while setting up an app.'
+        ),
+    )
     async def setup(self) -> None:
         self._check_state(AppState.INITIALIZED)
         self._state = AppState.SETTING_UP
@@ -173,6 +186,21 @@ class HubPlatformApp:
         for component in self._components.values():
             await component.setup_context(self._app_context)
 
+        for component_name, extensions in self._component_extensions.items():
+            if component_name not in self._components:
+                continue
+
+            component = self._components[component_name]
+            for extension in extensions:
+                async with convert_exceptions(
+                    except_=ComponentExtensionInstallError,
+                    exception_factory=lambda: ComponentExtensionInstallError(
+                        f'An unexpected error occurred while installing an extension for '
+                        f'component {component_name!r}.'
+                    ),
+                ):
+                    await component.install_extension(extension)
+        await self._app_context.lock()
         self._state = AppState.READY
 
     async def run(self) -> None:
@@ -192,14 +220,25 @@ class HubPlatformApp:
         while True:
             done, pending = await asyncio.wait(to_wait, return_when=asyncio.FIRST_COMPLETED)
 
-            if not self._stop_signal.is_set():
+            if stop_task not in done:
                 _process_done(done, stop_task)
                 to_wait = pending
                 continue
             break
 
-        app.main.info('Stopping the app...')
+        if self._state == AppState.STOPPING:
+            app.main.info('Stopping the app...')
+        else:
+            app.main.warning(
+                'A stop signal resieved, but state didnt changed. Changing it, stopping the app.'
+            )
+            self._state = AppState.STOPPING
+
         _process_done(done, stop_task)
+        if not pending:
+            self._mark_stopped()
+            return
+
         for i in pending:
             try:
                 self._components[i.get_name()].stop()
@@ -214,6 +253,9 @@ class HubPlatformApp:
 
         done, pending = await asyncio.wait(pending, timeout=30)
         _process_done(done, stop_task)
+        if not pending:
+            self._mark_stopped()
+            return
 
         for i in pending:
             app.main.warning(
@@ -231,9 +273,13 @@ class HubPlatformApp:
             #       not_responding: set[component],
             #   )
 
-        self._stopped_signal.set()
-        self._state = AppState.READY
+        self._mark_stopped()
         return
+
+    def _mark_stopped(self) -> None:
+        self._stopped_signal.set()
+        self._stated = AppState.READY
+        app.main.info('App stopped.')
 
     def stop(self) -> None:
         self._check_state(state=AppState.RUNNING)

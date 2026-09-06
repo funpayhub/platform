@@ -84,7 +84,7 @@ class TelegramComponent(HubPlatformAppComponent):
     async def wait_stop(self) -> None:
         await self._dispatcher._stopped_signal.wait()
 
-    async def setup_extension(self, extension: ComponentExtension) -> None:
+    async def install_extension(self, extension: ComponentExtension) -> None:
         if not isinstance(extension, TelegramComponentExtension):
             raise TypeError(
                 f'Telegram component expects TelegramComponentExtension, '

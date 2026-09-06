@@ -21,6 +21,9 @@ class HubPlatformAppComponent(ABC):
     async def setup_context(self, context: AppContext) -> None:
         pass
 
+    async def install_extension(self, extension: ComponentExtension) -> None:
+        raise NotImplementedError
+
     @property
     @abstractmethod
     def component_name(self) -> str:
