@@ -176,6 +176,7 @@ class HubPlatformApp:
         self._check_state(AppState.INITIALIZED)
         self._state = AppState.SETTING_UP
 
+        self.app_context.provide('App', 'app', self)
         self.app_context.provide('App', 'translator', self.translator)
         self.app_context.provide('App', 'tr', self.translator)
         self.app_context.provide('App', 'properties', self.properties)
