@@ -29,7 +29,6 @@ from hubplatform.telegram.ui import (
     MenuBuildingSpec,
     KeyboardBlockSpec,
 )
-from hubplatform.exceptions.base import I18nException
 from hubplatform.app.components.telegram.ui import callbacks as ui_cbs
 from hubplatform.app.components.telegram.menu_ids import MenuIDs, MenuIDs as UINames
 from hubplatform.app.components.telegram.ui.finalizers import StripAndNavigationFinalizer
@@ -119,7 +118,7 @@ class ListParamMenuBuilder:
         node = properties.get_parameter(ctx.context.node_path)
         menu_spec = MenuSpec()
         if not isinstance(node, ListParameter):
-            raise I18nException(
+            raise TypeError(
                 I18nString(
                     key='telegram-ui-properties-list_param-err-not_a_list_param',
                     fallback='Cannot build list param menu for not a ListParameter.',

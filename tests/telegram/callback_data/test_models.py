@@ -5,13 +5,13 @@ from dataclasses import dataclass
 import pytest
 
 from hubplatform.core import PydanticSerializableMixin
-from hubplatform.exceptions.telegram import BadCallbackIdentifierError
 from hubplatform.telegram.callback_data import (
     CallbackData,
     validate_identifier,
     is_keyword_callback_data,
     is_positional_callback_data,
 )
+from hubplatform.telegram.callback_data.exceptions import BadCallbackIdentifierError
 
 
 class EmptyCallbackData(CallbackData, identifier='empty'): ...

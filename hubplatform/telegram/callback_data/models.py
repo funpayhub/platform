@@ -23,7 +23,9 @@ from aiogram.types import CallbackQuery
 from aiogram.utils.magic_filter import MagicFilter
 
 from hubplatform.core.pydantic_serializable import pydantic_fallback_serializer
-from hubplatform.exceptions.telegram.callback_data import (
+
+from .compress import CompressionCodecsRegistry, ZLibBase85CompressionCodec
+from .exceptions import (
     CallbackDataPackError,
     CallbackDataUnpackError,
     NotSerializableValueError,
@@ -31,8 +33,6 @@ from hubplatform.exceptions.telegram.callback_data import (
     InvalidCallbackDataFormatError,
     CallbackIdentifierMismatchError,
 )
-
-from .compress import CompressionCodecsRegistry, ZLibBase85CompressionCodec
 from .compact_encoder import dumps_compact, loads_compact
 
 

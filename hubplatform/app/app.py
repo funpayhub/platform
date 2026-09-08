@@ -16,7 +16,7 @@ from pyconfigtree.parameter.base import ParameterHookTypes
 
 from hubplatform.core import convert_exceptions
 from hubplatform.i18n import Translator, FluentTranslator
-from hubplatform.app_context import AppContext
+from hubplatform.app.context import AppContext
 from hubplatform.goods_source import GoodsSourcesManager
 from hubplatform.app.environment import AppEnvironment, app_environment
 from hubplatform.logging.loggers import app

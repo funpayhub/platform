@@ -2,19 +2,20 @@ from __future__ import annotations
 
 
 __all__ = [
+    'CallbackDataError',
     'CallbackDataUnpackError',
-    'InvalidCallbackDataFormatError',
     'CallbackDataPackError',
-    'NotSerializableValueError',
+    'InvalidCallbackDataFormatError',
     'CallbackIdentifierMismatchError',
     'BadCallbackIdentifierError',
+    'NotSerializableValueError',
     'CallbackDataTooLongError',
 ]
 
-from .base import TelegramError
+
+from hubplatform.telegram.exceptions import TelegramError
 
 
-# BASE EXCEPTIONS
 class CallbackDataError(TelegramError): ...
 
 
@@ -26,8 +27,6 @@ class CallbackDataPackError(CallbackDataError):
     """Raised when a callback payload cannot be serialized."""
 
 
-# REAL EXCEPTIONS
-# Parsing exceptions
 class InvalidCallbackDataFormatError(CallbackDataUnpackError):
     """Raised when callback data uses not valid wire format."""
 
@@ -40,7 +39,6 @@ class BadCallbackIdentifierError(CallbackDataError):
     """Raised when a callback identifier does not match the re `[a-zA-Z0-9\\._-]`."""
 
 
-# Packing exceptions
 class NotSerializableValueError(CallbackDataPackError):
     """Raised when a value is unsupported by the positional serializer."""
 

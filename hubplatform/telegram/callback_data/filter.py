@@ -11,10 +11,10 @@ from aiogram.types import CallbackQuery
 from aiogram.filters import Filter
 from aiogram.utils.magic_filter import MagicFilter
 
-from hubplatform.exceptions.telegram import CallbackIdentifierMismatchError
 from hubplatform.telegram.callback_data.hash import HashService
 
 from .models import CallbackData, parse_callback_data
+from .exceptions import CallbackIdentifierMismatchError
 
 
 class CallbackQueryFilter(Filter):

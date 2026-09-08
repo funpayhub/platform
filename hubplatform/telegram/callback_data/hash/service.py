@@ -11,10 +11,9 @@ import hashlib
 from types import MappingProxyType
 from collections.abc import Mapping
 
-from hubplatform.exceptions import BadHashError
-
 from .types import QueryHash
 from .storage import HashStorage, Sqlite3HashStorage
+from .exceptions import BadHashError
 
 
 class HashService:

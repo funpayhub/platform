@@ -5,7 +5,7 @@ __all__ = ['HubPlatformAppComponent', 'ComponentExtension']
 
 from abc import ABC, abstractmethod
 
-from hubplatform.app_context import AppContext
+from hubplatform.app.context import AppContext
 
 
 class HubPlatformAppComponent(ABC):

@@ -14,7 +14,7 @@ from aiogram import Bot
 from pyconfigtree import Properties
 
 from hubplatform.telegram import Router, Dispatcher
-from hubplatform.app_context import AppContext
+from hubplatform.app.context import AppContext
 from hubplatform.telegram.ui import UIManager, UIRegistry, global_ui_manager
 from hubplatform.app.app_component import ComponentExtension, HubPlatformAppComponent
 from hubplatform.telegram.commands import Command, CommandsRegistry, global_commands_registry

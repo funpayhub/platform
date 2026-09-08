@@ -12,12 +12,12 @@ from aiogram.types import CallbackQuery
 from aiogram.fsm.strategy import FSMStrategy
 from aiogram.fsm.storage.base import BaseStorage, BaseEventIsolation
 
-from hubplatform.exceptions import BadHashError
-from hubplatform.exceptions.telegram import CallbackDataUnpackError
 from hubplatform.telegram.callback_data import parse_callback_data
 from hubplatform.telegram.callback_data.hash.service import HashService, global_hash_service
 
 from .router import Router
+from .callback_data.exceptions import CallbackDataUnpackError
+from .callback_data.hash.exceptions import BadHashError
 
 
 async def parse_callback_data_middleware(
