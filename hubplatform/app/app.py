@@ -164,6 +164,12 @@ class HubPlatformApp:
     def add_component_extension(
         self, component_name: str, component_extension: ComponentExtension
     ) -> None:
+        self._check_state(AppState.INITIALIZED)
+        if not isinstance(component_extension, ComponentExtension):
+            raise TypeError(
+                f'Component extension must be an instance of `ComponentExtension`, '
+                f'not {type(component_extension).__name__!r}'
+            )
         self._component_extensions[component_name].append(component_extension)
 
     @convert_exceptions(
@@ -183,6 +189,7 @@ class HubPlatformApp:
         self.app_context.provide('App', 'expressions_registry', self.expressions_registry)
         self.app_context.provide('App', 'goods_manager', self.goods_manager)
         self.app_context.provide('App', 'app_context', self.app_context)
+        self.app_context.provide('App', 'app_env', self.environment)
 
         for component in self._components.values():
             await component.setup_context(self._app_context)
