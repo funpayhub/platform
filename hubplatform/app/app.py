@@ -286,7 +286,7 @@ class HubPlatformApp:
 
     def _mark_stopped(self) -> None:
         self._stopped_signal.set()
-        self._stated = AppState.READY
+        self._state = AppState.READY
         app.main.info('App stopped.')
 
     def stop(self) -> None:

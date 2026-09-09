@@ -11,7 +11,7 @@ __all__ = [
     'ButtonRenderError',
 ]
 
-from hubplatform.exceptions.base import HubPlatformError
+from hubplatform.exceptions import HubPlatformError
 
 
 class TelegramUIError(HubPlatformError): ...

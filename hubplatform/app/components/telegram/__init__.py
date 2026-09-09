@@ -8,7 +8,7 @@ __all__ = [
 
 
 from hubplatform.telegram.ui import UIRegistry
-from hubplatform.telegram.router import Router
+from hubplatform.telegram.dispatching import Router
 
 from .ui.router import ui_router
 from .ui.builders import basic_ui_registry
