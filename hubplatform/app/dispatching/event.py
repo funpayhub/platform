@@ -7,6 +7,9 @@ __all__ = [
     'HubPlatformEvent',
     'NodeAttachedEvent',
     'NodeDetachedEvent',
+    'AppStartedEvent',
+    'AppStoppingEvent',
+    'AppStoppedEvent',
     'ParameterValueChangedEvent',
 ]
 
@@ -15,6 +18,18 @@ from eventry.asyncio import ExtendedEvent
 
 
 class HubPlatformEvent(ExtendedEvent, event_name='__hubplatform_event__'):
+    pass
+
+
+class AppStartedEvent(HubPlatformEvent, event_name='hubplatform_app_started'):
+    pass
+
+
+class AppStoppingEvent(HubPlatformEvent, event_name='hubplatform_app_stopping'):
+    pass
+
+
+class AppStoppedEvent(HubPlatformEvent, event_name='hubplatform_app_stopped'):
     pass
 
 

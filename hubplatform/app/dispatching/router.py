@@ -15,7 +15,14 @@ from eventry.asyncio import (
     DefaultHandlerManager,
 )
 
-from .event import NodeAttachedEvent, NodeDetachedEvent, ParameterValueChangedEvent
+from .event import (
+    AppStartedEvent,
+    AppStoppedEvent,
+    AppStoppingEvent,
+    NodeAttachedEvent,
+    NodeDetachedEvent,
+    ParameterValueChangedEvent,
+)
 
 
 class Router(EventryRouter[Callable[..., Any]]):
@@ -49,6 +56,27 @@ class Router(EventryRouter[Callable[..., Any]]):
             DefaultHandlerManager(
                 'on_node_detached',
                 NodeDetachedEvent.__event_name__,
+            )
+        )
+
+        self.on_app_started = self.add_handler_manager(
+            DefaultHandlerManager(
+                'on_app_started',
+                AppStartedEvent.__event_name__,
+            )
+        )
+
+        self.on_app_stopping = self.add_handler_manager(
+            DefaultHandlerManager(
+                'on_app_stopping',
+                AppStoppingEvent.__event_name__,
+            )
+        )
+
+        self.on_app_stopped = self.add_handler_manager(
+            DefaultHandlerManager(
+                'on_app_stopped',
+                AppStoppedEvent.__event_name__,
             )
         )
 
