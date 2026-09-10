@@ -4,12 +4,15 @@ from __future__ import annotations
 __all__ = [
     'TELEGRAM_APP_ROUTER',
     'TELEGRAM_APP_UI_REGISTRY',
+    'TelegramComponent',
+    'TelegramComponentExtension',
 ]
 
 
 from hubplatform.telegram.ui import UIRegistry
 from hubplatform.telegram.dispatching import Router
 
+from .component import TelegramComponent, TelegramComponentExtension
 from .ui.router import ui_router
 from .ui.builders import basic_ui_registry
 from .properties.router import props_router
