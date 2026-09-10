@@ -3,9 +3,12 @@ from __future__ import annotations
 
 __all__ = ['HubPlatformAppComponent', 'ComponentExtension']
 
+from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
 
-from hubplatform.app.context import AppContext
+
+if TYPE_CHECKING:
+    from hubplatform.app import HubPlatformApp
 
 
 class HubPlatformAppComponent(ABC):
@@ -18,7 +21,7 @@ class HubPlatformAppComponent(ABC):
     async def wait_stop(self) -> None:
         pass
 
-    async def setup_context(self, context: AppContext) -> None:
+    async def setup(self, app: HubPlatformApp) -> None:
         pass
 
     async def install_extension(self, extension: ComponentExtension) -> None:

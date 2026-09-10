@@ -192,7 +192,7 @@ class HubPlatformApp:
         self.app_context.provide('App', 'app_env', self.environment)
 
         for component in self._components.values():
-            await component.setup_context(self._app_context)
+            await component.setup(self._app_context)
 
         for component_name, extensions in self._component_extensions.items():
             if component_name not in self._components:

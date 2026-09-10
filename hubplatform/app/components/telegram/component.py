@@ -6,19 +6,22 @@ __all__ = [
     'TelegramComponentExtension',
 ]
 
-
 import asyncio
+from typing import TYPE_CHECKING
 from dataclasses import field, dataclass
 
 from aiogram import Bot
 from pyconfigtree import Properties
 
 from hubplatform.telegram import Router, Dispatcher
-from hubplatform.app.context import AppContext
 from hubplatform.telegram.ui import UIManager, UIRegistry, global_ui_manager
 from hubplatform.app.app_component import ComponentExtension, HubPlatformAppComponent
 from hubplatform.telegram.commands import Command, CommandsRegistry, global_commands_registry
 from hubplatform.telegram.callback_data.hash import HashService
+
+
+if TYPE_CHECKING:
+    from hubplatform.app import HubPlatformApp
 
 from . import TELEGRAM_APP_ROUTER, TELEGRAM_APP_UI_REGISTRY
 
@@ -97,10 +100,13 @@ class TelegramComponent(HubPlatformAppComponent):
         if extension.routers:
             self._dispatcher.include_routers(*extension.routers)
 
-        # todo: add commands
-        # todo: add checks
+        for cmd in extension.commands:
+            self._commands_registry.add_command(cmd)
 
-    async def setup_context(self, context: AppContext) -> None:
+        await extension.setup(self)
+
+    async def setup(self, app: HubPlatformApp) -> None:
+        context = app.app_context
         name = self.component_name
         context.require(name, 'properties', lambda v: isinstance(v, Properties))
         context.require(name, 'telegram', lambda v: v is self)
@@ -131,3 +137,6 @@ class TelegramComponentExtension(ComponentExtension):
     ui: list[UIRegistry] = field(default_factory=list)
     commands: list[Command] = field(default_factory=list)
     routers: list[Router] = field(default_factory=list)
+
+    async def setup(self, component: TelegramComponent) -> None:
+        pass
