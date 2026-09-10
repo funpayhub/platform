@@ -6,7 +6,7 @@ from aiogram.types import Message, CallbackQuery as Query
 from aiogram.fsm.context import FSMContext
 
 from hubplatform.telegram.ui import UIManager, MenuContext, MenuViewState
-from hubplatform.telegram.router import Router
+from hubplatform.telegram.dispatching import Router
 from hubplatform.app.components.telegram.menu_ids import MenuIDs
 
 from . import states, callbacks as cbs

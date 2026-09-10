@@ -85,6 +85,8 @@ class TelegramComponent(HubPlatformAppComponent):
         self._dispatcher._stop_signal.set()
 
     async def wait_stop(self) -> None:
+        if self._dispatcher._stopped_signal is None:
+            self._dispatcher._stopped_signal = asyncio.Event()
         await self._dispatcher._stopped_signal.wait()
 
     async def install_extension(self, extension: ComponentExtension) -> None:
@@ -129,7 +131,7 @@ class TelegramComponent(HubPlatformAppComponent):
         context.provide(name, 'commands_registry', self.commands_registry)
         context.provide(name, 'hash_service', self.hash_service)
         self._ui_manager.ui_registry._context = context
-        self._dispatcher.workflow_data = context
+        self._dispatcher.workflow_data = context  # type: ignore[assignment]  # stupid aiogram
 
 
 @dataclass

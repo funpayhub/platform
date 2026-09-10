@@ -192,7 +192,7 @@ class HubPlatformApp:
         self.app_context.provide('App', 'app_env', self.environment)
 
         for component in self._components.values():
-            await component.setup(self._app_context)
+            await component.setup(self)
 
         for component_name, extensions in self._component_extensions.items():
             if component_name not in self._components:
@@ -225,6 +225,9 @@ class HubPlatformApp:
 
         self._state = AppState.RUNNING
         to_wait: set[asyncio.Task[Any]] = tasks
+
+        done: set[asyncio.Task[Any]] = set()  # for type checking
+        pending: set[asyncio.Task[Any]] = set()  # for type checking
         while True:
             done, pending = await asyncio.wait(to_wait, return_when=asyncio.FIRST_COMPLETED)
 
