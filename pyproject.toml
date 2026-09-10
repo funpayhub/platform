@@ -1,96 +1,21 @@
 [project]
-name = "hubplatform"
-version = "0.1.0"
-requires-python = ">=3.14"
-dependencies = [
-    "aiogram>=3.31.0, <3.32.0",
-    "eventry>=0.7.1",
-    "fluent-runtime>=0.4.0, <0.5.0",
-    "pyconfigtree[toml]>=0.3.0,<0.4.0",
-    "pydantic>=2.13.4",
+name = "hubplatform-workspace"
+version = "0.0.0"
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    "packages/hubplatform",
 ]
 
 [dependency-groups]
 dev = [
-    "mypy>=2.3.0",
-    "pre-commit>=4.6.1",
-    "pytest>=9.1.1",
-    "pytest-asyncio>=1.4.0",
-    "ruff>=0.16.2",
+    "mypy",
+    "pre-commit",
+    "pytest",
+    "ruff",
 ]
-
-
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
-
-
-[tool.setuptools.package-data]
-hubplatform = ["**/*.sql", "**/*.ftl"]
-
-
-[tool.tox]
-env_list = ['3.14', '3.15']
-
-
-[tool.pytest]
-markers = [
-    "slow: long-running tests",
-]
-
-
-[tool.tox.env_run_base]
-deps = ["pytest", "pytest-asyncio", "mypy"]
-commands = [
-    ["pytest", "--basetemp={env_tmp_dir}", { replace = "posargs", default = ["tests"], extend = true }],
-    ["mypy", {replace = "posargs", default = ["."], extend = true}]
-]
-
-
-[tool.mypy]
-python_version = '3.14'
-warn_redundant_casts = true
-warn_unused_ignores = true
-strict = true
-pretty = true
-files = ["hubplatform", "tests"]
-
-
-[tool.ruff]
-line-length = 99
-include = [
-    'hubplatform/**/*.py',
-    'tests/**/*.py'
-]
-
-
-[tool.ruff.format]
-quote-style = "single"
-line-ending = "lf"
-indent-style = "space"
-docstring-code-format = true
-
-
-[tool.ruff.lint]
-select = [
-    "I",
-    "N",
-    "C4",
-    "E",
-    "F",
-    "T20",
-    "RET",
-]
-extend-select = ["D212"]
-
-
-[tool.ruff.lint.isort]
-section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
-required-imports = ["from __future__ import annotations"]
-force-to-top = ["typing", "dataclasses"]
-length-sort = true
-lines-between-types = 0
-lines-after-imports = 2
-split-on-trailing-comma = true
-combine-as-imports = true
-
