@@ -1,25 +1,27 @@
 [project]
-name = "hubplatform-workspace"
-version = "0.1.0"
-requires-python = ">=3.13"
-dependencies = []
+name = 'hubplatform-workspace'
+version = '0.0.0'
+requires-python = '>=3.13'
+
 
 [tool.uv]
 package = false
 
+
 [tool.uv.workspace]
 members = [
-    "packages/hubplatform",
-    "packages/hubplatform_runtime"
+    'packages/hubplatform',
+    'packages/hubplatform_runtime'
 ]
+
 
 [dependency-groups]
 dev = [
-    "mypy>=2.3.0",
-    "pre-commit>=4.6.1",
-    "pytest>=9.1.1",
-    "pytest-asyncio>=1.4.0",
-    "ruff>=0.16.2",
+    'mypy>=2.3.0',
+    'pre-commit>=4.6.1',
+    'pytest>=9.1.1',
+    'pytest-asyncio>=1.4.0',
+    'ruff>=0.16.2',
 ]
 
 
@@ -28,10 +30,10 @@ env_list = ['3.14', '3.15']
 
 
 [tool.tox.env_run_base]
-deps = ["pytest", "pytest-asyncio", "mypy"]
+deps = ['pytest', 'pytest-asyncio', 'mypy']
 commands = [
-    ["pytest", "--basetemp={env_tmp_dir}", { replace = "posargs", default = ["tests"], extend = true }],
-    ["mypy", {replace = "posargs", default = ["."], extend = true}]
+    ['pytest', '--basetemp={env_tmp_dir}', { replace = 'posargs', default = ['tests'], extend = true }],
+    ['mypy', {replace = 'posargs', default = ['.'], extend = true}]
 ]
 
 
@@ -41,7 +43,10 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 strict = true
 pretty = true
-files = ["hubplatform", "tests"]
+files = [
+    'packages/hubplatform',
+    'packages/hubplatform_runtime'
+]
 
 
 [tool.ruff]
@@ -53,29 +58,29 @@ include = [
 
 
 [tool.ruff.format]
-quote-style = "single"
-line-ending = "lf"
-indent-style = "space"
+quote-style = 'single'
+line-ending = 'lf'
+indent-style = 'space'
 docstring-code-format = true
 
 
 [tool.ruff.lint]
 select = [
-    "I",
-    "N",
-    "C4",
-    "E",
-    "F",
-    "T20",
-    "RET",
+    'I',
+    'N',
+    'C4',
+    'E',
+    'F',
+    'T20',
+    'RET',
 ]
-extend-select = ["D212"]
+extend-select = ['D212']
 
 
 [tool.ruff.lint.isort]
-section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
-required-imports = ["from __future__ import annotations"]
-force-to-top = ["typing", "dataclasses"]
+section-order = ['future', 'standard-library', 'third-party', 'first-party', 'local-folder']
+required-imports = ['from __future__ import annotations']
+force-to-top = ['typing', 'dataclasses']
 length-sort = true
 lines-between-types = 0
 lines-after-imports = 2
