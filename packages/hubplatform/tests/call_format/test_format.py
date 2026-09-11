@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from hubplatform.expressions.syntax import Call
 from hubplatform.expressions.syntax.parsing import (
     _TOKEN_ALLOWED_CHARS,

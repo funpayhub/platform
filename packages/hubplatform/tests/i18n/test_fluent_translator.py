@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from hubplatform.i18n.types import I18nString
 from hubplatform.i18n.fluent import FluentTranslator
 

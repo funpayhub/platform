@@ -5,7 +5,6 @@ from pathlib import Path
 from collections.abc import Generator
 
 import pytest
-
 from hubplatform.telegram.callback_data.hash import QueryHash, Sqlite3HashStorage
 
 

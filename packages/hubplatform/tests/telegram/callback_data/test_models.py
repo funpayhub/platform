@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pytest
-
 from hubplatform.core import PydanticSerializableMixin
 from hubplatform.telegram.callback_data import (
     CallbackData,

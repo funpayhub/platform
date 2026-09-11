@@ -6,7 +6,6 @@ from itertools import chain
 from collections.abc import Generator
 
 import pytest
-
 from hubplatform.telegram.callback_data.compact_encoder import dumps_compact, loads_compact
 
 
