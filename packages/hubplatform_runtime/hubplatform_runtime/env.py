@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+
+__all__ = ['Environment', 'environment']
+
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from functools import cache
 
 
 @dataclass(frozen=True)
@@ -15,3 +19,8 @@ class Environment:
     PLUGINS_ENV_DIR: Path = Path(
         os.environ.get('HUBPLATFORM_CONFIGS_DIR', Path.cwd() / 'plugins' / 'venv')
     )
+
+
+@cache
+def environment() -> Environment:
+    return Environment()
