@@ -3,8 +3,11 @@ from __future__ import annotations
 
 __all__ = ['ExitCodes']
 
+from enum import IntEnum, unique
 
-class ExitCodes:
+
+@unique
+class ExitCodes(IntEnum):
     SHUTDOWN = 0
     RESTART = 100
     RESTART_SAFE = 101
