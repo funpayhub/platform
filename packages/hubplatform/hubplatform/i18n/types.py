@@ -53,8 +53,8 @@ class I18nString(str):
         *,
         lang: str | None = None,
     ) -> TranslationResult:
-        kwargs = self.prepare_args(translator=translator, lang=lang)
         if translator is not None:
+            kwargs = self.prepare_args(translator=translator, lang=lang)
             result = translator.translate_string(self.key, kwargs, lang=lang)
             if result.translated:
                 return result
