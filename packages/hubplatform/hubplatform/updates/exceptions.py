@@ -10,7 +10,7 @@ __all__ = [
 from packaging.version import Version
 
 from hubplatform.i18n import I18nString
-from hubplatform.app.exceptions import HubPlatformError
+from hubplatform.exceptions import HubPlatformError
 
 
 class VersionManagerError(HubPlatformError):
