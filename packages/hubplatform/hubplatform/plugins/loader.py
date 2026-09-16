@@ -16,7 +16,7 @@ from packaging.requirements import Requirement
 from hubplatform.plugins import PluginManifest
 
 from .plugin import HubPlatformPluginProto
-from .installer import PluginInstaller
+from .injector import PluginInjector
 from .exceptions import PluginError
 
 
@@ -190,7 +190,7 @@ class PluginsLoader:
 
     async def install_plugins(self, app: HubPlatformApp) -> None:
         self._ensure_state(LoaderState.LOADED)
-        installer = PluginInstaller(plugins=tuple(self._loaded_plugins.values()))
+        installer = PluginInjector(plugins=tuple(self._loaded_plugins.values()))
         await installer.install_plugins(app)
 
     def _error(self, exc: Exception, from_: Exception | None = None) -> NoReturn:

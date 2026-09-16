@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 __all__ = [
-    'PluginInstaller',
+    'PluginInjector',
 ]
 
 from typing import TYPE_CHECKING
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from hubplatform.app import HubPlatformApp
 
 
-class PluginInstaller:
+class PluginInjector:
     def __init__(self, plugins: Sequence[LoadedPlugin]) -> None:
         self._plugins = tuple(plugins)
 
