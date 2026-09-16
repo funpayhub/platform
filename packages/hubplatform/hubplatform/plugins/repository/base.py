@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 
 from packaging.version import Version
 
-from .types import PluginDetails, RepositoryPage
+from .types import PluginDetails, PluginRelease, RepositoryPage
 
 
 class PluginsRepository(ABC):
@@ -38,5 +38,15 @@ class PluginsRepository(ABC):
         app_version: Version | None = None,
     ) -> PluginDetails:
         """Return plugin metadata, optionally filtered by application version."""
+
+        ...
+
+    @abstractmethod
+    async def get_release(
+        self,
+        plugin_id: str,
+        plugin_version: Version,
+    ) -> PluginRelease:
+        """Return the exact artifact URI and checksum for a plugin release."""
 
         ...

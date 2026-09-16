@@ -3,6 +3,7 @@ from __future__ import annotations
 
 __all__ = [
     'PluginDetails',
+    'PluginRelease',
     'PluginSummary',
     'RepositoryPage',
 ]
@@ -48,13 +49,22 @@ class PluginSummary(_RepositoryModel):
     latest_compatible_version: RepositoryVersion
 
 
+class PluginRelease(_RepositoryModel):
+    """Download metadata needed by an application-specific artifact fetcher."""
+
+    plugin_id: str = Field(min_length=1)
+    plugin_version: RepositoryVersion
+    artifact_uri: str = Field(min_length=1)
+    sha256: str = Field(pattern=r'^(?:sha256:)?[a-fA-F0-9]{64}$')
+
+
 class PluginDetails(_RepositoryModel):
     """Represents a plugin details."""
 
     plugin_id: str = Field(min_length=1)
     plugin_name: str = Field(min_length=1)
     plugin_description: str = ''
-    versions: tuple[RepositoryVersion, ...] = Field(default_factory=tuple)
+    releases: tuple[PluginRelease, ...] = Field(default_factory=tuple)
 
 
 class RepositoryPage(_RepositoryModel):

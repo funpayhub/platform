@@ -4,7 +4,7 @@ from __future__ import annotations
 __all__ = ['HubPlatformApp']
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from enum import Enum, auto
 from types import MappingProxyType
 from collections import defaultdict
@@ -33,6 +33,10 @@ from .dispatching import (
 from .app_component import ComponentExtension, HubPlatformAppComponent
 
 
+if TYPE_CHECKING:
+    from hubplatform.plugins.control import PluginControl
+
+
 class AppState(Enum):
     INITIALIZED = auto()
     SETTING_UP = auto()
@@ -51,6 +55,7 @@ class HubPlatformApp:
         expressions_registry: ExpressionsRegistry | None = None,
         translator: Translator | None = None,
         components: Sequence[HubPlatformAppComponent] = (),
+        plugins: PluginControl | None = None,
     ):
         self._version = version if isinstance(version, Version) else Version(version)
         self._properties = properties
@@ -68,6 +73,7 @@ class HubPlatformApp:
             expressions_registry if expressions_registry is not None else ExpressionsRegistry()
         )
         self._translator = translator if translator is not None else FluentTranslator()
+        self._plugins = plugins
         self._app_context = AppContext()
         self._env = app_environment()
         self._router = Router(name='HubPlatformApp')
@@ -127,6 +133,12 @@ class HubPlatformApp:
     @property
     def translator(self) -> Translator:
         return self._translator
+
+    @property
+    def plugins(self) -> PluginControl | None:
+        """Plugin administration API exposed to application components and UI."""
+
+        return self._plugins
 
     @property
     def environment(self) -> AppEnvironment:
@@ -190,6 +202,8 @@ class HubPlatformApp:
         self.app_context.provide('App', 'goods_manager', self.goods_manager)
         self.app_context.provide('App', 'app_context', self.app_context)
         self.app_context.provide('App', 'app_env', self.environment)
+        if self.plugins is not None:
+            self.app_context.provide('App', 'plugins', self.plugins)
 
         for component in self._components.values():
             await component.setup(self)
