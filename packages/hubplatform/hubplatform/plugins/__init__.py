@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from .manifest import (
-    LoadedPlugin as LoadedPlugin,
     PluginAuthor as PluginAuthor,
     PluginManifest as PluginManifest,
 )

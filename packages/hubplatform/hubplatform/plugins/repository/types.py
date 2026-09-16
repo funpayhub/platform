@@ -31,6 +31,7 @@ RepositoryVersion = Annotated[
 
 class _RepositoryModel(BaseModel):
     """Common model config for repository models."""
+
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         extra='forbid',
@@ -49,6 +50,7 @@ class PluginSummary(_RepositoryModel):
 
 class PluginDetails(_RepositoryModel):
     """Represents a plugin details."""
+
     plugin_id: str = Field(min_length=1)
     plugin_name: str = Field(min_length=1)
     plugin_description: str = ''

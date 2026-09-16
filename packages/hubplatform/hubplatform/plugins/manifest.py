@@ -4,7 +4,6 @@ from __future__ import annotations
 __all__ = [
     'PluginManifest',
     'PluginAuthor',
-    'LoadedPlugin',
 ]
 
 
@@ -48,10 +47,10 @@ class PluginManifest(_WithDescription):
     name: str
     plugin_version: Version
     entry_point: str = Field(pattern=r'^([a-zA-Z_][a-zA-Z0-9_]*\.)+[a-zA-Z_][a-zA-Z0-9_]*$')
-    author: PluginAuthor | None = Field(default=None)
-    home_page: str | None = Field(default=None)
-    app_version: SpecifierSet
-    dependencies: tuple[Requirement] = Field(default_factory=tuple)
+    author: PluginAuthor | None = None
+    home_page: str | None = None
+    app_version: SpecifierSet = SpecifierSet('>=0.0.0')
+    dependencies: tuple[Requirement, ...] = Field(default_factory=tuple)
     locales_path: str | None = None
 
     @field_validator('plugin_version', mode='before')
@@ -72,7 +71,7 @@ class PluginManifest(_WithDescription):
     @classmethod
     def convert_requirements(
         cls, value: list[str | Requirement] | tuple[str | Requirement, ...]
-    ) -> tuple[Requirement]:
+    ) -> tuple[Requirement, ...]:
         if not isinstance(value, list | tuple):
             raise ValueError(
                 'Dependencies must be a list | tuple of strings or `Requirement` objects.'
@@ -96,10 +95,3 @@ class PluginAuthor(BaseModel):
     website: str | None = Field(default=None)
     social: dict[str, str] | None = Field(default=None)
 
-
-@dataclass
-class LoadedPlugin[PluginCLS]:
-    path: Path
-    manifest: PluginManifest
-    plugin: PluginCLS | None
-    error: Exception | None = None

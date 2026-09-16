@@ -61,7 +61,7 @@ class DependencyManager:
 
 
 @cache
-def global_dependency_manager():
+def global_dependency_manager() -> DependencyManager:
     installer = PipPackageInstaller()
     resolver = PipDependencyResolver()
     return DependencyManager(resolver=resolver, installer=installer)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 import importlib
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 from dataclasses import dataclass
 from copy import copy
 from enum import Enum, auto
@@ -14,6 +14,14 @@ from packaging.version import Version
 from packaging.requirements import Requirement
 
 from hubplatform.plugins import PluginManifest
+
+from .plugin import HubPlatformPluginProto
+from .installer import PluginInstaller
+from .exceptions import PluginError
+
+
+if TYPE_CHECKING:
+    from hubplatform.app import HubPlatformApp
 
 
 class LoaderState(Enum):
@@ -34,11 +42,13 @@ class DiscoveredPlugin:
 class LoadedPlugin:
     path: Path
     manifest: PluginManifest
-    plugin_instance: object
+    plugin_instance: HubPlatformPluginProto
 
     @classmethod
     def from_discovered_plugin(
-        cls, discovered: DiscoveredPlugin, plugin_instance: object
+        cls,
+        discovered: DiscoveredPlugin,
+        plugin_instance: HubPlatformPluginProto,
     ) -> LoadedPlugin:
         return cls(
             path=discovered.path,
@@ -97,7 +107,7 @@ class PluginsLoader:
             manifest = self._load_manifest(manifest_path)
 
             if manifest.plugin_id in self._discovered_plugins:
-                self._error(RuntimeError('plugin duplicate.'))  # todo: custom error
+                self._error(PluginError('plugin duplicate.'))
 
             self._discovered_plugins[manifest.plugin_id] = DiscoveredPlugin(
                 path=subpath, manifest=manifest
@@ -118,10 +128,10 @@ class PluginsLoader:
                 continue
 
             if self._app_version not in plugin.manifest.app_version:
-                err = RuntimeError(
+                err = PluginError(
                     f'Plugin {plugin_id} requires app version {plugin.manifest.app_version}, '
                     f'but current version is {self._app_version}'
-                )  # todo: custom error
+                )
                 self._error(err)
 
             for requirement in plugin.manifest.dependencies:
@@ -137,14 +147,13 @@ class PluginsLoader:
         try:
             installed_version = Version(get_package_version(requirement.name))
         except PackageNotFoundError:
-            # todo: custom error
-            err = RuntimeError(
+            err = PluginError(
                 f'Plugin {plugin_id} requires package {requirement}, but it is not installed.'
             )
             self._error(err)
 
         if installed_version not in requirement.specifier:
-            err = RuntimeError(
+            err = PluginError(
                 f'Plugin {plugin_id} requires package {requirement}, '
                 f'but version {installed_version} installed.'
             )
@@ -166,18 +175,23 @@ class PluginsLoader:
         plugin_cls: Any = getattr(module, class_name, None)
 
         if plugin_cls is None:
-            self._error(RuntimeError('Cannot find plugins entry point'))  # todo: custom error
+            self._error(PluginError('Cannot find plugins entry point'))
 
         try:
             instance = plugin_cls()
         except Exception as e:
-            err = RuntimeError(
+            err = PluginError(
                 f'Cannot instantiate plugin {plugin.manifest.plugin_id!r} '
                 f"('{plugin_module_name}.{module_name}')."
-            )  # todo: custom error
+            )
             self._error(err, e)
 
         return LoadedPlugin.from_discovered_plugin(plugin, instance)
+
+    async def install_plugins(self, app: HubPlatformApp) -> None:
+        self._ensure_state(LoaderState.LOADED)
+        installer = PluginInstaller(plugins=tuple(self._loaded_plugins.values()))
+        await installer.install_plugins(app)
 
     def _error(self, exc: Exception, from_: Exception | None = None) -> NoReturn:
         self._state = LoaderState.FAILED
@@ -185,7 +199,7 @@ class PluginsLoader:
 
     def _ensure_state(self, state: LoaderState) -> None:
         if self._state is not state:
-            raise RuntimeError(
+            raise PluginError(
                 f'Required state for this operation is {state!r}, '
                 f'but current state is {self._state!r}.'
             )
