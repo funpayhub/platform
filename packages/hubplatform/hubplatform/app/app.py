@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-__all__ = ['HubPlatformApp']
+__all__ = ['HubPlatformApp', 'AppState']
 
 import asyncio
 from typing import Any
