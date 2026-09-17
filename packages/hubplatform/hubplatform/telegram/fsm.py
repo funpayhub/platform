@@ -3,7 +3,6 @@ from __future__ import annotations
 
 __all__ = [
     'State',
-    # 'StateFromQuery',
     'StateFilter',
 ]
 
@@ -19,7 +18,6 @@ class State:
     identifier: Final[str] = ''
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
-
         if 'identifier' not in kwargs:
             raise TypeError(f"{cls.__name__} must be defined with keyword argument 'identifier'.")
         identifier = kwargs.pop('identifier', None)
