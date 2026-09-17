@@ -337,11 +337,20 @@ async def build_list_input_menu(
     return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
 
+def _get_emoji_from_node(node: Node) -> str:
+    emoji = node.metadata.get('telegram_ui_emoji')
+    if emoji is None:
+        emoji = node.metadata.get('emoji')
+    if emoji is None:
+        return ''
+    return str(emoji) + ' '
+
+
 @register_node_button_builder(Properties)
 async def props_btn_builder(node: Properties, i18n: Translator) -> KeyboardBlockSpec:
     return KeyboardBlockSpec.callback_button(
         block_id='hubplatform.properties:properties',
-        text=i18n.translate(node.name),
+        text=_get_emoji_from_node(node) + i18n.translate(node.name),
         callback_data=ui_cbs.OpenMenu(
             menu_id=MenuIDs.properties.properties_menu,
             context=NodeMenuContext(node_path=list(node.path)).dump(),
@@ -353,7 +362,7 @@ async def props_btn_builder(node: Properties, i18n: Translator) -> KeyboardBlock
 async def bool_param_btn_builder(node: BoolParameter, i18n: Translator) -> KeyboardBlockSpec:
     return KeyboardBlockSpec.callback_button(
         block_id='hubplatform.properties:bool_param',
-        text=f'{i18n.translate(node.name)}',
+        text=_get_emoji_from_node(node) + i18n.translate(node.name),
         callback_data=cbs.NextValue(node_path=list(node.path)),
         style='danger' if not node.value else 'success',
     )
@@ -381,7 +390,7 @@ async def manual_input_btn_builder(
 
     return KeyboardBlockSpec.callback_button(
         block_id=f'hubplatform.properties.{block_id}',
-        text=i18n.translate(node.name),
+        text=_get_emoji_from_node(node) + i18n.translate(node.name),
         callback_data=cbs.ManualValueInput(node_path=list(node.path)),
     )
 
@@ -390,7 +399,7 @@ async def manual_input_btn_builder(
 async def list_param_btn_builder(node: ListParameter[Any], i18n: Translator) -> KeyboardBlockSpec:
     return KeyboardBlockSpec.callback_button(
         block_id='hubplatform.properties.list_param',
-        text=i18n.translate(node.name),
+        text=_get_emoji_from_node(node) + i18n.translate(node.name),
         callback_data=ui_cbs.OpenMenu(
             menu_id=MenuIDs.properties.list_param_menu,
             context=NodeMenuContext(node_path=list(node.path)).dump(),
