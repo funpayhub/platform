@@ -412,7 +412,7 @@ class ExpressionsRegistry:
         *,
         id: str,
         name: str,
-        description: str,
+        description: str | ExpressionDoc,
         supported_contexts: tuple[type[ExpressionCallContext], ...],
     ) -> _F:
         pass
@@ -424,7 +424,7 @@ class ExpressionsRegistry:
         *,
         id: str,
         name: str,
-        description: str,
+        description: str | ExpressionDoc,
         supported_contexts: tuple[type[ExpressionCallContext], ...],
     ) -> Callable[[_F], _F]:
         pass

@@ -10,6 +10,8 @@ import random
 from typing import Any
 from math import ceil, floor
 from datetime import datetime
+from .registry import ExpressionsRegistry, ExpressionDoc, ArgDocs
+from .call_context import ExpressionCallContext
 
 
 _time_formats = {
@@ -22,6 +24,45 @@ _time_formats = {
 }
 
 
+registry = ExpressionsRegistry()
+registry.add_category(
+    id='hubplatform:common',
+    name='Common',
+    description='Common expressions, that can be used without any context.',
+    include_expressions=(),
+    include_categories=(),
+    supported_contexts=(ExpressionCallContext, )
+)
+
+
+@registry.add_expression(
+    id='hubplatform:time',
+    name='Date & Time',
+    description=ExpressionDoc(
+        overview='Date & Time',
+        args_doc={
+            'mode': ArgDocs(
+                name='Режим',
+                key='mode',
+                overview='Режим форматирования даты и времени',
+                default='time',
+                possible_values={
+                    'time': 'Время в формате ЧЧ:ММ',
+                    'fulltime': 'Время в формате ЧЧ:ММ:СС',
+                    'date': 'Дата в формате ДД.ММ',
+                    'fulldate': 'Дата в формате ДД.ММ.ГГГГ',
+                    'dt': 'Дата и время в формате ДД.ММ ЧЧ:ММ',
+                    'fulldt': 'Дата и время в формате ДД.ММ.ГГГГ ЧЧ:ММ:СС',
+                    'Кастомный формат':
+                        'Любой формат, поддерживающийся Python DateTime. '
+                        'Подробнее: https://docs.python.org/3/library/'
+                        'datetime.html#strftime-strptime-behavior'
+                }
+            )
+        }
+    ),
+    supported_contexts=(ExpressionCallContext, )
+)
 def time_expression(mode: str = 'time') -> str:
     if mode in _time_formats:
         return datetime.now().strftime(_time_formats[mode])
@@ -38,3 +79,4 @@ def round_expression(val: float, mode: str = 'floor') -> float:
     if mode == 'ceil':
         return ceil(val)
     return round(val)
+
