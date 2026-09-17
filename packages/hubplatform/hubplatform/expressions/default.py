@@ -10,7 +10,8 @@ import random
 from typing import Any
 from math import ceil, floor
 from datetime import datetime
-from .registry import ExpressionsRegistry, ExpressionDoc, ArgDocs
+
+from .registry import ArgDocs, ExpressionDoc, ExpressionsRegistry
 from .call_context import ExpressionCallContext
 
 
@@ -31,7 +32,7 @@ registry.add_category(
     description='Common expressions, that can be used without any context.',
     include_expressions=(),
     include_categories=(),
-    supported_contexts=(ExpressionCallContext, )
+    supported_contexts=(ExpressionCallContext,),
 )
 
 
@@ -53,15 +54,14 @@ registry.add_category(
                     'fulldate': 'Дата в формате ДД.ММ.ГГГГ',
                     'dt': 'Дата и время в формате ДД.ММ ЧЧ:ММ',
                     'fulldt': 'Дата и время в формате ДД.ММ.ГГГГ ЧЧ:ММ:СС',
-                    'Кастомный формат':
-                        'Любой формат, поддерживающийся Python DateTime. '
-                        'Подробнее: https://docs.python.org/3/library/'
-                        'datetime.html#strftime-strptime-behavior'
-                }
+                    'Кастомный формат': 'Любой формат, поддерживающийся Python DateTime. '
+                    'Подробнее: https://docs.python.org/3/library/'
+                    'datetime.html#strftime-strptime-behavior',
+                },
             )
-        }
+        },
     ),
-    supported_contexts=(ExpressionCallContext, )
+    supported_contexts=(ExpressionCallContext,),
 )
 def time_expression(mode: str = 'time') -> str:
     if mode in _time_formats:
@@ -79,4 +79,3 @@ def round_expression(val: float, mode: str = 'floor') -> float:
     if mode == 'ceil':
         return ceil(val)
     return round(val)
-
