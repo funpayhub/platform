@@ -22,6 +22,7 @@ from eventry.asyncio.callable_wrappers import CallableWrapper
 from hubplatform.expressions.syntax import Call, StringWithCalls
 from hubplatform.expressions.syntax.parsing import call_decoder
 
+from .query import CategoriesQuery
 from .call_context import ExpressionCallContext
 
 
@@ -253,10 +254,25 @@ _F = TypeVar('_F', bound=Expression)
 class ExpressionsRegistry:
     def __init__(self) -> None:
         self._expressions: dict[str, ExpressionEnvelope] = {}
+        """A dict where each key is an expression ID and value is an actual expression object."""
+
         self._categories: dict[str, ExpressionsCategory] = {}
+        """A dict where each key is a category ID and value is an actual category object."""
 
         self._included_categories: dict[str, set[str]] = defaultdict(set)
+        """A dict where each key is a parent category ID 
+            and value is a set of its subcategory IDs.
+        The referenced categories are not required to exist yet, as inclusion rules may be
+            registered before the corresponding categories are added.
+        """
+
         self._included_expressions: dict[str, set[str]] = defaultdict(set)
+        """A dict, where each key is a parent category ID 
+            and value is a set of its expression IDs.
+        The referenced categories and expressions are not required to exist yet, 
+            as inclusion rules may be registered before the corresponding 
+            categories and expressions are added.
+        """
 
     @property
     def expressions(self) -> Mapping[str, ExpressionEnvelope]:
@@ -510,6 +526,13 @@ class ExpressionsRegistry:
 
         for subcategory_id in self._included_categories[category_id]:
             result.update(self.get_expressions(subcategory_id, expand_subcategories=True))
+        return result
+
+    def query_expressions(self, query: CategoriesQuery) -> dict[str, ExpressionEnvelope]:
+        result = {}
+        for i in self._expressions:
+            if query(i, self):
+                result[i] = self._expressions[i]
         return result
 
     async def format_text(
