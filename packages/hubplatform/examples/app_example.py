@@ -15,6 +15,7 @@ from hubplatform.app.components.telegram import TelegramComponent
 from hubplatform.app.components.telegram.menu_ids import MenuIDs
 from hubplatform.app.components.telegram.properties.builders import NodeMenuContext
 from hubplatform.app.components.telegram.expressions.builders import ExpressionsListMenuContext
+from hubplatform.logging.style import setup_logging
 
 
 props = Properties(node_id='root')
@@ -27,6 +28,7 @@ app = HubPlatformApp(
     translator=global_translator(),
     components=[telegram_component],
 )
+setup_logging(translator=app.translator)
 
 
 # Add some commands to telegram component
