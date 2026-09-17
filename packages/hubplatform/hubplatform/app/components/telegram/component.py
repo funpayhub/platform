@@ -23,8 +23,6 @@ from hubplatform.telegram.callback_data.hash import HashService
 if TYPE_CHECKING:
     from hubplatform.app import HubPlatformApp
 
-from . import TELEGRAM_APP_ROUTER, TELEGRAM_APP_UI_REGISTRY
-
 
 class TelegramComponent(HubPlatformAppComponent):
     def __init__(
@@ -41,6 +39,7 @@ class TelegramComponent(HubPlatformAppComponent):
         self._commands_registry = commands_registry
         self._bot = Bot(token=self._token)
 
+        from . import TELEGRAM_APP_ROUTER, TELEGRAM_APP_UI_REGISTRY  # todo: fix it!
         self._dispatcher.include_router(TELEGRAM_APP_ROUTER)
         self._ui_manager.ui_registry.merge_from(TELEGRAM_APP_UI_REGISTRY)
 
