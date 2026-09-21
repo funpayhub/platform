@@ -17,6 +17,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.package-data]
 'hubplatform' = [
-    'hubplatform/**/*.ftl',
-    'hubplatform/**/*.sql'
+    '**/*.ftl',
+    '**/*.sql'
 ]
