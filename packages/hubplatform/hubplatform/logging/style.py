@@ -39,11 +39,12 @@ LEVEL_NAMES = {
     logging.CRITICAL: 'CRIT',
 }
 
-STRING_COLOR = '\x1b[32m'
-NUMBER_COLOR = '\x1b[33m'
-ERROR_COLOR = '\x1b[31m'
-UNKNOWN_COLOR = '\x1b[37m'
-PLUGIN_COLOR = '\x1b[36m'
+STRING_COLOR = '\x1b[32m'  # Green
+NUMBER_COLOR = '\x1b[33m'  # Yellow
+ERROR_COLOR = '\x1b[31m'  # Red
+UNKNOWN_COLOR = '\x1b[37m'  # White
+PLUGIN_COLOR = '\x1b[36m'  # Cyan
+COMPONENT_COLOR = '\x1b[35m'  # Magenta
 
 BRACKET_COLORS = (
     '\x1b[36m',
@@ -348,15 +349,18 @@ class ColoredPercentFormatter:
 
 
 class BaseFormatter(logging.Formatter):
-    def format_plugin_name(
-        self,
-        record: logging.LogRecord,
-    ) -> str:
+    def format_plugin_name(self, record: logging.LogRecord) -> str:
         plugin = getattr(record, 'plugin', None)
         if plugin is None:
             return ''
 
         return str(plugin.manifest.name)
+
+    def format_component_name(self, record: logging.LogRecord) -> str:
+        component_name = getattr(record, 'hub_component', None)
+        if not component_name:
+            return ''
+        return str(component_name) + ' component'
 
     def append_exception(self, text: str, record: logging.LogRecord, *, color: str = '') -> str:
         if record.exc_info is not None:
@@ -439,7 +443,15 @@ class ConsoleFormatter(BaseFormatter):
             else:
                 plugin_name = f' [{plugin_name}]'
 
-        result = f'{prefix}{time} [{level}]{logger_name}{plugin_name} {message}'
+        component_name = self.format_component_name(record)
+        if component_name:
+            if self.supports_color:
+                if self.supports_color:
+                    component_name = f' {RESET}{COMPONENT_COLOR}{BOLD}[{component_name}]{RESET}'
+                else:
+                    component_name = f' [{component_name}]'
+
+        result = f'{prefix}{time} [{level}]{component_name}{logger_name}{plugin_name} {message}'
 
         result = self.append_exception(
             result,

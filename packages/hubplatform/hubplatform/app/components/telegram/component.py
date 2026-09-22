@@ -40,6 +40,7 @@ class TelegramComponent(HubPlatformAppComponent):
         self._bot = Bot(token=self._token)
 
         from . import TELEGRAM_APP_ROUTER, TELEGRAM_APP_UI_REGISTRY  # todo: fix it!
+
         self._dispatcher.include_router(TELEGRAM_APP_ROUTER)
         self._ui_manager.ui_registry.merge_from(TELEGRAM_APP_UI_REGISTRY)
 
