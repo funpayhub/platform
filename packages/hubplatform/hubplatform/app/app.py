@@ -95,8 +95,8 @@ class HubPlatformApp:
         event = ParameterValueChangedEvent(parameter=parameter)
         await self._dispatcher.propagate_event(event)
 
-    def _check_state(self, state: AppState) -> None:
-        if self._state is not state:
+    def _check_state(self, *state: AppState) -> None:
+        if self._state not in state:
             raise RuntimeError(
                 f'This operation requires app state {state}, but current state is {self._state}'
             )
@@ -164,7 +164,7 @@ class HubPlatformApp:
     def add_component_extension(
         self, component_name: str, component_extension: ComponentExtension
     ) -> None:
-        self._check_state(AppState.INITIALIZED)
+        self._check_state(AppState.INITIALIZED, AppState.SETTING_UP)
         if not isinstance(component_extension, ComponentExtension):
             raise TypeError(
                 f'Component extension must be an instance of `ComponentExtension`, '
