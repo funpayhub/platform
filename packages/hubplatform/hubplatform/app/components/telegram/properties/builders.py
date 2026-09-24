@@ -295,9 +295,7 @@ async def build_value_manual_input_menu(
     menu_spec.footer_keyboard.append(
         KeyboardBlockSpec.prerendered_block(
             block_id='hubplatform.cancel',
-            block=cancel_button(
-                open_session_id=ctx.context.open_session_id, translator=translator
-            ),
+            block=cancel_button(open_session_id=ctx.context.open_session_id),
         )
     )
 
@@ -328,9 +326,7 @@ async def build_list_input_menu(
     menu_spec.footer_keyboard.append(
         KeyboardBlockSpec.prerendered_block(
             block_id='hubplatform.cancel',
-            block=cancel_button(
-                open_session_id=ctx.context.open_session_id, translator=translator
-            ),
+            block=cancel_button(open_session_id=ctx.context.open_session_id),
         )
     )
 

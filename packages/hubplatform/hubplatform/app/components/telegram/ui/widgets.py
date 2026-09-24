@@ -67,14 +67,10 @@ def text_navigation_buttons(id: str, max_pages: int, current_page: int) -> list[
     ]
 
 
-def cancel_button(
-    open_session_id: str | None = None, translator: Translator | None = None
-) -> Button:
+def cancel_button(open_session_id: str | None = None) -> Button:
     return Button(
         button_id='cancel',
-        text=I18nString(key='telegram-ui-basic-widgets-cancel', fallback='Отмена').translate_(
-            translator=translator
-        ),
+        text=I18nString(key='telegram-ui-basic-widgets-cancel', fallback='Отмена'),
         callback_data=ClearState(open_session_id=open_session_id),
         style='danger',
     )
