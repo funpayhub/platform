@@ -349,7 +349,7 @@ def _get_emoji_from_node(node: Node) -> str:
 @register_node_button_builder(Properties)
 async def props_btn_builder(node: Properties, i18n: Translator) -> KeyboardBlockSpec:
     return KeyboardBlockSpec.callback_button(
-        block_id='hubplatform.properties:properties',
+        block_id=f'hubplatform.properties.{":".join(node.path)}',
         text=_get_emoji_from_node(node) + i18n.translate(node.name),
         callback_data=ui_cbs.OpenMenu(
             menu_id=MenuIDs.properties.properties_menu,
@@ -361,18 +361,11 @@ async def props_btn_builder(node: Properties, i18n: Translator) -> KeyboardBlock
 @register_node_button_builder(BoolParameter)
 async def bool_param_btn_builder(node: BoolParameter, i18n: Translator) -> KeyboardBlockSpec:
     return KeyboardBlockSpec.callback_button(
-        block_id='hubplatform.properties:bool_param',
+        block_id=f'hubplatform.properties.{":".join(node.path)}',
         text=_get_emoji_from_node(node) + i18n.translate(node.name),
         callback_data=cbs.NextValue(node_path=list(node.path)),
         style='danger' if not node.value else 'success',
     )
-
-
-_ids = {
-    IntParameter: 'int_param',
-    FloatParameter: 'float_param',
-    StringParameter: 'string_param',
-}
 
 
 @register_node_button_builder(IntParameter)
@@ -382,14 +375,8 @@ async def manual_input_btn_builder(
     node: IntParameter | FloatParameter | StringParameter,
     i18n: Translator,
 ) -> KeyboardBlockSpec:
-    for t, block_id in _ids.items():
-        if isinstance(node, t):
-            break
-    else:
-        raise ValueError('Unsupported node type.')
-
     return KeyboardBlockSpec.callback_button(
-        block_id=f'hubplatform.properties.{block_id}',
+        block_id=f'hubplatform.properties.{":".join(node.path)}',
         text=_get_emoji_from_node(node) + i18n.translate(node.name),
         callback_data=cbs.ManualValueInput(node_path=list(node.path)),
     )
@@ -398,7 +385,7 @@ async def manual_input_btn_builder(
 @register_node_button_builder(ListParameter)
 async def list_param_btn_builder(node: ListParameter[Any], i18n: Translator) -> KeyboardBlockSpec:
     return KeyboardBlockSpec.callback_button(
-        block_id='hubplatform.properties.list_param',
+        block_id=f'hubplatform.properties.{":".join(node.path)}',
         text=_get_emoji_from_node(node) + i18n.translate(node.name),
         callback_data=ui_cbs.OpenMenu(
             menu_id=MenuIDs.properties.list_param_menu,
