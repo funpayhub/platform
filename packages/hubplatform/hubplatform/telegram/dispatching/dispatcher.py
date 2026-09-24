@@ -3,12 +3,12 @@ from __future__ import annotations
 
 __all__ = ['Dispatcher']
 
-
+import html
 from typing import Any
 from collections.abc import Callable
 
 from aiogram import Dispatcher as AiogramDispatcher
-from aiogram.types import CallbackQuery
+from aiogram.types import Message, CallbackQuery, RichMessageButton
 from aiogram.fsm.strategy import FSMStrategy
 from aiogram.fsm.storage.base import BaseStorage, BaseEventIsolation
 
@@ -18,6 +18,25 @@ from hubplatform.telegram.callback_data.hash.service import HashService, global_
 from hubplatform.telegram.callback_data.hash.exceptions import BadHashError
 
 from .router import Router
+
+
+async def unescape_callback_data(
+    handler: Callable[..., Any],
+    event: CallbackQuery,
+    data: dict[str, Any],
+) -> Any:
+    if not event.data or not isinstance(event.message, Message):
+        return await handler(event, data)
+
+    msg = event.message
+    if msg.rich_message:
+        for block in msg.rich_message.blocks:
+            if isinstance(block, RichMessageButton):
+                if block.callback_data == event.data:
+                    object.__setattr__(event, 'data', html.unescape(event.data))
+                    break
+
+    return await handler(event, data)
 
 
 async def parse_callback_data_middleware(
@@ -69,4 +88,5 @@ class Dispatcher(AiogramDispatcher, Router):
             **kwargs,
         )
 
+        self.callback_query.outer_middleware(unescape_callback_data)
         self.callback_query.outer_middleware(parse_callback_data_middleware)  # type: ignore[arg-type]

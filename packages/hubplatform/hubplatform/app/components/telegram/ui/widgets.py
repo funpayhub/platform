@@ -7,7 +7,7 @@ __all__ = [
     'cancel_button',
 ]
 
-from hubplatform.i18n import I18nString, Translator
+from hubplatform.i18n import I18nString
 from hubplatform.telegram.ui import Button, MenuContext
 from hubplatform.telegram.callback_data import CallbackData
 from hubplatform.app.components.telegram.ui.callbacks import (

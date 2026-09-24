@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from hubplatform.i18n import Translator, I18nString
+from hubplatform.i18n import I18nString
 from hubplatform.telegram.ui import (
     MenuSpec,
     UIRegistry,
