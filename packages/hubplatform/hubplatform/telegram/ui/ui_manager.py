@@ -307,6 +307,7 @@ class UIManager:
         *,
         bot: Bot | None = None,
         view_state: MenuViewState | None = None,
+        history: list[MenuFrame] | None = None,
     ) -> MenuDeliveryResult:
         bot = self._bot_from_environment(environment, bot)
         if bot is None:
@@ -326,10 +327,15 @@ class UIManager:
             current=MenuFrame.from_menu_context(menu_id, context, view_state or MenuViewState()),
             context=context,
             environment=environment,
+            history=history,
         )
 
     async def clone_session(
-        self, session_id: str, environment: EnvironmentType, *, bot: Bot | None = None
+        self,
+        session_id: str,
+        environment: EnvironmentType,
+        *,
+        bot: Bot | None = None,
     ) -> MenuDeliveryResult:
         bot = self._bot_from_environment(environment, bot)
         if bot is None:
