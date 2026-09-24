@@ -33,7 +33,7 @@ setup_logging(translator=app.translator)
 
 # Add some commands to telegram component
 @telegram_component.dispatcher.message(Command('props'))
-async def send_props_menu(message: Message, ui_manager: UIManager):
+async def send_props_menu(message: Message, ui_manager: UIManager) -> None:
     await ui_manager.open_menu(
         menu_id=MenuIDs.properties.properties_menu,
         context=NodeMenuContext(node_path=[]),
@@ -42,7 +42,7 @@ async def send_props_menu(message: Message, ui_manager: UIManager):
 
 
 @telegram_component.dispatcher.message(Command('sources'))
-async def send_sources_list_menu(message: Message, ui_manager: UIManager):
+async def send_sources_list_menu(message: Message, ui_manager: UIManager) -> None:
     await ui_manager.open_menu(
         menu_id=MenuIDs.goods_sources.sources_list_menu,
         context=MenuContext(),
@@ -51,7 +51,7 @@ async def send_sources_list_menu(message: Message, ui_manager: UIManager):
 
 
 @telegram_component.dispatcher.message(Command('expressions'))
-async def send_expressions_menu(message: Message, ui_manager: UIManager):
+async def send_expressions_menu(message: Message, ui_manager: UIManager) -> None:
     await ui_manager.open_menu(
         menu_id=MenuIDs.expressions.expressions_list_menu,
         context=ExpressionsListMenuContext(),
@@ -59,7 +59,7 @@ async def send_expressions_menu(message: Message, ui_manager: UIManager):
     )
 
 
-async def main():
+async def main() -> None:
     if app.state is not AppState.READY:
         await app.setup()
 

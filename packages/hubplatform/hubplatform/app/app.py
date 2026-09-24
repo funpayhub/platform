@@ -293,7 +293,7 @@ class HubPlatformApp:
         app.main.info('App stopped.')
 
     def stop(self) -> None:
-        self._check_state(state=AppState.RUNNING)
+        self._check_state(AppState.RUNNING)
         self._state = AppState.STOPPING
         self._stop_signal.set()
 
