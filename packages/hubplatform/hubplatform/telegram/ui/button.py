@@ -7,6 +7,7 @@ import html
 
 from pydantic import BaseModel
 
+from hubplatform.i18n import I18nString, Translator
 from hubplatform.telegram.callback_data import CallbackData
 from hubplatform.telegram.ui.exceptions import ButtonRenderError
 from hubplatform.telegram.callback_data.hash import HashService
@@ -60,15 +61,23 @@ class Button(BaseModel):
 
     disabled: bool = False
 
-    def to_html(self, hash_service: HashService | None = None) -> str:
+    def to_html(
+        self,
+        hash_service: HashService | None = None,
+        translator: Translator | None = None,
+    ) -> str:
         try:
-            return self._to_html(hash_service=hash_service)
+            return self._to_html(hash_service=hash_service, translator=translator)
         except ButtonRenderError:
             raise
         except Exception as e:
             raise ButtonRenderError(button_id=self.button_id) from e
 
-    def _to_html(self, hash_service: HashService | None = None) -> str:
+    def _to_html(
+        self,
+        hash_service: HashService | None = None,
+        translator: Translator | None = None,
+    ) -> str:
         attributes = {}
         if self.disabled:
             attributes['type'] = 'disabled'
@@ -87,10 +96,12 @@ class Button(BaseModel):
         if self.style is not None:
             attributes['style'] = self.style
 
+        text = self.text.translate_(translator) if isinstance(self.text, I18nString) else self.text
+
         return (
             '<tg-button '
             + ' '.join(f'{k}="{html.escape(v)}"' for k, v in attributes.items())
-            + f'>{self.text}</tg-button>'
+            + f'>{text}</tg-button>'
         )
 
     def _pack_callback(self, hash_service: HashService | None = None) -> str:

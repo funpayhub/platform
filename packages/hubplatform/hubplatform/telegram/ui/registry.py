@@ -22,6 +22,7 @@ from pydantic import ConfigDict
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
+from hubplatform.i18n import Translator
 from hubplatform.logging.loggers import telegram as _logger
 from hubplatform.telegram.callback_data.hash.service import HashService
 
@@ -423,6 +424,7 @@ class UIRegistry:
         menu_id: str,
         menu_context: MenuContext | MenuBuildContext,
         hash_service: HashService | None = None,
+        translator: Translator | None = None,
     ) -> MenuRenderResult:
         if menu_id not in self._menus:
             raise KeyError(f'Menu {menu_id!r} not registered.')
@@ -459,7 +461,9 @@ class UIRegistry:
                 di_context=self._context,
             )
 
-            result = await menu_spec.render(di_context=self._context, hash_service=hash_service)
+            result = await menu_spec.render(
+                di_context=self._context, hash_service=hash_service, translator=translator
+            )
 
         if result.building_errors:
             logger.warning(

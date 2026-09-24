@@ -30,6 +30,7 @@ from .menu import (
     MenuBuildContext,
     MenuRenderResult,
 )
+from ...i18n import Translator, global_translator
 from .registry import UIRegistry, global_ui_registry
 from .session.types import MenuFrame, MenuSession
 from .session.storage import MenuSessionStorage, global_menu_session_storage
@@ -56,10 +57,12 @@ class UIManager:
         ui_registry: UIRegistry,
         hash_service: HashService,
         session_storage: MenuSessionStorage,
+        translator: Translator | None = None,
     ) -> None:
         self._ui_registry = ui_registry
         self._hash_service = hash_service
         self._session_storage = session_storage
+        self._translator = translator if translator is not None else global_translator()
 
     @property
     def ui_registry(self) -> UIRegistry:
@@ -146,6 +149,7 @@ class UIManager:
                 history=tuple(history) if history is not None else (),
             ),
             hash_service=self.hash_service,
+            translator=self._translator,
         )
         # Callback hashes must be persisted before Telegram exposes the keyboard.
         self.hash_service.save()

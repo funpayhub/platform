@@ -17,6 +17,7 @@ from dataclasses import field as dataclass_field
 from pydantic import Field, BaseModel, JsonValue, ConfigDict
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
+from hubplatform.i18n import I18nString, Translator
 from hubplatform.telegram.ui.session import MenuFrame
 from hubplatform.telegram.ui.keyboard import Keyboard, KeyboardBlockSpec
 from hubplatform.telegram.ui.exceptions import ButtonRenderError, KeyboardBlockBuildingError
@@ -49,6 +50,7 @@ class MenuSpec:
         self,
         di_context: Mapping[str, Any],
         hash_service: HashService | None = None,
+        translator: Translator | None = None,
     ) -> MenuRenderResult:
         building_errors: list[KeyboardBlockBuildingError] = []
         keyboard: Keyboard = []
@@ -70,7 +72,9 @@ class MenuSpec:
             result_line = []
             for button in line:
                 try:
-                    result_line.append(button._to_html(hash_service=hash_service))
+                    result_line.append(
+                        button._to_html(hash_service=hash_service, translator=translator)
+                    )
                 except ButtonRenderError as e:
                     render_errors.append(e)
                 except Exception as e:
@@ -85,17 +89,33 @@ class MenuSpec:
             keyboard_htmls.append(f'<tg-button-row>{"\n".join(converted_line)}</tg-button-row>')
         keyboard_html = '\n'.join(keyboard_htmls)
 
-        text = self.header_text
-        if self.body_text:
+        header_text = (
+            self.header_text
+            if not isinstance(self.header_text, I18nString)
+            else self.header_text.translate_(translator)
+        )
+        body_text = (
+            self.body_text
+            if not isinstance(self.body_text, I18nString)
+            else self.body_text.translate_(translator)
+        )
+        footer_text = (
+            self.footer_text
+            if not isinstance(self.footer_text, I18nString)
+            else self.footer_text.translate_(translator)
+        )
+
+        text = header_text
+        if body_text:
             if text:
                 text += self.header_body_sep
-            text += self.body_text
-        if self.footer_text:
-            if self.body_text:
+            text += body_text
+        if footer_text:
+            if body_text:
                 text += self.body_footer_sep
-            elif self.header_text:
+            elif header_text:
                 text += self.header_footer_sep
-            text += self.footer_text
+            text += footer_text
 
         if keyboard_html:
             text += '\n' + keyboard_html
