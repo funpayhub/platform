@@ -29,13 +29,14 @@ async def unescape_callback_data(
         return await handler(event, data)
 
     msg = event.message
-    if msg.rich_message:
-        for block in msg.rich_message.blocks:
-            if isinstance(block, RichMessageButton):
-                if block.callback_data == event.data:
-                    object.__setattr__(event, 'data', html.unescape(event.data))
-                    break
 
+    if msg.reply_markup:
+        for line in msg.reply_markup.inline_keyboard:
+            for button in line:
+                if button.callback_data == event.data:
+                    return await handler(event, data)
+
+    object.__setattr__(event, 'data', html.unescape(event.data))
     return await handler(event, data)
 
 
