@@ -77,6 +77,7 @@ class TelegramComponent(HubPlatformAppComponent):
         return self._commands_registry
 
     async def run(self) -> None:
+        await self._bot.delete_webhook(drop_pending_updates=True)
         await self._dispatcher.start_polling(self._bot)
 
     def stop(self) -> None:
