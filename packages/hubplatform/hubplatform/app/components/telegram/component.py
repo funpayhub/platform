@@ -7,6 +7,7 @@ __all__ = [
 ]
 
 import asyncio
+from collections.abc import Callable, Awaitable
 from typing import TYPE_CHECKING
 from dataclasses import field, dataclass
 
@@ -140,6 +141,4 @@ class TelegramComponentExtension(ComponentExtension):
     ui: list[UIRegistry] = field(default_factory=list)
     commands: list[Command] = field(default_factory=list)
     routers: list[Router] = field(default_factory=list)
-
-    async def setup(self, component: TelegramComponent) -> None:
-        pass
+    setup_call: Callable[[TelegramComponent], Awaitable[None]] | None = None
