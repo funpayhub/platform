@@ -107,7 +107,8 @@ class TelegramComponent(HubPlatformAppComponent):
         for cmd in extension.commands:
             self._commands_registry.add_command(cmd)
 
-        await extension.setup(self)
+        if extension.setup_call is not None:
+            await extension.setup_call(self)
 
     async def setup(self, app: HubPlatformApp) -> None:
         context = app.app_context
