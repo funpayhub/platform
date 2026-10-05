@@ -252,7 +252,7 @@ _F = TypeVar('_F', bound=Expression)
 
 
 class ExpressionsRegistry:
-    def __init__(self) -> None:
+    def __init__(self, base_context_type: type[ExpressionCallContext] | None = None) -> None:
         self._expressions: dict[str, ExpressionEnvelope] = {}
         """A dict where each key is an expression ID and value is an actual expression object."""
 
@@ -274,6 +274,10 @@ class ExpressionsRegistry:
             categories and expressions are added.
         """
 
+        self._base_context_type = (
+            base_context_type if base_context_type is not None else ExpressionCallContext
+        )
+
     @property
     def expressions(self) -> Mapping[str, ExpressionEnvelope]:
         return MappingProxyType(self._expressions)
@@ -281,6 +285,10 @@ class ExpressionsRegistry:
     @property
     def categories(self) -> Mapping[str, ExpressionsCategory]:
         return MappingProxyType(self._categories)
+
+    @property
+    def base_context_type(self) -> type[ExpressionCallContext]:
+        return self._base_context_type
 
     def merge_from(self, *registries: ExpressionsRegistry, skip_existing: bool = True) -> None:
         if not registries:
