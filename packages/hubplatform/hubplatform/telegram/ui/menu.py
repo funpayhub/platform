@@ -14,8 +14,8 @@ __all__ = [
 from typing import Any, Mapping, MutableSequence
 from dataclasses import field as dataclass_field
 
-from aiogram.types import InlineKeyboardButton
 from pydantic import Field, BaseModel, JsonValue, ConfigDict
+from aiogram.types import InlineKeyboardButton
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from hubplatform.i18n import I18nString, Translator
@@ -52,7 +52,7 @@ class MenuSpec:
         di_context: Mapping[str, Any],
         hash_service: HashService | None = None,
         translator: Translator | None = None,
-        inline_keyboard: bool = True
+        render_as_inline_keyboard: bool = False,
     ) -> MenuRenderResult:
         building_errors: list[KeyboardBlockBuildingError] = []
         keyboard: Keyboard = []
@@ -77,8 +77,8 @@ class MenuSpec:
                 try:
                     result_line.append(
                         button._to_aiogram_button(hash_service=hash_service, translator=translator)
-                        if inline_keyboard else
-                        button._to_html(hash_service=hash_service, translator=translator)
+                        if render_as_inline_keyboard
+                        else button._to_html(hash_service=hash_service, translator=translator)
                     )
                 except ButtonRenderError as e:
                     render_errors.append(e)
@@ -87,16 +87,18 @@ class MenuSpec:
                     new_render_e.__cause__ = e
                     render_errors.append(new_render_e)
             if result_line:
-                if not inline_keyboard:
+                if not render_as_inline_keyboard:
                     rendered_keyboard.append(result_line)
                 else:
                     kb.append(result_line)
 
         keyboard_html = ''
-        if not inline_keyboard:
+        if not render_as_inline_keyboard:
             keyboard_htmls = []
             for converted_line in rendered_keyboard:
-                keyboard_htmls.append(f'<tg-button-row>{"\n".join(converted_line)}</tg-button-row>')
+                keyboard_htmls.append(
+                    f'<tg-button-row>{"\n".join(converted_line)}</tg-button-row>'
+                )
             keyboard_html = '\n'.join(keyboard_htmls)
 
         header_text = (

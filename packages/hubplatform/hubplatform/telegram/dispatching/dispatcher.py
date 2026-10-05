@@ -8,7 +8,7 @@ from typing import Any
 from collections.abc import Callable
 
 from aiogram import Dispatcher as AiogramDispatcher
-from aiogram.types import Message, CallbackQuery, RichMessageButton
+from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.strategy import FSMStrategy
 from aiogram.fsm.storage.base import BaseStorage, BaseEventIsolation
 

@@ -7,9 +7,9 @@ __all__ = [
 ]
 
 import asyncio
-from collections.abc import Callable, Awaitable
 from typing import TYPE_CHECKING
 from dataclasses import field, dataclass
+from collections.abc import Callable, Awaitable
 
 from aiogram import Bot
 from pyconfigtree import Properties

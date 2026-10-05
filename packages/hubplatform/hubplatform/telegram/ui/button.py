@@ -5,8 +5,8 @@ __all__ = ['Button']
 
 import html
 
-from aiogram.types import InlineKeyboardButton
 from pydantic import BaseModel
+from aiogram.types import InlineKeyboardButton
 
 from hubplatform.i18n import I18nString, Translator
 from hubplatform.telegram.callback_data import CallbackData
@@ -118,7 +118,7 @@ class Button(BaseModel):
                 'pack_compact',
                 'compress',
                 'compression_version',
-                'disabled'
+                'disabled',
             },
         )
         kwargs['text'] = (

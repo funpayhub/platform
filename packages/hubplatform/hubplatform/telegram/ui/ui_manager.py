@@ -17,7 +17,8 @@ from aiogram.types import (
     Message,
     CallbackQuery,
     InputRichMessage,
-    InaccessibleMessage, InlineKeyboardMarkup,
+    InaccessibleMessage,
+    InlineKeyboardMarkup,
 )
 
 from hubplatform.telegram.callback_data.hash import HashService, global_hash_service
@@ -58,11 +59,13 @@ class UIManager:
         hash_service: HashService,
         session_storage: MenuSessionStorage,
         translator: Translator | None = None,
+        render_as_inline_keyboard: bool = False,
     ) -> None:
         self._ui_registry = ui_registry
         self._hash_service = hash_service
         self._session_storage = session_storage
         self._translator = translator if translator is not None else global_translator()
+        self.render_as_inline_keyboard = render_as_inline_keyboard
 
     @property
     def ui_registry(self) -> UIRegistry:
@@ -137,6 +140,7 @@ class UIManager:
         environment: MenuEnvironment | None,
         history: list[MenuFrame] | None = None,
         session: SessionRef | None,
+        render_as_inline_keyboard: bool | None = None,
     ) -> MenuRenderResult:
         result = await self.ui_registry.build_menu(
             menu_id=menu_id,
@@ -150,13 +154,19 @@ class UIManager:
             ),
             hash_service=self.hash_service,
             translator=self._translator,
+            render_as_inline_keyboard=render_as_inline_keyboard
+            if render_as_inline_keyboard is not None
+            else self.render_as_inline_keyboard,
         )
         # Callback hashes must be persisted before Telegram exposes the keyboard.
         self.hash_service.save()
         return result
 
     async def _build_session(
-        self, session: MenuSession, actor_id: int | None = None
+        self,
+        session: MenuSession,
+        actor_id: int | None = None,
+        render_as_inline_keyboard: bool | None = None,
     ) -> MenuRenderResult:
         context_type = self.ui_registry.get_menu_context_type(session.current.menu_id)
         context = context_type.model_validate(session.current.context_fields)
@@ -171,6 +181,7 @@ class UIManager:
             environment=self._environment_from_session(session, actor_id=actor_id),
             session=SessionRef(session_id=session.id, revision=session.revision),
             history=session.history,
+            render_as_inline_keyboard=render_as_inline_keyboard,
         )
 
     async def _rerender_session(
@@ -179,6 +190,7 @@ class UIManager:
         trigger: Trigger | None = None,
         bot: Bot | None = None,
         actor_id: int | None = None,
+        render_as_inline_keyboard: bool | None = None,
     ) -> MenuDeliveryResult:
         if session.chat_id is None or session.message_id is None:
             raise ValueError('Cannot render a session not bound to a message.')
@@ -192,7 +204,9 @@ class UIManager:
                 'Bot instance was neither found in the trigger object nor explicitly provided.'
             )
 
-        menu = await self._build_session(session, actor_id=actor_id)
+        menu = await self._build_session(
+            session, actor_id=actor_id, render_as_inline_keyboard=render_as_inline_keyboard
+        )
         telegram_result = await bot.edit_message_text(
             chat_id=session.chat_id,
             message_id=session.message_id,
@@ -213,6 +227,7 @@ class UIManager:
         context: MenuContext,
         environment: MenuEnvironment,
         history: list[MenuFrame] | None = None,
+        render_as_inline_keyboard: bool | None = None,
     ) -> MenuDeliveryResult:
         if environment.chat_id is None:
             raise ValueError('Cannot deliver a session without a chat ID.')
@@ -235,12 +250,13 @@ class UIManager:
                 environment=environment,
                 session=SessionRef(session_id=session.id, revision=session.revision),
                 history=[frame.model_copy(deep=True) for frame in session.history],
+                render_as_inline_keyboard=render_as_inline_keyboard,
             )
             sent_message = await bot.send_rich_message(
                 chat_id=environment.chat_id,
                 message_thread_id=environment.thread_id,
                 rich_message=InputRichMessage(html=menu.text),
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=menu.keyboard)
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=menu.keyboard),
             )
             session = await self.session_storage.bind_message(
                 session_id=session.id,
@@ -263,6 +279,7 @@ class UIManager:
         environment: MenuEnvironment | Message | CallbackQuery | None = None,
         view_state: MenuViewState | None = None,
         history: list[MenuFrame] | None = None,
+        render_as_inline_keyboard: bool | None = None,
     ) -> MenuRenderResult:
         return await self._build(
             menu_id=menu_id,
@@ -273,6 +290,7 @@ class UIManager:
             ),
             history=history,
             session=None,
+            render_as_inline_keyboard=render_as_inline_keyboard,
         )
 
     async def render_session(
@@ -281,10 +299,12 @@ class UIManager:
         trigger: Trigger | None = None,
         *,
         actor_id: int | None = None,
+        render_as_inline_keyboard: bool | None = None,
     ) -> MenuRenderResult:
         return await self._build_session(
             session=await self.session_storage.get(session_id),
             actor_id=actor_id if actor_id is not None else self._actor_id_from_env(trigger),
+            render_as_inline_keyboard=render_as_inline_keyboard,
         )
 
     async def rerender_session(
@@ -295,6 +315,7 @@ class UIManager:
         bot: Bot | None = None,
         actor_id: int | None = None,
         expected_revision: int | None = None,
+        render_as_inline_keyboard: bool | None = None,
     ) -> MenuDeliveryResult:
         session = await self.session_storage.get(session_id)
         if expected_revision is not None and expected_revision != session.revision:
@@ -303,7 +324,13 @@ class UIManager:
                 actual=session.revision,
             )
 
-        return await self._rerender_session(session, trigger, bot=bot, actor_id=actor_id)
+        return await self._rerender_session(
+            session,
+            trigger,
+            bot=bot,
+            actor_id=actor_id,
+            render_as_inline_keyboard=render_as_inline_keyboard,
+        )
 
     async def open_menu(
         self,
@@ -314,6 +341,7 @@ class UIManager:
         bot: Bot | None = None,
         view_state: MenuViewState | None = None,
         history: list[MenuFrame] | None = None,
+        render_as_inline_keyboard: bool | None = None,
     ) -> MenuDeliveryResult:
         bot = self._bot_from_environment(environment, bot)
         if bot is None:
@@ -334,6 +362,7 @@ class UIManager:
             context=context,
             environment=environment,
             history=history,
+            render_as_inline_keyboard=render_as_inline_keyboard,
         )
 
     async def clone_session(
@@ -342,6 +371,7 @@ class UIManager:
         environment: EnvironmentType,
         *,
         bot: Bot | None = None,
+        render_as_inline_keyboard: bool | None = None,
     ) -> MenuDeliveryResult:
         bot = self._bot_from_environment(environment, bot)
         if bot is None:
@@ -366,6 +396,7 @@ class UIManager:
             context=context,
             environment=environment,
             history=source.history,
+            render_as_inline_keyboard=render_as_inline_keyboard,
         )
 
     async def replace_menu(
@@ -380,6 +411,7 @@ class UIManager:
         push_current_to_history: bool = True,
         expected_revision: int | None = None,
         actor_id: int | None = None,
+        render_as_inline_keyboard: bool | None = None,
     ) -> MenuDeliveryResult:
         bot = self._bot_from_environment(trigger, bot)
         if bot is None:
@@ -406,6 +438,7 @@ class UIManager:
                 trigger=trigger,
                 bot=bot,
                 actor_id=actor_id,
+                render_as_inline_keyboard=render_as_inline_keyboard,
             )
 
     async def close_session(
@@ -442,6 +475,7 @@ class UIManager:
         rerender: bool = False,
         bot: Bot | None = None,
         actor_id: int | None = None,
+        render_as_inline_keyboard: bool | None = None,
     ) -> AsyncGenerator[MenuSession, None]:
         resolved_bot = self._bot_from_environment(trigger, bot)
         if rerender and resolved_bot is None:
@@ -458,6 +492,7 @@ class UIManager:
                     trigger=trigger,
                     bot=resolved_bot,
                     actor_id=actor_id,
+                    render_as_inline_keyboard=render_as_inline_keyboard,
                 )
 
 
