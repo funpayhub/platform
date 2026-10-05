@@ -5,6 +5,7 @@ __all__ = ['Button']
 
 import html
 
+from aiogram.types import InlineKeyboardButton
 from pydantic import BaseModel
 
 from hubplatform.i18n import I18nString, Translator
@@ -103,6 +104,31 @@ class Button(BaseModel):
             + ' '.join(f'{k}="{html.escape(v)}"' for k, v in attributes.items())
             + f'>{text}</tg-button>'
         )
+
+    def _to_aiogram_button(
+        self,
+        hash_service: HashService | None = None,
+        translator: Translator | None = None,
+    ) -> InlineKeyboardButton:
+        kwargs = self.model_dump(
+            mode='python',
+            exclude={
+                'button_id',
+                'hash',
+                'pack_compact',
+                'compress',
+                'compression_version',
+                'disabled'
+            },
+        )
+        kwargs['text'] = (
+            self.text.translate_(translator) if isinstance(self.text, I18nString) else self.text
+        )
+
+        if self.callback_data is not None:
+            kwargs['callback_data'] = self._pack_callback(hash_service=hash_service)
+
+        return InlineKeyboardButton(**kwargs)
 
     def _pack_callback(self, hash_service: HashService | None = None) -> str:
         if self.callback_data is None:

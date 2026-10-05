@@ -17,7 +17,7 @@ from aiogram.types import (
     Message,
     CallbackQuery,
     InputRichMessage,
-    InaccessibleMessage,
+    InaccessibleMessage, InlineKeyboardMarkup,
 )
 
 from hubplatform.telegram.callback_data.hash import HashService, global_hash_service
@@ -197,6 +197,7 @@ class UIManager:
             chat_id=session.chat_id,
             message_id=session.message_id,
             rich_message=InputRichMessage(html=menu.text),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=menu.keyboard),
         )
         return MenuDeliveryResult(
             session=session.model_copy(deep=True),
@@ -239,6 +240,7 @@ class UIManager:
                 chat_id=environment.chat_id,
                 message_thread_id=environment.thread_id,
                 rich_message=InputRichMessage(html=menu.text),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=menu.keyboard)
             )
             session = await self.session_storage.bind_message(
                 session_id=session.id,
