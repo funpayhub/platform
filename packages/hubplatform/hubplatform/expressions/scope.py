@@ -1,7 +1,6 @@
 __all__ = ['ExpressionsScope']
 
-from collections.abc import Generator, Sequence, Mapping
-from types import MappingProxyType
+from collections.abc import Generator
 
 
 class ExpressionsScope:
@@ -65,11 +64,11 @@ class ExpressionsScope:
                 for (path, subsubscope) in subscope.subscopes(recursive=True):
                     yield (subscope_id, *path), subsubscope
 
-    def bindings(self, recursive: bool = True) -> Mapping[str, str]:
+    def bindings(self, recursive: bool = True) -> dict[str, str]:
         if not recursive:
-            return MappingProxyType(self._bindings)
+            return self._bindings.copy()
 
         bindings = self._bindings.copy()
         for subscope_path, subscope in self.subscopes(recursive=False):
             bindings.update(subscope.bindings(recursive=True))
-        return MappingProxyType(bindings)
+        return bindings
