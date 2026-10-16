@@ -1,6 +1,6 @@
 __all__ = ['ExpressionsScope']
 
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 
 
 class ExpressionsScope:
@@ -72,3 +72,11 @@ class ExpressionsScope:
         for subscope_path, subscope in self.subscopes(recursive=False):
             bindings.update(subscope.bindings(recursive=True))
         return bindings
+
+    def get_subscope(self, path: Sequence[str]) -> ExpressionsScope | None:
+        curr_scope = self
+        for i in path:
+            if i not in curr_scope._subscopes:
+                return None
+            curr_scope = curr_scope._subscopes[i]
+        return curr_scope
