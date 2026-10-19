@@ -4,9 +4,10 @@ from collections.abc import Generator, Sequence
 
 
 class ExpressionsScope:
-    def __init__(self) -> None:
+    def __init__(self, root: bool = False) -> None:
         self._bindings: dict[str, str] = {}
         self._subscopes: dict[str, ExpressionsScope] = {}
+        self._root = root
 
     def __setitem__(self, key: str, value: str | ExpressionsScope) -> None:
         if not isinstance(key, str):
@@ -22,6 +23,10 @@ class ExpressionsScope:
             f'{type(value)} was given.'
         )
 
+    @property
+    def is_root(self) -> bool:
+        return self._root
+
     def bind(self, key: str, expression_id: str) -> None:
         if key in self._bindings:
             raise KeyError(f'Binding {key!r} already exists.')  # todo: custom error
@@ -36,6 +41,8 @@ class ExpressionsScope:
         self._subscopes[subscope_id] = subscope
 
     def _check_subscope(self, subscope_id: str, subscope: ExpressionsScope) -> None:
+        if subscope.is_root:
+            raise ValueError('Cannot add root subscope.')
         if not isinstance(subscope_id, str):
             raise TypeError(f'Subscope id must be an instance of str, not {type(subscope_id)}.')
         if not isinstance(subscope, ExpressionsScope):
@@ -44,6 +51,9 @@ class ExpressionsScope:
             )
         if subscope_id in self._subscopes:
             raise KeyError(f'Subscope {subscope_id!r} already exists.')  # todo: custom error
+
+        if self._root:
+            return
 
         for _, subsubscope in subscope.subscopes(recursive=True):
             if subsubscope is self:
