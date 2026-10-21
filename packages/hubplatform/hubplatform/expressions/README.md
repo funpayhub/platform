@@ -6,17 +6,23 @@ Expressions allow embedding evaluated values in string literals.
 ## Syntax
 - Expressions can be embedded in strings using the `$` syntax: `$expression`.
 - An expression name may contain only ASCII letters, digits and `_`, and must not start with a digit.
-  Example: `$item1()`.
+  Example: `$expression1()`.
+- An expression name ends at the first character that is not an ASCII letter, digit or `_`
+  (i.e. not in `[a-zA-Z0-9_]`). That character is not part of the expression:
+  `Hello, $username!` is the `$username` expression followed by the text `!`.
 - Expressions can accept arguments enclosed in parentheses `()`:
   `$expression(1, 123.321, "some_string", flag=true)`.
   Arguments must be separated by a comma (`,`). Trailing commas are not allowed.
+- The opening `(` of the argument list must immediately follow the expression name.
+  No whitespace is allowed between them: `$expression (1)` is the `$expression` expression
+  without arguments, followed by the text ` (1)`.
 - `$expression` and `$expression()` are equivalent.
 - Arguments can be positional or keyword (`name=value`):
   - A keyword argument name must be a valid Python parameter name.
   - A keyword argument value can be of any supported type, including another expression call.
   - Positional arguments must come before keyword arguments, and a keyword name
     must not be repeated.
-- Whitespace around separators and brackets is allowed and is not part of the values:
+- Inside an argument list, whitespace around separators and brackets is allowed and is not part of the values:
   `$expression( a , b )` is the same as `$expression(a,b)`. To include whitespace in a
   string, enclose the string in double quotes: `" a "`.
 - An expression can be passed as an argument to another expression.
@@ -24,13 +30,14 @@ Expressions allow embedding evaluated values in string literals.
   but is passed directly to the receiving expression.
 - The result of an expression is inserted into the text as-is and is never parsed again:
   a `$` in the result is neither an expression nor an escape.
-- To separate an expression from the text that follows it, use an empty argument list:
-  `Order status: $order_status()ed.`
+- To separate an expression from text that starts with a name character (`[a-zA-Z0-9_]`),
+  use an empty argument list: `Order status: $order_status()ed.`
 
 ### Escaping
 - A literal `$` in text must always be escaped as `$$`: `Price: $$5` is rendered as `Price: $5`.
-- A `$` that is neither part of `$$` nor followed by an expression name is a syntax error
-  (for example, `$5`, `$ ` or a trailing `$`).
+- A lone `$` is never treated as literal text. A `$` that is neither part of `$$` nor followed
+  by a valid expression name is a syntax error. For example, `$ `, `$!` and a trailing `$` are
+  errors, and so is `$5`, because an expression name cannot start with a digit.
 - `$$` is processed first, from left to right:
   - `$$name` is rendered as `$name`;
   - `$$$name` is rendered as `$` followed by the value of the `$name` expression.
@@ -62,6 +69,10 @@ However, the syntax for passing arguments directly is defined only for the follo
   Key-value pairs must be separated with `:`, pairs with a comma. Trailing commas are not allowed.
   Keys can be a value of any non-container supported type.
   Duplicate keys are not allowed and cause a parsing error.
+  Keys are compared the same way as Python `dict` keys: values that are equal in Python are the
+  same key. In particular, `1`, `1.0` and `true` are equal, as are `0`, `0.0` and `false`.
+  So `{1: a, true: b}` and `{0: a, 0.0: b}` are duplicate-key errors, while `{1: a, "1": b}` is valid,
+  because the string `"1"` is not equal to the integer `1`.
   Values can be of any supported type, including nested sequences, mappings and other expression calls.
   Example: `{some_key: 123, 1000: {another: mapping}, "some call": $other_expression(123, arg2)}`
 
