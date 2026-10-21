@@ -4,7 +4,10 @@ from collections.abc import Generator, Sequence
 
 
 class ExpressionsScope:
-    def __init__(self, root: bool = False) -> None:
+    def __init__(
+        self,
+        root: bool = False
+    ) -> None:
         self._bindings: dict[str, str] = {}
         self._subscopes: dict[str, ExpressionsScope] = {}
         self._root = root
