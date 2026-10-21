@@ -231,35 +231,6 @@ async def g2g_username(ctx: G2GOrderContext, *, parent: ParentExpression) -> str
     return f'@{await parent(ctx)}'
 ```
 
-Overrides are intended for changing behavior. To add choices to an expression, use variants.
-
-#### Variant expressions
-A variant expression selects its behavior with its first argument (`mode`). Every variant
-is also available as a separate alias `$<expression>_<variant>`:
-
-```python
-order = manager.scope(GenericOrderContext).variant_expression('order', id='hubplatform:order')
-
-@order.variant('id', docs=Docs('expr-order-id'))
-async def _(ctx: GenericOrderContext) -> str:
-    return ctx.order_id
-
-@order.variant('bonuses', context=G2GOrderContext, docs=Docs('expr-order-bonuses'))
-async def _(ctx: G2GOrderContext) -> int:
-    return ctx.order.received_bonuses
-```
-
-- `$order(id)` and `$order_id` are equivalent; `$order(sum, currency=true)` and
-  `$order_sum(currency=true)` are equivalent. Arguments after `mode` are passed to the variant.
-- A variant registered for a more specific context exists only in that context and its children:
-  `$order(bonuses)` and `$order_bonuses` work in a G2G order context and nowhere else.
-- Variants are resolved with the same rules as names: the nearest variant wins, and replacing a
-  variant of an ancestor context requires `override=True`.
-- Aliases are ordinary bindings and follow the same collision rules: an alias that collides with
-  another expression's name is a configuration error. Variant keys must be valid expression name
-  characters.
-- Documentation and template validation know exactly which variants exist in each context.
-
 #### Re-exporting expressions
 A scope can make expressions of a composed context available under its own names:
 
@@ -275,7 +246,7 @@ Re-exported names follow the same collision and override rules as other bindings
 
 ### Lifecycle
 1. **Registration.** During app setup, components and component extensions (plugins)
-   create contexts, register expressions, variants, aliases and re-exports. Registration order
+   create contexts, register expressions, aliases and re-exports. Registration order
    does not matter.
 2. **Freeze.** After all components and extensions are installed (before the app context
    is locked), `manager.freeze()` validates every scope and compiles an immutable snapshot:
@@ -326,7 +297,7 @@ Every `$` in the text that is not part of `$$` starts an expression call. Every 
 exactly one **top-level** call:
 
 - `ExpressionsSyntaxError` - the call cannot be parsed (including `$5`, `$ ` and a trailing `$`).
-- `UnknownExpressionError` - the name or the variant does not exist in the context.
+- `UnknownExpressionError` - the name does not exist in the context.
   An expression can stop existing at any time, for example when the plugin that provided it is
   removed while texts that use it are saved in the configuration, so this is a regular error.
 - `ExpressionArgumentsError` - the arguments cannot be bound to the expression's signature.
@@ -367,7 +338,7 @@ To keep a broken call as-is and continue parsing, the parser determines where th
 
 ### Template validation
 `manager.validate(text, context_type)` checks a text without evaluating anything and returns all
-problems at once: syntax errors, unknown names and variants, and arguments that cannot be bound
+problems at once: syntax errors, unknown names, and arguments that cannot be bound
 (literal arguments only). Problems use the same error types and positions as `format()`.
 It is used when a user edits a text in the UI. Syntax errors block saving. Unknown names are
 warnings, and the user can still save the text. Every text property declares the context type
@@ -381,14 +352,12 @@ A G2G component sends a message when a customer creates a new order.
 
 Scopes:
 - `ExpressionsContext`: `$upper`, `$round`, `$random`, `$time`, ...
-- `GenericOrderContext`: `$username` (the counterparty), `$order_id`, `$order(mode)` with
-  variants `id`, `sum`, `counterparty_username` and the matching aliases.
-- `G2GOrderContext`: variant `bonuses` of `$order` (and the `$order_bonuses` alias),
-  G2G-specific expressions.
+- `GenericOrderContext`: `$username` (the counterparty), `$order_id`, `$order_sum`, ...
+- `G2GOrderContext`: `$order_bonuses` and other G2G-specific expressions.
 
 The handler creates `G2GOrderContext(...)` and calls `manager.format(text, ctx, ...)`.
-Every expression of the three scopes above is available. `$order(bonuses)` works here, but
-in a FunPay order context it is an unknown variant.
+Every expression of the three scopes above is available. `$order_bonuses` works here, but
+in a FunPay order context it is an unknown name.
 
 For FunPay, which reports new orders through system messages, the order handler creates only
 `FunPayOrderContext`. `$username` is therefore the buyer, not the FunPay system account that sent the
