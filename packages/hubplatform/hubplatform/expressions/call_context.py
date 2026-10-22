@@ -23,4 +23,8 @@ class ExpressionCallContext:
                     'Expression context cannot be inherited from multiple context classes.'
                 )
 
+    @classmethod
+    def get_available_context_types(cls) -> tuple[type[ExpressionCallContext], ...]:
+        return cls._available_context_types
+
 ExpressionCallContext._available_context_types = (ExpressionCallContext, )
