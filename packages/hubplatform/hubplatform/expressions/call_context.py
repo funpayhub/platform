@@ -3,16 +3,24 @@ from __future__ import annotations
 
 __all__ = ['ExpressionCallContext']
 
+from typing import Any, ClassVar
+
 
 class ExpressionCallContext:
-    def __init_subclass__(cls, **kwargs) -> None:
-        has_context_base = False
+    _available_context_types: ClassVar[tuple[type[ExpressionCallContext], ...]] = tuple()
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        context_base: type[ExpressionCallContext] | None = None
         for i in cls.__bases__:
             if issubclass(i, ExpressionCallContext):
-                if not has_context_base:
-                    has_context_base = True
+                if context_base is None:
+                    context_base = i
+                    cls._available_context_types = (*i._available_context_types, cls)
                     continue
 
                 raise TypeError(
-                    f'Expression context cannot be inherited from multiple context classes.'
+                    'Expression context cannot be inherited from multiple context classes.'
                 )
+
+ExpressionCallContext._available_context_types = (ExpressionCallContext, )

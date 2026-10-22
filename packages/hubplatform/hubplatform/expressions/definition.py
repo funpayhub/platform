@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+
+__all__ = ['ExpressionDefinition']
+
 import inspect
-from types import MappingProxyType
 from typing import Any, Literal, Protocol, ParamSpec, overload, runtime_checkable
 from dataclasses import field, dataclass
-from collections.abc import Mapping, Callable
+from collections.abc import Mapping
 
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
@@ -12,7 +14,7 @@ from .syntax import Call
 from .exceptions import ExpressionExecutionError
 
 
-_P = ParamSpec('_P', default=...)
+_P = ParamSpec('_P')
 
 
 @runtime_checkable
@@ -31,7 +33,7 @@ type Expression = ExpressionProto | type[ExpressionProto]
 
 
 @dataclass(frozen=True)
-class ExpressionEnvelope:
+class ExpressionDefinition:
     id: str
     call: Expression
     _wrapped: CallableWrapper[str] = field(init=False)
@@ -94,38 +96,3 @@ class ExpressionEnvelope:
         if self._wrapped_renderer is not None:
             return await self._wrapped_renderer(args=[instance, result], data=di, to_thread=False)
         return str(result)
-
-
-class ExpressionsCatalog:
-    def __init__(self) -> None:
-        self._expressions: dict[str, ExpressionEnvelope] = {}
-
-    @property
-    def expressions(self) -> Mapping[str, ExpressionEnvelope]:
-        return MappingProxyType(self._expressions)
-
-    @overload
-    def add_expression[_F](self, expression: _F, *, id: str) -> _F:
-        pass
-
-    @overload
-    def add_expression[_F](self, expression: None = None, *, id: str) -> Callable[[_F], _F]:
-        pass
-
-    def add_expression[_F](
-        self,
-        expression: _F | None = None,
-        *,
-        id: str,
-    ) -> Callable[[_F], _F] | _F:
-        if id in self._expressions:
-            raise RuntimeError(f'Expression {id} already registered.')
-
-        def inner(expression: _F) -> _F:
-            envelope = ExpressionEnvelope(id=id, call=expression)
-            self._expressions[id] = envelope
-            return expression
-
-        if expression is None:
-            return inner
-        return inner(expression)
