@@ -12,7 +12,7 @@ from math import ceil, floor
 from datetime import datetime
 
 from .registry import ArgDocs, ExpressionDoc, ExpressionsRegistry
-from .call_context import ExpressionCallContext
+from .call_context import ExpressionContext
 
 
 _time_formats = {
@@ -32,7 +32,7 @@ registry.add_category(
     description='Common expressions, that can be used without any context.',
     include_expressions=(),
     include_categories=(),
-    supported_contexts=(ExpressionCallContext,),
+    supported_contexts=(ExpressionContext,),
 )
 
 
@@ -61,7 +61,7 @@ registry.add_category(
             )
         },
     ),
-    supported_contexts=(ExpressionCallContext,),
+    supported_contexts=(ExpressionContext,),
 )
 def time_expression(mode: str = 'time') -> str:
     if mode in _time_formats:

@@ -12,6 +12,7 @@ from eventry.asyncio.callable_wrappers import CallableWrapper
 
 from .syntax import Call
 from .exceptions import ExpressionExecutionError
+from .call_context import ExpressionContext
 
 
 _P = ParamSpec('_P')
@@ -19,13 +20,15 @@ _P = ParamSpec('_P')
 
 @runtime_checkable
 class ExpressionProto(Protocol[_P]):
-    async def __call__(self, /, *_a: _P.args, **_kw: _P.kwargs) -> Any:
+    async def __call__(self, _c: ExpressionContext, /, *_a: _P.args, **_kw: _P.kwargs) -> Any:
         pass
 
 
 @runtime_checkable
 class ExpressionWithRendererProto(ExpressionProto[_P], Protocol[_P]):
-    async def render(self, _v: Any, /, *_a: _P.args, **_kw: _P.kwargs) -> str:
+    async def render(
+        self, _c: ExpressionContext, _v: Any, /, *_a: _P.args, **_kw: _P.kwargs
+    ) -> str:
         pass
 
 
@@ -54,21 +57,33 @@ class ExpressionDefinition:
 
     @overload
     async def execute(
-        self, call: Call, di_mapping: Mapping[str, Any], render: Literal[True]
+        self,
+        call: Call,
+        context: ExpressionContext,
+        di_mapping: Mapping[str, Any],
+        render: Literal[True],
     ) -> str:
         pass
 
     @overload
     async def execute(
-        self, call: Call, di_mapping: Mapping[str, Any], render: bool = False
+        self,
+        call: Call,
+        context: ExpressionContext,
+        di_mapping: Mapping[str, Any],
+        render: bool = False,
     ) -> Any:
         pass
 
     async def execute(
-        self, call: Call, di_mapping: Mapping[str, Any], render: bool = False
+        self,
+        call: Call,
+        context: ExpressionContext,
+        di_mapping: Mapping[str, Any],
+        render: bool = False,
     ) -> Any:
         try:
-            return await self._execute(call, di_mapping, render=render)
+            return await self._execute(call, context, di_mapping, render=render)
         except ExpressionExecutionError:
             raise
         except Exception as e:
@@ -77,7 +92,9 @@ class ExpressionDefinition:
                 message=f'An unexpected error occurred while executing expression {call.name!r}.',
             ) from e
 
-    async def _execute(self, call: Call, di: Mapping[str, Any], render: bool = False) -> Any:
+    async def _execute(
+        self, call: Call, context: ExpressionContext, di: Mapping[str, Any], render: bool = False
+    ) -> Any:
         instance: Any = None
         if self._is_class and self._wrapped_init is not None:
             instance = object.__new__(self.call)  # type: ignore[arg-type]
@@ -85,14 +102,16 @@ class ExpressionDefinition:
                 args=[instance, *call.args], kwargs=call.kwargs
             )
             self.call.__init__(*call_args, **call_kwargs)  # type: ignore[misc]
-            result = await self._wrapped(args=[instance], data=di, to_thread=False)
+            result = await self._wrapped(args=[instance, context], data=di, to_thread=False)
         else:
             result = await self._wrapped(
-                args=[*call.args], data={**call.kwargs, **di}, to_thread=False
+                args=[context, *call.args], data={**call.kwargs, **di}, to_thread=False
             )
         if not render:
             return result
 
         if self._wrapped_renderer is not None:
-            return await self._wrapped_renderer(args=[instance, result], data=di, to_thread=False)
+            return await self._wrapped_renderer(
+                args=[instance, context, result], data=di, to_thread=False
+            )
         return str(result)

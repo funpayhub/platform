@@ -23,7 +23,7 @@ from hubplatform.expressions.syntax import Call, StringWithCalls
 from hubplatform.expressions.syntax.parsing import call_decoder
 
 from .query import CategoriesQuery
-from .call_context import ExpressionCallContext
+from .call_context import ExpressionContext
 
 
 _P = ParamSpec('_P', default=...)
@@ -31,14 +31,14 @@ _P = ParamSpec('_P', default=...)
 
 @runtime_checkable
 class ExpressionProto(Protocol[_P]):
-    async def __call__(self, _c: ExpressionCallContext, /, *_a: _P.args, **_kw: _P.kwargs) -> Any:
+    async def __call__(self, _c: ExpressionContext, /, *_a: _P.args, **_kw: _P.kwargs) -> Any:
         pass
 
 
 @runtime_checkable
 class ExpressionWithRendererProto(ExpressionProto[_P], Protocol[_P]):
     async def render(
-        self, _c: ExpressionCallContext, _v: Any, /, *_a: _P.args, **_kw: _P.kwargs
+        self, _c: ExpressionContext, _v: Any, /, *_a: _P.args, **_kw: _P.kwargs
     ) -> str:
         pass
 
@@ -75,7 +75,7 @@ class ExpressionEnvelope:
     id: str
     name: str
     description: ExpressionDoc
-    supported_contexts: tuple[type[ExpressionCallContext], ...]
+    supported_contexts: tuple[type[ExpressionContext], ...]
     call: Expression
     _wrapped: CallableWrapper[str] = field(init=False)
     _wrapped_init: CallableWrapper[None] | None = field(init=False, default=None)
@@ -97,7 +97,7 @@ class ExpressionEnvelope:
     async def execute(
         self,
         call: Call,
-        context: ExpressionCallContext,
+        context: ExpressionContext,
         di_context: Mapping[str, Any],
         render: Literal[True],
     ) -> str:
@@ -107,7 +107,7 @@ class ExpressionEnvelope:
     async def execute(
         self,
         call: Call,
-        context: ExpressionCallContext,
+        context: ExpressionContext,
         di_context: Mapping[str, Any],
         render: bool = False,
     ) -> Any:
@@ -116,7 +116,7 @@ class ExpressionEnvelope:
     async def execute(
         self,
         call: Call,
-        context: ExpressionCallContext,
+        context: ExpressionContext,
         di_context: Mapping[str, Any],
         render: bool = False,
     ) -> str:
@@ -141,7 +141,7 @@ class ExpressionEnvelope:
     async def _execute(
         self,
         call: Call,
-        context: ExpressionCallContext,
+        context: ExpressionContext,
         di_context: Mapping[str, Any],
         render: Literal[True],
     ) -> str:
@@ -151,7 +151,7 @@ class ExpressionEnvelope:
     async def _execute(
         self,
         call: Call,
-        context: ExpressionCallContext,
+        context: ExpressionContext,
         di_context: Mapping[str, Any],
         render: Literal[False],
     ) -> Any:
@@ -161,7 +161,7 @@ class ExpressionEnvelope:
     async def _execute(
         self,
         call: Call,
-        context: ExpressionCallContext,
+        context: ExpressionContext,
         di_context: Mapping[str, Any],
         render: bool,
     ) -> str | Any:
@@ -170,7 +170,7 @@ class ExpressionEnvelope:
     async def _execute(
         self,
         call: Call,
-        context: ExpressionCallContext,
+        context: ExpressionContext,
         di_context: Mapping[str, Any],
         render: bool,
     ) -> str:
@@ -208,7 +208,7 @@ class ExpressionsCategory:
     id: str
     name: str
     description: str
-    supported_contexts: tuple[type[ExpressionCallContext], ...]
+    supported_contexts: tuple[type[ExpressionContext], ...]
 
     def check_can_include_category(self, subcategory: ExpressionsCategory) -> None:
         for context in self.supported_contexts:
@@ -413,7 +413,7 @@ class ExpressionsRegistry:
         id: str,
         name: str,
         description: str | ExpressionDoc,
-        supported_contexts: tuple[type[ExpressionCallContext], ...],
+        supported_contexts: tuple[type[ExpressionContext], ...],
     ) -> _F:
         pass
 
@@ -425,7 +425,7 @@ class ExpressionsRegistry:
         id: str,
         name: str,
         description: str | ExpressionDoc,
-        supported_contexts: tuple[type[ExpressionCallContext], ...],
+        supported_contexts: tuple[type[ExpressionContext], ...],
     ) -> Callable[[_F], _F]:
         pass
 
@@ -436,7 +436,7 @@ class ExpressionsRegistry:
         id: str,
         name: str,
         description: str | ExpressionDoc,
-        supported_contexts: tuple[type[ExpressionCallContext], ...],
+        supported_contexts: tuple[type[ExpressionContext], ...],
     ) -> Callable[[_F], _F] | _F:
         def inner(expression: _F) -> _F:
             if id in self._expressions:
@@ -468,7 +468,7 @@ class ExpressionsRegistry:
         description: str,
         include_expressions: Sequence[str],
         include_categories: Sequence[str],
-        supported_contexts: tuple[type[ExpressionCallContext], ...],
+        supported_contexts: tuple[type[ExpressionContext], ...],
     ) -> None:
         if id in self._categories:
             raise RuntimeError(f'ExpressionsCategory {id} already registered.')
@@ -538,7 +538,7 @@ class ExpressionsRegistry:
     async def format_text(
         self,
         string: str,
-        context: ExpressionCallContext,
+        context: ExpressionContext,
         di_context: Mapping[str, Any],
         ignore_errors: bool = False,
     ) -> FormattingResult:
@@ -573,7 +573,7 @@ class ExpressionsRegistry:
         )
 
     async def resolve_value(
-        self, value: Any, context: ExpressionCallContext, di_context: Mapping[str, Any]
+        self, value: Any, context: ExpressionContext, di_context: Mapping[str, Any]
     ) -> Any:
         if isinstance(value, Call):
             return await self.execute_call(value, context, di_context)
@@ -593,7 +593,7 @@ class ExpressionsRegistry:
     async def execute_call(
         self,
         call: Call,
-        context: ExpressionCallContext,
+        context: ExpressionContext,
         di_context: Mapping[str, Any],
         render: Literal[True],
     ) -> str:
@@ -603,7 +603,7 @@ class ExpressionsRegistry:
     async def execute_call(
         self,
         call: Call,
-        context: ExpressionCallContext,
+        context: ExpressionContext,
         di_context: Mapping[str, Any],
         render: bool = False,
     ) -> Any:
@@ -612,7 +612,7 @@ class ExpressionsRegistry:
     async def execute_call(
         self,
         call: Call,
-        context: ExpressionCallContext,
+        context: ExpressionContext,
         di_context: Mapping[str, Any],
         render: bool = False,
     ) -> Any:

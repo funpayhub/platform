@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 
-__all__ = ['ExpressionCallContext']
+__all__ = ['ExpressionContext']
 
 from typing import Any, ClassVar
 
 
-class ExpressionCallContext:
-    _available_context_types: ClassVar[tuple[type[ExpressionCallContext], ...]] = tuple()
+class ExpressionContext:
+    _available_context_types: ClassVar[tuple[type[ExpressionContext], ...]] = tuple()
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        context_base: type[ExpressionCallContext] | None = None
+        context_base: type[ExpressionContext] | None = None
         for i in cls.__bases__:
-            if issubclass(i, ExpressionCallContext):
+            if issubclass(i, ExpressionContext):
                 if context_base is None:
                     context_base = i
                     cls._available_context_types = (*i._available_context_types, cls)
@@ -24,7 +24,8 @@ class ExpressionCallContext:
                 )
 
     @classmethod
-    def get_available_context_types(cls) -> tuple[type[ExpressionCallContext], ...]:
+    def get_available_context_types(cls) -> tuple[type[ExpressionContext], ...]:
         return cls._available_context_types
 
-ExpressionCallContext._available_context_types = (ExpressionCallContext, )
+
+ExpressionContext._available_context_types = (ExpressionContext,)
