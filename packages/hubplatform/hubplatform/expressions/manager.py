@@ -2,16 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from collections.abc import Set
+from typing import Any
 
 from .category import ExpressionsCategory
 from .definition import Expression, ExpressionDefinition
 from .call_context import ExpressionContext
-
-
-@dataclass(frozen=True)
-class ExpressionEnvelope:
-    expression: ExpressionDefinition
-    categories: Set[str]
 
 
 class ExpressionsManager:
@@ -19,16 +14,28 @@ class ExpressionsManager:
         self._expressions: dict[type[ExpressionContext], dict[str, ExpressionDefinition]] = {}
         self._categories: dict[str, ExpressionsCategory] = {}
 
+
+        self._expressions_tree: dict[Any, Any] = {}
+        self._categories_tree: dict[Any, Any] = {}
+
+        self._frozen = False
+
+    @property
+    def frozen(self) -> bool:
+        return self._frozen
+
     def add_expression(
         self,
         expression: Expression | ExpressionDefinition,
         context_type: type[ExpressionContext],
         call_key: str,
         category: str | None = None,
-    ) -> None: ...
+    ) -> None:
+        self._check_not_frozen()
+        pass
 
     def add_category(self):
-        pass
+        self._check_not_frozen()
 
     def get_available_expressions(
         self, context_type: type[ExpressionContext]
@@ -40,3 +47,19 @@ class ExpressionsManager:
                 continue
             result[i] = self._expressions.copy()
         return result
+
+    def freeze(self) -> None:
+        if self._frozen == True:
+            return
+
+    def _check_not_frozen(self) -> None:
+        if self._frozen:
+            raise RuntimeError(
+                f'This operation available only when expressions manager is not frozen.'
+            )
+
+    def _check_frozen(self) -> None:
+        if not self._frozen:
+            raise RuntimeError(
+                'This operation available only when expressions manager is frozen.'
+            )
