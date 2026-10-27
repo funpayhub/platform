@@ -6,8 +6,8 @@ __all__ = [
     'ArgDocs',
 ]
 
-from types import MappingProxyType
 from typing import Literal
+from types import MappingProxyType
 from collections.abc import Mapping
 
 
@@ -45,7 +45,7 @@ class ArgDocs:
         overview: str,
         default: str | None = None,
         possible_values: str | Mapping[str, str],
-        kind: Literal['normal', 'positional_only', 'keyword_only'] = 'normal'
+        kind: Literal['normal', 'positional_only', 'keyword_only'] = 'normal',
     ) -> None:
         self._name = name
         self._key = key
@@ -77,9 +77,11 @@ class ArgDocs:
 
     @property
     def possible_values(self) -> _DocsString | Mapping[_DocsString, _DocsString]:
-        return self._possible_values \
-            if isinstance(self._possible_values, str) \
+        return (
+            self._possible_values
+            if isinstance(self._possible_values, str)
             else MappingProxyType(self._possible_values)
+        )
 
     @property
     def kind(self) -> Literal['normal', 'positional_only', 'keyword_only']:

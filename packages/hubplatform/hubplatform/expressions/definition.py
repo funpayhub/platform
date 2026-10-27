@@ -130,6 +130,7 @@ def expression[T: Expression](*, docs: ExpressionDocs) -> Callable[[T], T]:
         )
         expression_obj.__dict__['__hubplatform_expression_definition__'] = definition
         return expression_obj
+
     return inner
 
 
