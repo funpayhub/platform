@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 
-__all__ = ['ExpressionDefinition']
+__all__ = ['ExpressionDefinition', 'Expression', 'expression', 'extract_expression_definition']
 
 import inspect
 from typing import Any, Literal, Protocol, ParamSpec, overload, runtime_checkable
 from dataclasses import field, dataclass
-from collections.abc import Mapping
+from collections.abc import Mapping, Callable
 
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
+from .docs import ExpressionDocs
 from .syntax import Call
 from .exceptions import ExpressionExecutionError
 from .call_context import ExpressionContext
@@ -37,14 +38,18 @@ type Expression = ExpressionProto | type[ExpressionProto]
 
 @dataclass(frozen=True)
 class ExpressionDefinition:
-    id: str
     call: Expression
+    docs: ExpressionDocs
     _wrapped: CallableWrapper[str] = field(init=False)
     _wrapped_init: CallableWrapper[None] | None = field(init=False, default=None)
     _wrapped_renderer: CallableWrapper[str] | None = field(init=False, default=None)
     _is_class: bool = field(init=False)
 
     def __post_init__(self) -> None:
+        if not isinstance(self.docs, ExpressionDocs):
+            raise TypeError(
+                f'Expression docs must be an instance of `ExpressionDocs`, not {type(self.docs)}.'
+            )
         if isinstance(self.call, type):
             object.__setattr__(self, '_is_class', True)
             object.__setattr__(self, '_wrapped', CallableWrapper(self.call.__call__))
@@ -115,3 +120,21 @@ class ExpressionDefinition:
                 args=[instance, context, result], data=di, to_thread=False
             )
         return str(result)
+
+
+def expression[T: Expression](*, docs: ExpressionDocs) -> Callable[[T], T]:
+    def inner(expression_obj: T) -> T:
+        definition = ExpressionDefinition(
+            call=expression_obj,
+            docs=docs,
+        )
+        expression_obj.__dict__['__hubplatform_expression_definition__'] = definition
+        return expression_obj
+    return inner
+
+
+def extract_expression_definition(obj: Any) -> ExpressionDefinition:
+    if not hasattr(obj, '__hubplatform_expression_definition__'):
+        raise ValueError(f'{obj} was not wrapped with `@expression` decorator.')
+
+    return getattr(obj, '__hubplatform_expression_definition__')

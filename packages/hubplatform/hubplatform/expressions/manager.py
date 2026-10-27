@@ -1,12 +1,21 @@
 from __future__ import annotations
 
-from hubplatform.expressions.definition import ExpressionDefinition
-from hubplatform.expressions.call_context import ExpressionContext
+from .definition import ExpressionDefinition, Expression
+from .call_context import ExpressionContext
 
 
 class ExpressionsManager:
     def __init__(self) -> None:
         self._expressions: dict[type[ExpressionContext], dict[str, ExpressionDefinition]] = {}
+
+    def add_expression(
+        self,
+        expression: Expression | ExpressionDefinition,
+        context_type: type[ExpressionContext],
+        call_key: str,
+        category: str | None = None,
+    ) -> None:
+        ...
 
     def get_available_expressions(
         self, context_type: type[ExpressionContext]
