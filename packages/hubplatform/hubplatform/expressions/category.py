@@ -3,7 +3,7 @@ from __future__ import annotations
 
 __all__ = [
     'ExpressionsCategory',
-    'DUMMY_CATEGORY',
+    'dummy_category',
 ]
 
 from dataclasses import dataclass
@@ -17,7 +17,8 @@ class ExpressionsCategory:
     description: str
 
 
-DUMMY_CATEGORY = ExpressionsCategory(
-    name=I18nString('hubplatform.expressions_category.dummy.name'),
-    description=I18nString('hubplatform.expressions_category.dummy.description'),
-)
+def dummy_category() -> ExpressionsCategory:
+    return ExpressionsCategory(
+        name=I18nString('hubplatform.expressions_category.dummy.name'),
+        description=I18nString('hubplatform.expressions_category.dummy.description'),
+    )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, TypeAlias
 from dataclasses import dataclass
 
@@ -65,17 +66,6 @@ class ExpressionsManager:
 
     def add_category(self):
         self._check_not_frozen()
-
-    def get_available_expressions(
-        self, context_type: type[ExpressionContext]
-    ) -> dict[type[ExpressionContext], dict[str, ExpressionDefinition]]:
-        context_types = context_type.get_available_context_types()
-        result = {}
-        for i in context_types:
-            if i not in self._expressions:
-                continue
-            result[i] = self._expressions.copy()
-        return result
 
     def freeze(self) -> None:
         if self._frozen:
