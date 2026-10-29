@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Generator, Sequence
+from types import MappingProxyType
 from typing import Any, TypeAlias
 from dataclasses import dataclass
 
@@ -16,7 +17,60 @@ _CategoriesTree: TypeAlias = dict[str, '_CategoriesTree']
 @dataclass(frozen=True)
 class ExpressionEnvelope:
     expression: ExpressionDefinition
+    call_key: str
     category: str | None = None
+
+
+class ExpressionsScope:
+    def __init__(self, context_type: type[ExpressionContext]) -> None:
+        self._context_type = context_type
+        self._parent = None
+        self._subscopes: dict[type[ExpressionContext], ExpressionsScope] = {}
+        self._subscopes_proxy = MappingProxyType(self._subscopes)
+        self._expressions: dict[str, ExpressionEnvelope] = {}
+        self._expressions_by_category: dict[str | None, dict[str, ExpressionEnvelope]] = {}
+
+    def _add_expressions(self, expressions: Sequence[ExpressionEnvelope], /) -> None:
+        for expr in expressions:
+            self._expressions[expr.call_key] = expr
+            if expr.category not in self._expressions_by_category:
+                self._expressions_by_category[expr.category] = {}
+            self._expressions_by_category[expr.category][expr.call_key] = expr
+
+    def _add_subscope(self, subscope: ExpressionsScope) -> None:
+        self._subscopes[subscope._context_type] = subscope
+        subscope._parent = self
+
+    @property
+    def context_type(self) -> type[ExpressionContext]:
+        return self._context_type
+
+    @property
+    def parent(self) -> ExpressionsScope | None:
+        return self._parent
+
+    @property
+    def subscopes(self) -> Mapping[type[ExpressionContext], ExpressionsScope]:
+        return self._subscopes_proxy
+
+    @property
+    def is_root(self) -> bool:
+        return self._parent is None
+
+    @property
+    def chain_to_root(self) -> Generator[ExpressionsScope, None, None]:
+        curr = self
+        while curr is not None:
+            yield curr
+            curr = curr._parent
+
+    @property
+    def available_expressions(self) -> Mapping[str, ExpressionEnvelope]:
+        expressions = [i._expressions for i in self.chain_to_root]
+        result = {}
+        for j in reversed(expressions):
+            result.update(j)
+        return result
 
 
 class ExpressionsManager:
@@ -87,7 +141,7 @@ class ExpressionsManager:
             raise RuntimeError('This operation available only when expressions manager is frozen.')
 
     def _build_context_tree(self) -> _ContextTree:
-        result = {}
+        result = {ExpressionContext: {}}
         for context_type in self._expressions:
             curr = result
             for curr_context_type in context_type.get_available_context_types():
@@ -120,3 +174,11 @@ class ExpressionsManager:
                     f'Context type {context_type.__module__}.{context_type.__qualname__} '
                     f'has bound expressions, but it is not registered.'
                 )
+
+    def _build_scopes_tree(self) -> ExpressionsScope:
+        tree = self._build_context_tree()
+        root = ExpressionsScope(ExpressionContext)
+
+        curr_dict = tree[ExpressionContext]
+        curr_scope = root
+
