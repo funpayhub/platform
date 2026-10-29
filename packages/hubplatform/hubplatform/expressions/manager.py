@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Generator, Sequence
-from types import MappingProxyType
 from typing import Any, TypeAlias
 from dataclasses import dataclass
+from types import MappingProxyType
+from collections.abc import Mapping, Iterable, Generator
 
 from .category import ExpressionsCategory
 from .definition import Expression, ExpressionDefinition
@@ -30,7 +30,7 @@ class ExpressionsScope:
         self._expressions: dict[str, ExpressionEnvelope] = {}
         self._expressions_by_category: dict[str | None, dict[str, ExpressionEnvelope]] = {}
 
-    def _add_expressions(self, expressions: Sequence[ExpressionEnvelope], /) -> None:
+    def _add_expressions(self, expressions: Iterable[ExpressionEnvelope], /) -> None:
         for expr in expressions:
             self._expressions[expr.call_key] = expr
             if expr.category not in self._expressions_by_category:
@@ -83,12 +83,24 @@ class ExpressionsManager:
 
         self._context_tree: dict[Any, Any] = {}
         self._categories_tree: dict[Any, Any] = {}
+        self._tree: ExpressionsScope = ExpressionsScope(ExpressionContext)
 
         self._frozen = False
 
     @property
     def frozen(self) -> bool:
         return self._frozen
+
+    def get(self, context: type[ExpressionContext]) -> ExpressionsScope:
+        self._check_frozen()
+        curr = self._tree
+        for i in context.get_available_context_types()[1:]:
+            if i not in curr.subscopes:
+                raise ValueError(
+                    f'{context.__module__}.{context.__qualname__} does not exist in scopes tree.'
+                )
+            curr = curr.subscopes[i]
+        return curr
 
     def add_context(self, context_type: type[ExpressionContext], id: str) -> None:
         self._check_not_frozen()
@@ -126,7 +138,7 @@ class ExpressionsManager:
             return
 
         self._check_all_context_types_are_registered()
-        self._context_tree = self._build_context_tree()
+        self._tree = self._build_scopes_tree()
         self._categories_tree = self._build_categories_tree()
         self._frozen = True
 
@@ -146,13 +158,11 @@ class ExpressionsManager:
             curr = result
             for curr_context_type in context_type.get_available_context_types():
                 if curr_context_type not in curr:
-                    if curr_context_type not in self._expressions:
-                        continue
                     curr[curr_context_type] = {}
                 curr = curr[curr_context_type]
         return result
 
-    def _build_categories_tree(self) -> dict[Any, Any]:
+    def _build_categories_tree(self) -> _CategoriesTree:
         result = {}
         for full_category in self._categories:
             split = full_category.split('.')
@@ -175,10 +185,18 @@ class ExpressionsManager:
                     f'has bound expressions, but it is not registered.'
                 )
 
-    def _build_scopes_tree(self) -> ExpressionsScope:
-        tree = self._build_context_tree()
-        root = ExpressionsScope(ExpressionContext)
+    def _build_scopes_tree(
+        self, tree: _ContextTree | None = None, attach_to: ExpressionsScope | None = None
+    ) -> ExpressionsScope:
+        tree = self._build_context_tree()[ExpressionContext] if tree is None else tree
+        if attach_to is None:
+            attach_to = ExpressionsScope(ExpressionContext)
+            expressions = self._expressions.get(ExpressionContext, {})
+            attach_to._add_expressions(expressions.values())
 
-        curr_dict = tree[ExpressionContext]
-        curr_scope = root
-
+        for context_type in tree:
+            subscope = ExpressionsScope(context_type)
+            expressions = self._expressions.get(context_type, {})
+            subscope._add_expressions(expressions.values())
+            attach_to._add_subscope(self._build_scopes_tree(tree[context_type], subscope))
+        return attach_to
