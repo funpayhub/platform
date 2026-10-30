@@ -7,6 +7,7 @@ __all__ = [
     'CallEncodeError',
     'ArgsEncodeError',
     'ArgsDecoder',
+    'ArgsEncoder',
     'CallDecoder',
     'CallEncoder',
     'call_encoder',
@@ -27,7 +28,12 @@ _TOKEN_ALLOWED_CHARS = frozenset(string.ascii_letters + string.digits + '_')
 
 
 def _check_token(
-    token: Any, name: str, exception_type: type[Exception] = ValueError, *args: Any, **kwargs: Any
+    token: Any,
+    name: str,
+    exception_type: type[Exception] = ValueError,
+    allow_leading_digit: bool = False,
+    *args: Any,
+    **kwargs: Any,
 ) -> None:
     if not isinstance(token, str):
         raise exception_type(f'{name} must be a string, not {type(token)!r}.', *args, **kwargs)
@@ -41,7 +47,7 @@ def _check_token(
                 *args,
                 **kwargs,
             )
-    if token[0].isdigit():
+    if not allow_leading_digit and token[0].isdigit():
         raise exception_type(f'{name} cannot start with a digit.', *args, **kwargs)
 
 
@@ -66,13 +72,13 @@ class ArgsEncodeError(CallEncodeError):
 
 
 _BARE_VALUE_FORBIDDEN = frozenset('[{("\\$')
-_BARE_VALUE_STOP = frozenset(',=)]}:')
+_BARE_VALUE_STOP = frozenset(']}),=:')
 
 
 class ArgsEncoder:
     _BARE_VALUE_FORBIDDEN = _BARE_VALUE_FORBIDDEN | _BARE_VALUE_STOP
     _JSON_ENCODER = json.JSONEncoder()
-    _JSON_DECODER = json.JSONDecoder()
+    _JSON_DECODER = json.JSONDecoder(strict=False)
 
     def encode(self, positional: Sequence[Any], keyword: dict[str, Any]) -> str:
         strfied = [self.encode_value(i) for i in positional] + [
@@ -149,40 +155,27 @@ args_encoder = ArgsEncoder()
 
 
 class ArgsDecoder:
-    _JSON_DECODER = json.JSONDecoder()
-
-    def decode(self, value: str) -> tuple[list[Any], dict[str, Any]]:
-        if not value:
-            self._error('Empty value passed.', 0)
-        if value[0] != '(':
-            self._error("Args string must start with '('.", 0)
-
-        positional, keyword, pos = self.raw_decode(value)
-        if pos != len(value):
-            self._error('Trailing data. Expected end of string.', pos)
-        return positional, keyword
+    _JSON_DECODER = json.JSONDecoder(strict=False)
 
     def raw_decode(self, value: str, pos: int = 0) -> tuple[list[Any], dict[str, Any], int]:
         if pos >= len(value):
-            return [], {}, pos
+            self._error(f'Position {pos} is out of string length {len(value)}', pos)
 
         if value[pos] != '(':
-            return [], {}, pos
+            self._error(f'`pos` must point to start of an args list `(`, got {value[pos]!r}.', pos)
         pos += 1
-
-        keyword_mode = False
-
         pos = self._consume_spaces(value, pos)
+
         if pos >= len(value):
-            self._error("Unexpected end of string. Expected args closure (')').", pos)
+            self._error('Unexpected end of string. Expected args list closure `)`.', pos)
         if value[pos] == ')':
             return [], {}, pos + 1
 
         positional = []
         keyword = {}
+        keyword_mode = False
         while True:
             start = pos
-
             if keyword_mode:
                 key, val, pos = self.decode_kw_value(value, pos)
                 if key in keyword:
@@ -192,11 +185,14 @@ class ArgsDecoder:
                 current, pos = self.decode_value(value, pos)
 
             if pos >= len(value):
-                self._error("Unexpected end of string. Expected args closure (')').", pos)
+                self._error('Unexpected end of string. Expected args list closure `)`.', pos)
+
             if not keyword_mode and value[pos] == '=':
                 keyword_mode = True
                 pos = start
-                continue  # todo: parse again is not good
+                # we were parsing token as any type of value before.
+                # now, with keyword_mode = True we will parse it as keyword argument name.
+                continue
 
             if not keyword_mode:
                 positional.append(current)
@@ -205,7 +201,7 @@ class ArgsDecoder:
                 break
 
             if value[pos] != ',':
-                self._error(f"Unexpected char {value[pos]!r}. Expected args separator (',').", pos)
+                self._error(f'Unexpected char {value[pos]!r}. Expected args separator `,`.', pos)
 
             pos += 1
             pos = self._consume_spaces(value, pos)
@@ -221,19 +217,15 @@ class ArgsDecoder:
             result, pos = self.decode_enquoted_value(string, pos)
         elif string[pos] == '[':
             if simple_only:
-                self._error(
-                    'Unexpected start of a sequence. Expected non-container types only.', pos
-                )
+                self._error('Unexpected start of a sequence.', pos)
             result, pos = self.decode_sequence(string, pos)
         elif string[pos] == '{':
             if simple_only:
-                self._error(
-                    'Unexpected start of a mapping. Expected non-container types only.', pos
-                )
+                self._error('Unexpected start of a mapping.', pos)
             result, pos = self.decode_mapping(string, pos)
         elif string[pos] == '$':
             if simple_only:
-                self._error('Unexpected start of a call. Expected non-container types only.', pos)
+                self._error('Unexpected start of a call.', pos)
             result, pos = call_decoder.raw_decode(string, pos)
         else:
             result, pos = self.decode_bare_value(string, pos)
@@ -393,93 +385,75 @@ args_decoder = ArgsDecoder()
 
 
 class CallEncoder:
-    _ARGS_ENCODER = ArgsEncoder()
-
-    def encode(self, call_name: str, args: Sequence[Any], kwargs: dict[str, Any]) -> str:
-        _check_token(call_name, 'Call name', CallEncodeError)
-        encoded_args = self._ARGS_ENCODER.encode(args, kwargs)
-        return f'${call_name}{encoded_args}'
+    def encode(self, call: Call) -> str:
+        encoded_args = args_encoder.encode(call.args, call.kwargs)
+        return f'${call.name}{encoded_args}'
 
 
 call_encoder = CallEncoder()
 
 
 class CallDecoder:
-    _ARGS_PARSER = ArgsDecoder()
-
-    def raw_decode(self, string: str, pos: int = 0) -> tuple[Call | None, int]:
-        initial_pos = pos
+    def raw_decode(self, string: str, pos: int = 0) -> tuple[Call, int]:
         if pos >= len(string):
-            return None, initial_pos
+            raise CallDecodeError(
+                msg=f'Position {pos} is out of string length {len(string)}', pos=pos
+            )
 
         if string[pos] != '$':
-            return None, initial_pos
+            raise CallDecodeError(msg='`pos` must point to start of a call.', pos=pos)
 
         pos += 1
-
         start = pos
         while True:
             if pos >= len(string):
                 break
-            if string[pos].isspace():
+
+            char = string[pos]
+            if char == '(' or char.isspace() or char not in _TOKEN_ALLOWED_CHARS:
                 break
-            if string[pos] == '(':
-                break
-            if string[pos] not in _TOKEN_ALLOWED_CHARS:
-                raise CallDecodeError(
-                    msg=f'Call name contains not allowed char {string[pos]!r}. '
-                    f"Call names can only contain ASCII letters, digits and '_'.",
-                    pos=pos,
-                )
             pos += 1
 
         if pos == start:
-            return None, initial_pos
+            raise CallDecodeError(msg='Unexpected end of string. Expected call name.', pos=start)
 
         name = string[start:pos]
-        if name[0].isdigit():
-            raise CallDecodeError(msg='Call name cannot start with a digit.', pos=start)
 
-        args, kwargs, pos = self._ARGS_PARSER.raw_decode(string, pos)
-
-        return Call(name=name, args=args, kwargs=kwargs), pos
+        if pos < len(string) and string[pos] == '(':
+            args, kwargs, pos = args_decoder.raw_decode(string, pos)
+            return Call(name=name, args=args, kwargs=kwargs), pos
+        return Call(name=name, args=[], kwargs={}), pos
 
     def extract_calls(self, string: str) -> StringWithCalls:
         result: list[str | Call] = []
         spans: dict[tuple[int, int], Call] = {}
-        text: list[str] = []
-
-        def flush_text() -> None:
-            if text:
-                result.append(''.join(text))
-                text.clear()
+        buffer: list[str] = []
 
         pos = 0
 
         while pos < len(string):
             if string[pos] != '$':
-                text.append(string[pos])
+                buffer.append(string[pos])
                 pos += 1
                 continue
 
             if string[pos : pos + 2] == '$$':
-                text.append('$')
+                buffer.append('$')
                 pos += 2
                 continue
 
             call, new_pos = self.raw_decode(string, pos)
 
-            if call is None:
-                text.append('$')
-                pos += 1
-                continue
-
-            flush_text()
+            if buffer:
+                result.append(''.join(buffer))
+                buffer.clear()
             result.append(call)
             spans[(pos, new_pos)] = call
             pos = new_pos
 
-        flush_text()
+        if buffer:
+            result.append(''.join(buffer))
+            buffer.clear()
         return StringWithCalls(string=string, decoded=result, call_spans=spans)
 
 

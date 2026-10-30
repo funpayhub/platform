@@ -5,7 +5,8 @@ Expressions allow embedding evaluated values in string literals.
 
 ## Syntax
 - Expressions can be embedded in strings using the `$` syntax: `$expression`.
-- An expression name may contain only ASCII letters, digits and `_`, and must not start with a digit.
+- An expression name may contain only ASCII letters, digits and `_`. Unlike Python identifiers, it may
+  start with a digit: `$1st_place` and `$5` are the expressions named `1st_place` and `5`.
   Example: `$expression1()`.
 - An expression name ends at the first character that is not an ASCII letter, digit or `_`
   (i.e. not in `[a-zA-Z0-9_]`). That character is not part of the expression:
@@ -38,7 +39,8 @@ Expressions allow embedding evaluated values in string literals.
 - A literal `$` in text must always be escaped as `$$`: `Price: $$5` is rendered as `Price: $5`.
 - A lone `$` is never treated as literal text. A `$` that is neither part of `$$` nor followed
   by a valid expression name is a syntax error. For example, `$ `, `$!` and a trailing `$` are
-  errors, and so is `$5`, because an expression name cannot start with a digit.
+  errors. `$5` is not an error in the syntax: it is a call of the expression named `5`, so a literal
+  `$5` must be written as `$$5`.
 - `$$` is processed first, from left to right:
   - `$$name` is rendered as `$name`;
   - `$$$name` is rendered as `$` followed by the value of the `$name` expression.
@@ -64,6 +66,12 @@ However, the syntax for passing arguments directly is defined only for the follo
   trailing whitespace is ignored: `$expression( two words )` receives `two words`.
   Strings that contain characters from the set above, are empty, or have leading or
   trailing whitespace must be enclosed in double quotes (`"`).
+  A quoted string follows JSON string syntax. A backslash starts an escape sequence, and only
+  these are valid: `\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t` and `\uXXXX`. Any other
+  backslash sequence is a syntax error, so a literal backslash must be doubled: `"C:\\path"`.
+  Raw control characters (U+0000 to U+001F, including a newline and a tab) are allowed inside
+  quotes and are kept as-is; `\n`, `\t` and so on are equivalent. Escape sequences are not processed
+  in unquoted strings, where a backslash is simply not allowed.
   If an unquoted value (with its leading and trailing whitespace removed) matches the syntax of
   another supported type, it is interpreted as that type.
   For example, `123` is interpreted as an integer, not a string. To represent it as a string, write `"123"`.
@@ -296,7 +304,7 @@ For a syntax error, `span` is the broken call as determined by the
 Every `$` in the text that is not part of `$$` starts an expression call. Every error belongs to
 exactly one **top-level** call:
 
-- `ExpressionsSyntaxError` - the call cannot be parsed (including `$5`, `$ ` and a trailing `$`).
+- `ExpressionsSyntaxError` - the call cannot be parsed (including `$ `, `$!` and a trailing `$`).
 - `UnknownExpressionError` - the name does not exist in the context.
   An expression can stop existing at any time, for example when the plugin that provided it is
   removed while texts that use it are saved in the configuration, so this is a regular error.
@@ -329,11 +337,12 @@ effect immediately.
 #### Recovering from syntax errors
 To keep a broken call as-is and continue parsing, the parser determines where the broken call ends:
 
-- An error in the name (`$5`, `$ `, `$!`, a trailing `$`): the broken call is the `$` alone.
-  Parsing continues right after it, so `Price: $5` is kept as `Price: $5`.
+- An error in the name (`$ `, `$!`, a trailing `$`): the broken call is the `$` alone.
+  Parsing continues right after it, so `Cost: $!` is kept as `Cost: $!`.
 - An error in the argument list: the broken call ends at the `)` that closes its `(`. To find it,
-  the parser counts `(` and `)` that are not inside double-quoted strings (`\"` inside a string does not
-  end it). If there is no closing `)`, the broken call extends to the end of the text.
+  the parser counts `(` and `)` that are not inside double-quoted strings. Inside a string a backslash
+  escapes the next character: `\"` does not end the string, while the `"` in `\\"` does.
+  If there is no closing `)`, the broken call extends to the end of the text.
 - The source text of a broken call is kept raw: `$$` inside it is not unescaped.
 
 ### Template validation

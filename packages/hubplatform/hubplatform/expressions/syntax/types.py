@@ -2,27 +2,29 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 from dataclasses import dataclass
+from collections.abc import Mapping
+
+lazy from .parsing import _check_token, call_encoder
 
 
 @dataclass
 class Call:
     name: str
     args: Sequence[Any]
-    kwargs: dict[str, Any]
+    kwargs: Mapping[str, Any]
 
     def __post_init__(self) -> None:
-        from .parsing import _check_token
-
-        _check_token(self.name, 'Call name')
+        _check_token(self.name, 'Call name', allow_leading_digit=True)
 
     def encode(self) -> str:
-        from .parsing import call_encoder
+        return call_encoder.encode(self)
 
-        return call_encoder.encode(self.name, self.args, self.kwargs)
+    def __hash__(self) -> int:
+        return id(self)
 
 
 @dataclass(frozen=True)
 class StringWithCalls:
     string: str
-    decoded: list[str | Call]
-    call_spans: dict[tuple[int, int], Call]
+    decoded: Sequence[str | Call]
+    call_spans: Mapping[tuple[int, int], Call]
