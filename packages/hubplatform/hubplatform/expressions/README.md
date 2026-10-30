@@ -19,7 +19,10 @@ Expressions allow embedding evaluated values in string literals.
   without arguments, followed by the text ` (1)`.
 - `$expression` and `$expression()` are equivalent.
 - Arguments can be positional or keyword (`name=value`):
-  - A keyword argument name must be a valid Python parameter name.
+  - A keyword argument name can be any valid Python identifier (`str.isidentifier()`) except a Python
+    keyword (`keyword.iskeyword()`: `class`, `if`, `None`, ...). Unlike expression names, it may contain
+    non-ASCII letters, and it cannot start with a digit. Names that are not reserved keywords are
+    allowed, including `match`, `type`, `print`, `true` and `null`.
   - A keyword argument value can be of any supported type, including another expression call.
   - Positional arguments must come before keyword arguments, and a keyword name
     must not be repeated.
@@ -54,11 +57,13 @@ However, the syntax for passing arguments directly is defined only for the follo
 - **Integers**: an optional leading `-` followed by digits, without leading zeros
   (regex: `-?(0|[1-9][0-9]*)`).
   Examples: `0`, `123`, `-5`.
-- **Floats**: an optional leading `-`, an integer part without leading zeros, a decimal point (`.`)
-  and a non-empty fractional part (regex: `-?(0|[1-9][0-9]*)\.[0-9]+`).
-  Examples: `123.321`, `-0.5`, `10.0`.
-- Any other numeric-looking value is a string, not a number: for example `007`, `1.`, `.5`,
-  `+1`, `1e5`, `NaN`, `Infinity` and `-Infinity` are all strings.
+- **Floats**: an optional leading `-`, an integer part without leading zeros, and a fractional part,
+  an exponent, or both. The fractional part is a decimal point (`.`) followed by at least one digit.
+  The exponent is `e` or `E`, an optional sign (`+` or `-`) and at least one digit
+  (regex: `-?(0|[1-9][0-9]*)(\.[0-9]+([eE][+-]?[0-9]+)?|[eE][+-]?[0-9]+)`).
+  Examples: `123.321`, `-0.5`, `10.0`, `1e5`, `1.5E3`, `1e+16`, `1e-07`.
+- Any other numeric-looking value is a string, not a number: for example `007`, `01e5`, `1.`, `.5`,
+  `1.e5`, `.5e1`, `1e`, `1e+`, `+1`, `NaN`, `Infinity` and `-Infinity` are all strings.
 - **Booleans**: `true` or `false`, case-sensitive.
 - **Null**: `null`, case-sensitive (as in JSON).
 - **Strings**: can be written without quotes if they contain no characters from the set

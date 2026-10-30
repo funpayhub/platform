@@ -18,13 +18,16 @@ __all__ = [
 
 import json
 import string
+import keyword
 from typing import Any, Mapping, NoReturn
-from collections.abc import Set, Sequence
+from collections.abc import Sequence
 
 from hubplatform.expressions.syntax.types import Call, StringWithCalls
 
 
 _TOKEN_ALLOWED_CHARS = frozenset(string.ascii_letters + string.digits + '_')
+_JSON_DECODER = json.JSONDecoder(strict=False, parse_int=int, parse_float=float)
+_JSON_ENCODER = json.JSONEncoder(ensure_ascii=False, allow_nan=False)
 
 
 def _check_token(
@@ -77,8 +80,8 @@ _BARE_VALUE_STOP = frozenset(']}),=:')
 
 class ArgsEncoder:
     _BARE_VALUE_FORBIDDEN = _BARE_VALUE_FORBIDDEN | _BARE_VALUE_STOP
-    _JSON_ENCODER = json.JSONEncoder()
-    _JSON_DECODER = json.JSONDecoder(strict=False)
+    _JSON_ENCODER = _JSON_ENCODER
+    _JSON_DECODER = _JSON_DECODER
 
     def encode(self, positional: Sequence[Any], keyword: dict[str, Any]) -> str:
         strfied = [self.encode_value(i) for i in positional] + [
@@ -155,7 +158,7 @@ args_encoder = ArgsEncoder()
 
 
 class ArgsDecoder:
-    _JSON_DECODER = json.JSONDecoder(strict=False)
+    _JSON_DECODER = _JSON_DECODER
 
     def raw_decode(self, value: str, pos: int = 0) -> tuple[list[Any], dict[str, Any], int]:
         if pos >= len(value):
@@ -328,7 +331,6 @@ class ArgsDecoder:
         string: str,
         pos: int,
         json_decode: bool = True,
-        allowed: Set[str] | None = None,
         allow_spaces: bool = True,
     ) -> tuple[Any, int]:
         start = pos
@@ -342,8 +344,6 @@ class ArgsDecoder:
                 break
             if string[pos] in _BARE_VALUE_FORBIDDEN:
                 self._error(f'Forbidden char {string[pos]!r} in bare value.', pos)
-            if allowed is not None and string[pos] not in allowed:
-                self._error(f'Forbidden char {string[pos]!r} in bare value.', pos)
             pos += 1
 
         stop = pos
@@ -351,21 +351,19 @@ class ArgsDecoder:
         if start == stop:
             self._error('Empty bare value.', pos)
 
-        val = string[start:stop]
+        val = string[start:stop].strip()
         if json_decode:
             try:
                 return self._JSON_DECODER.decode(val), pos
             except json.JSONDecodeError:
                 pass
-        return val.strip(), pos
+        return val, pos
 
     def decode_kw_key(self, string: str, pos: int) -> tuple[str, int]:
         start = pos
-        result, pos = self.decode_bare_value(
-            string, pos, json_decode=False, allowed=_TOKEN_ALLOWED_CHARS, allow_spaces=False
-        )
-        if result[0].isdigit():
-            self._error('Keyword name cannot start with a digit.', pos=start)
+        result, pos = self.decode_bare_value(string, pos, json_decode=False, allow_spaces=False)
+        if not result.isidentifier() or keyword.iskeyword(result):
+            self._error('Invalid keyword argument name.', pos=start)
         return result, pos
 
     def _consume_spaces(self, value: str, pos: int) -> int:
