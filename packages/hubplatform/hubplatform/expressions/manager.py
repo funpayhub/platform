@@ -1,17 +1,28 @@
 from __future__ import annotations
 
-from typing import Any, TypeAlias
-from dataclasses import dataclass
-from types import MappingProxyType
-from collections.abc import Mapping, Iterable, Generator
 
+__all__ = [
+    'ExpressionEnvelope',
+    'ExpressionsScope',
+    'ExpressionsManager',
+    'FormattingResult',
+]
+
+from typing import Any, Literal, TypeAlias, overload
+from dataclasses import field, dataclass
+from types import MappingProxyType
+from collections.abc import Mapping, Callable, Iterable, Generator
+
+from .syntax import Call, StringWithCalls, call_decoder
 from .category import ExpressionsCategory
-from .definition import Expression, ExpressionDefinition
+from .definition import Expression, ExpressionDefinition, extract_expression_definition
+from .exceptions import ExpressionError, ExpressionExecutionError
 from .call_context import ExpressionContext
 
 
 _ContextTree: TypeAlias = dict[type[ExpressionContext], '_ContextTree']
 _CategoriesTree: TypeAlias = dict[str, '_CategoriesTree']
+_ExpressionsByCategory: TypeAlias = dict[str | None, dict[str, 'ExpressionEnvelope']]
 
 
 @dataclass(frozen=True)
@@ -28,7 +39,7 @@ class ExpressionsScope:
         self._subscopes: dict[type[ExpressionContext], ExpressionsScope] = {}
         self._subscopes_proxy = MappingProxyType(self._subscopes)
         self._expressions: dict[str, ExpressionEnvelope] = {}
-        self._expressions_by_category: dict[str | None, dict[str, ExpressionEnvelope]] = {}
+        self._expressions_by_category: _ExpressionsByCategory = {}
 
     def _add_expressions(self, expressions: Iterable[ExpressionEnvelope], /) -> None:
         for expr in expressions:
@@ -65,27 +76,55 @@ class ExpressionsScope:
             curr = curr._parent
 
     @property
-    def available_expressions(self) -> Mapping[str, ExpressionEnvelope]:
+    def scope_expressions(self) -> dict[str, ExpressionEnvelope]:
+        return self._expressions.copy()
+
+    @property
+    def scope_expressions_by_category(self) -> _ExpressionsByCategory:
+        return {k: v.copy() for k, v in self._expressions_by_category.items()}
+
+    @property
+    def available_expressions(self) -> dict[str, ExpressionEnvelope]:
         expressions = [i._expressions for i in self.chain_to_root]
         result = {}
         for j in reversed(expressions):
             result.update(j)
         return result
 
+    @property
+    def available_expressions_by_category(self) -> _ExpressionsByCategory:
+        expressions = self.available_expressions
+        result = {}
+        for call_key, expr in expressions.items():
+            if expr.category not in result:
+                result[expr.category] = {}
+            result[expr.category][call_key] = expr
+        return result
+
+
+@dataclass(frozen=True)
+class FormattingResult:
+    result_text: str
+    decoded: StringWithCalls
+    errors: list[ExpressionError] = field(default_factory=list)
+
+    def __str__(self) -> str:
+        return self.result_text
+
 
 class ExpressionsManager:
-    def __init__(self) -> None:
+    def __init__(self, context: Mapping[str, Any]) -> None:
         self._expressions: dict[type[ExpressionContext], dict[str, ExpressionEnvelope]] = {}
         self._categories: dict[str, ExpressionsCategory] = {}
 
         self._context_type_to_id: dict[type[ExpressionContext], str] = {}
         self._id_to_context_type: dict[str, type[ExpressionContext]] = {}
 
-        self._context_tree: dict[Any, Any] = {}
         self._categories_tree: dict[Any, Any] = {}
-        self._tree: ExpressionsScope = ExpressionsScope(ExpressionContext)
+        self._scope_tree: ExpressionsScope = ExpressionsScope(ExpressionContext)
 
         self._frozen = False
+        self._context = context
 
     @property
     def frozen(self) -> bool:
@@ -93,7 +132,7 @@ class ExpressionsManager:
 
     def get(self, context: type[ExpressionContext]) -> ExpressionsScope:
         self._check_frozen()
-        curr = self._tree
+        curr = self._scope_tree
         for i in context.get_available_context_types()[1:]:
             if i not in curr.subscopes:
                 raise ValueError(
@@ -128,7 +167,44 @@ class ExpressionsManager:
         category: str | None = None,
     ) -> None:
         self._check_not_frozen()
-        pass
+
+        expression = (
+            expression
+            if isinstance(expression, ExpressionDefinition)
+            else extract_expression_definition(expression)
+        )
+        if not isinstance(context_type, type) or not issubclass(context_type, ExpressionContext):
+            raise TypeError('`context_type` must be a subclass of `ExpressionContext`.')
+
+        if context_type not in self._expressions:
+            self._expressions[context_type] = {}
+
+        if call_key in self._expressions[context_type]:
+            raise ValueError(
+                f'Call key {call_key!r} already registered in {context_type.__qualname__} context.'
+            )
+
+        self._expressions[context_type][call_key] = ExpressionEnvelope(
+            call_key=call_key, category=category, expression=expression
+        )
+
+    def register[T: Expression | ExpressionDefinition](
+        self,
+        *,
+        context_type: type[ExpressionContext],
+        call_key: str,
+        category: str | None = None,
+    ) -> Callable[[T], T]:
+        def inner(expr: T) -> T:
+            self.add_expression(
+                expression=expr,
+                context_type=context_type,
+                call_key=call_key,
+                category=category,
+            )
+            return expr
+
+        return inner
 
     def add_category(self):
         self._check_not_frozen()
@@ -138,9 +214,80 @@ class ExpressionsManager:
             return
 
         self._check_all_context_types_are_registered()
-        self._tree = self._build_scopes_tree()
+        self._scope_tree = self._build_scopes_tree()
         self._categories_tree = self._build_categories_tree()
         self._frozen = True
+
+    async def format_string(
+        self,
+        string: str,
+        context: ExpressionContext,
+        ignore_errors: bool = False,
+    ) -> FormattingResult:
+        decoded = call_decoder.extract_calls(string)
+        if not decoded.call_spans:
+            return FormattingResult(decoded=decoded, result_text=string, errors=[])
+
+        result = []
+        errors: list[ExpressionError] = []
+
+        for i in decoded.decoded:
+            if isinstance(i, str):
+                result.append(i)
+                continue
+
+            try:
+                result.append(await self.execute_call(i, context, render=True))
+            except Exception as err:
+                if not isinstance(err, ExpressionExecutionError):
+                    new_e = ExpressionExecutionError(expression_id=i.name)
+                    new_e.__cause__ = err
+                    err = new_e
+                if ignore_errors:
+                    errors.append(err)
+                    continue
+                raise err
+
+        return FormattingResult(
+            result_text=''.join(result),
+            errors=errors,
+            decoded=decoded,
+        )
+
+    @overload
+    async def execute_call(self, call: Call, ctx: ExpressionContext, render: Literal[True]) -> str:
+        pass
+
+    @overload
+    async def execute_call(self, call: Call, ctx: ExpressionContext, render: bool = False) -> Any:
+        pass
+
+    async def execute_call(self, call: Call, ctx: ExpressionContext, render: bool = False) -> Any:
+        scope = self.get(type(ctx))
+        expr = scope.available_expressions.get(call.name)
+        if expr is None:
+            raise ExpressionExecutionError(
+                expression_id=call.name,
+                message=f'Formatter {call.name!r} does not exist in manager.',
+            )
+
+        args = [await self.resolve_value(arg, ctx) for arg in call.args]
+        kwargs = {key: await self.resolve_value(value, ctx) for key, value in call.kwargs.items()}
+        resolved_call = Call(name=call.name, args=args, kwargs=kwargs)
+
+        return await expr.expression.execute(resolved_call, ctx, self._context, render=render)
+
+    async def resolve_value(self, value: Any, context: ExpressionContext) -> Any:
+        if isinstance(value, Call):
+            return await self.execute_call(value, context, render=False)
+
+        if isinstance(value, list):
+            return [await self.resolve_value(item, context) for item in value]
+
+        if isinstance(value, dict):
+            return {key: await self.resolve_value(item, context) for key, item in value.items()}
+
+        return value
 
     def _check_not_frozen(self) -> None:
         if self._frozen:

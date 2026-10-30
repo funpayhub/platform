@@ -128,13 +128,13 @@ def expression[T: Expression](*, docs: ExpressionDocs) -> Callable[[T], T]:
             call=expression_obj,
             docs=docs,
         )
-        expression_obj.__dict__['__hubplatform_expression_definition__'] = definition
+        setattr(expression_obj, '__hubplatform_expression_definition__', definition)
         return expression_obj
 
     return inner
 
 
-def extract_expression_definition(obj: Any) -> ExpressionDefinition:
+def extract_expression_definition(obj: object) -> ExpressionDefinition:
     if not hasattr(obj, '__hubplatform_expression_definition__'):
         raise ValueError(f'{obj} was not wrapped with `@expression` decorator.')
 
