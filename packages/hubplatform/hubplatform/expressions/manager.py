@@ -11,6 +11,7 @@ __all__ = [
 from typing import Any, Literal, TypeAlias, overload
 from dataclasses import field, dataclass
 from types import MappingProxyType
+from itertools import chain
 from collections.abc import Mapping, Callable, Iterable, Generator
 
 from .syntax import Call, StringWithCalls, call_decoder
@@ -35,7 +36,7 @@ class ExpressionEnvelope:
 class ExpressionsScope:
     def __init__(self, context_type: type[ExpressionContext]) -> None:
         self._context_type = context_type
-        self._parent = None
+        self._parent: ExpressionsScope | None = None
         self._subscopes: dict[type[ExpressionContext], ExpressionsScope] = {}
         self._subscopes_proxy = MappingProxyType(self._subscopes)
         self._expressions: dict[str, ExpressionEnvelope] = {}
@@ -70,7 +71,7 @@ class ExpressionsScope:
 
     @property
     def chain_to_root(self) -> Generator[ExpressionsScope, None, None]:
-        curr = self
+        curr: ExpressionsScope | None = self
         while curr is not None:
             yield curr
             curr = curr._parent
@@ -206,7 +207,7 @@ class ExpressionsManager:
 
         return inner
 
-    def add_category(self):
+    def add_category(self) -> None:
         self._check_not_frozen()
 
     def freeze(self) -> None:
@@ -301,7 +302,7 @@ class ExpressionsManager:
 
     def _build_context_tree(self) -> _ContextTree:
         result = {ExpressionContext: {}}
-        for context_type in self._expressions:
+        for context_type in chain(self._expressions, self._context_type_to_id):
             curr = result
             for curr_context_type in context_type.get_available_context_types():
                 if curr_context_type not in curr:
@@ -347,3 +348,70 @@ class ExpressionsManager:
             subscope._add_expressions(expressions.values())
             attach_to._add_subscope(self._build_scopes_tree(tree[context_type], subscope))
         return attach_to
+
+    def _copy(self) -> ExpressionsManager:
+        manager = ExpressionsManager({})
+        manager._expressions = {k: v.copy() for k, v in self._expressions.items()}
+        manager._categories = self._categories.copy()
+        manager._context_type_to_id = self._context_type_to_id.copy()
+        manager._id_to_context_type = self._id_to_context_type.copy()
+        return manager
+
+    def _merge_single(self, manager: ExpressionsManager, skip_existing: bool = True) -> None:
+        self._check_not_frozen()
+        if not skip_existing:
+            for ctx_type in manager._expressions:
+                self_exprs = self._expressions.get(ctx_type, {})
+                if self_exprs and (
+                    collision := self_exprs.keys() & manager._expressions[ctx_type].keys()
+                ):
+                    raise RuntimeError(f'Expressions {collision!r} already registered.')
+
+            if collision := self._categories.keys() & manager._categories.keys():
+                raise RuntimeError(f'Categories {collision!r} already registered.')
+
+            if collision := self._context_type_to_id.keys() & manager._context_type_to_id.keys():
+                raise RuntimeError(f'Context types {collision!r} already registered.')
+
+            if collision := self._id_to_context_type.keys() & manager._id_to_context_type.keys():
+                raise RuntimeError(f'Context type IDs {collision} already registered.')
+
+        for ctx_type in manager._expressions:
+            if ctx_type not in self._expressions:
+                self._expressions[ctx_type] = {}
+
+            self._expressions[ctx_type] |= {
+                k: v
+                for k, v in manager._expressions[ctx_type].items()
+                if k not in self._expressions[ctx_type]
+            }
+        self._categories |= {
+            k: v for k, v in manager._categories.items() if k not in self._categories
+        }
+
+        id_to_merge = {k for k in manager._id_to_context_type if k not in self._id_to_context_type}
+        context_types_to_merge = {
+            k: v
+            for k, v in manager._context_type_to_id.items()
+            if k not in self._context_type_to_id and v in id_to_merge
+        }
+        self._context_type_to_id |= context_types_to_merge
+        self._id_to_context_type |= {v: k for k, v in context_types_to_merge.items()}
+
+    def _replace_with(self, manager: ExpressionsManager) -> None:
+        self._check_not_frozen()
+        self._expressions = manager._expressions
+        self._categories = manager._categories
+        self._context_type_to_id = manager._context_type_to_id
+        self._id_to_context_type = manager._id_to_context_type
+
+    def merge_from(self, *managers: ExpressionsManager, skip_existing: bool = True) -> None:
+        self._check_not_frozen()
+        if not managers:
+            return
+
+        candidate = self._copy()
+        for manager in managers:
+            candidate._merge_single(manager, skip_existing=skip_existing)
+
+        self._replace_with(candidate)
