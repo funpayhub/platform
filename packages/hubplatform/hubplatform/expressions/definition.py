@@ -4,15 +4,13 @@ from __future__ import annotations
 __all__ = ['ExpressionDefinition', 'Expression', 'expression', 'extract_expression_definition']
 
 import inspect
-from typing import Any, Literal, Protocol, ParamSpec, overload, runtime_checkable
+from typing import Any, Protocol, Sequence, ParamSpec, runtime_checkable
 from dataclasses import field, dataclass
 from collections.abc import Mapping, Callable
 
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
 from .docs import ExpressionDocs
-from .syntax import Call
-from .exceptions import ExpressionExecutionError
 from .call_context import ExpressionContext
 
 
@@ -33,7 +31,7 @@ class ExpressionWithRendererProto(ExpressionProto[_P], Protocol[_P]):
         pass
 
 
-type Expression = ExpressionProto | type[ExpressionProto]
+type Expression = ExpressionProto[Any] | type[ExpressionProto[Any]]
 
 
 @dataclass(frozen=True)
@@ -60,57 +58,25 @@ class ExpressionDefinition:
             object.__setattr__(self, '_is_class', False)
             object.__setattr__(self, '_wrapped', CallableWrapper(self.call))
 
-    @overload
     async def execute(
         self,
-        call: Call,
+        args: Sequence[Any],
+        kwargs: Mapping[str, Any],
         context: ExpressionContext,
-        di_mapping: Mapping[str, Any],
-        render: Literal[True],
-    ) -> str:
-        pass
-
-    @overload
-    async def execute(
-        self,
-        call: Call,
-        context: ExpressionContext,
-        di_mapping: Mapping[str, Any],
+        di: Mapping[str, Any],
         render: bool = False,
-    ) -> Any:
-        pass
-
-    async def execute(
-        self,
-        call: Call,
-        context: ExpressionContext,
-        di_mapping: Mapping[str, Any],
-        render: bool = False,
-    ) -> Any:
-        try:
-            return await self._execute(call, context, di_mapping, render=render)
-        except ExpressionExecutionError:
-            raise
-        except Exception as e:
-            raise ExpressionExecutionError(
-                expression_id=call.name,
-                message=f'An unexpected error occurred while executing expression {call.name!r}.',
-            ) from e
-
-    async def _execute(
-        self, call: Call, context: ExpressionContext, di: Mapping[str, Any], render: bool = False
     ) -> Any:
         instance: Any = None
         if self._is_class and self._wrapped_init is not None:
             instance = object.__new__(self.call)  # type: ignore[arg-type]
             call_args, call_kwargs = self._wrapped_init.collect_args(
-                args=[instance, *call.args], kwargs=call.kwargs
+                args=[instance, *args], kwargs=kwargs
             )
             self.call.__init__(*call_args, **call_kwargs)  # type: ignore[misc]
             result = await self._wrapped(args=[instance, context], data=di, to_thread=False)
         else:
             result = await self._wrapped(
-                args=[context, *call.args], data={**call.kwargs, **di}, to_thread=False
+                args=[context, *args], data={**kwargs, **di}, to_thread=False
             )
         if not render:
             return result
@@ -135,7 +101,7 @@ def expression[T: Expression](*, docs: ExpressionDocs) -> Callable[[T], T]:
 
 
 def extract_expression_definition(obj: object) -> ExpressionDefinition:
-    if not hasattr(obj, '__hubplatform_expression_definition__'):
+    definition = getattr(obj, '__hubplatform_expression_definition__', None)
+    if not isinstance(definition, ExpressionDefinition):
         raise ValueError(f'{obj} was not wrapped with `@expression` decorator.')
-
-    return getattr(obj, '__hubplatform_expression_definition__')
+    return definition

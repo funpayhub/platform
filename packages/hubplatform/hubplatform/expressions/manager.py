@@ -95,7 +95,7 @@ class ExpressionsScope:
     @property
     def available_expressions_by_category(self) -> _ExpressionsByCategory:
         expressions = self.available_expressions
-        result = {}
+        result: _ExpressionsByCategory = {}
         for call_key, expr in expressions.items():
             if expr.category not in result:
                 result[expr.category] = {}
@@ -274,18 +274,23 @@ class ExpressionsManager:
 
         args = [await self.resolve_value(arg, ctx) for arg in call.args]
         kwargs = {key: await self.resolve_value(value, ctx) for key, value in call.kwargs.items()}
-        resolved_call = Call(name=call.name, args=args, kwargs=kwargs)
 
-        return await expr.expression.execute(resolved_call, ctx, self._context, render=render)
+        try:
+            return await expr.expression.execute(args, kwargs, ctx, self._context, render=render)
+        except Exception as e:
+            raise ExpressionExecutionError(
+                expression_id=call.name,
+                message=f'An error occurred while executing {call.name!r}.',
+            ) from e
 
     async def resolve_value(self, value: Any, context: ExpressionContext) -> Any:
         if isinstance(value, Call):
             return await self.execute_call(value, context, render=False)
 
-        if isinstance(value, list):
+        if isinstance(value, tuple):
             return [await self.resolve_value(item, context) for item in value]
 
-        if isinstance(value, dict):
+        if isinstance(value, frozendict):
             return {key: await self.resolve_value(item, context) for key, item in value.items()}
 
         return value
@@ -301,7 +306,7 @@ class ExpressionsManager:
             raise RuntimeError('This operation available only when expressions manager is frozen.')
 
     def _build_context_tree(self) -> _ContextTree:
-        result = {ExpressionContext: {}}
+        result: _ContextTree = {ExpressionContext: {}}
         for context_type in chain(self._expressions, self._context_type_to_id):
             curr = result
             for curr_context_type in context_type.get_available_context_types():
@@ -311,7 +316,7 @@ class ExpressionsManager:
         return result
 
     def _build_categories_tree(self) -> _CategoriesTree:
-        result = {}
+        result: _CategoriesTree = {}
         for full_category in self._categories:
             split = full_category.split('.')
             curr = result

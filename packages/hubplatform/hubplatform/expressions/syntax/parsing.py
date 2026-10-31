@@ -2,6 +2,8 @@ from __future__ import annotations
 
 
 __all__ = [
+    'Call',
+    'StringWithCalls',
     'CallDecodeError',
     'ArgsDecodeError',
     'CallEncodeError',
@@ -19,13 +21,11 @@ __all__ = [
 import json
 import string
 import keyword
-from json import JSONDecodeError
-from typing import Any, Mapping, NoReturn
-from collections.abc import Sequence
-
 import unicodedata
-
-from .types import Call, StringWithCalls
+from typing import Any, Mapping, NoReturn
+from dataclasses import dataclass
+from json import JSONDecodeError
+from collections.abc import Sequence
 
 
 def _parse_constant(_: Any) -> NoReturn:
@@ -36,7 +36,51 @@ _TOKEN_ALLOWED_CHARS = frozenset(string.ascii_letters + string.digits + '_')
 _JSON_DECODER = json.JSONDecoder(strict=False, parse_constant=_parse_constant)
 _JSON_ENCODER = json.JSONEncoder(ensure_ascii=False, allow_nan=False)
 
-type Types = str | bool | int | float | None | Call | Sequence['Types'] | Mapping['Types', 'Types']
+type DecodedTypes = (
+    str
+    | bool
+    | int
+    | float
+    | None
+    | Call
+    | tuple['DecodedTypes', ...]
+    | frozendict['DecodedTypes', 'DecodedTypes']
+)
+
+
+type EncodableTypes = (
+    DecodedTypes | Sequence['EncodableTypes'] | Mapping['EncodableTypes', 'EncodableTypes']
+)
+
+
+@dataclass(frozen=True)
+class Call:
+    name: str
+    args: tuple[DecodedTypes, ...]
+    kwargs: frozendict[str, DecodedTypes]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str):
+            raise TypeError(f'Call name must be a string, not {type(self.name)}.')
+        if not self.name:
+            raise ValueError('Call name cannot be empty.')
+
+        for index, char in enumerate(self.name):
+            if char not in _TOKEN_ALLOWED_CHARS:
+                raise ValueError(
+                    f'Call name {self.name!r} contains not allowed char {char!r} at position '
+                    f"{index}. Call name can only contain ASCII letters, digits and '_'.",
+                )
+
+    def encode(self) -> str:
+        return call_encoder.encode(self)
+
+
+@dataclass(frozen=True)
+class StringWithCalls:
+    string: str
+    decoded: tuple[str | Call, ...]
+    call_spans: frozendict[tuple[int, int], Call]
 
 
 class CallDecodeError(Exception):
@@ -68,14 +112,16 @@ class ArgsEncoder:
     _JSON_ENCODER = _JSON_ENCODER
     _JSON_DECODER = _JSON_DECODER
 
-    def encode(self, positional: Sequence[Any], keyword: Mapping[str, Any]) -> str:
+    def encode(
+        self, positional: Sequence[EncodableTypes], keyword: Mapping[str, EncodableTypes]
+    ) -> str:
         args = [self.encode_value(i) for i in positional]
         if keyword:
             args.append(self.encode_kw(keyword))
         args_str = ', '.join(args)
         return f'({args_str})'
 
-    def encode_value(self, value: Any) -> str:
+    def encode_value(self, value: EncodableTypes) -> str:
         if isinstance(value, str):
             return self.encode_string(value)
         if isinstance(value, int | float | bool) or value is None:
@@ -88,7 +134,7 @@ class ArgsEncoder:
             return value.encode()
         raise TypeError('Unexpected value type.')  # todo
 
-    def encode_kw(self, kw: Mapping[str, Any]) -> str:
+    def encode_kw(self, kw: Mapping[str, EncodableTypes]) -> str:
         normalized = {}
         for k, v in kw.items():
             k = unicodedata.normalize('NFKC', k)
@@ -99,7 +145,7 @@ class ArgsEncoder:
         encoded = [self.encode_kw_value(k, v) for k, v in normalized.items()]
         return ', '.join(encoded)
 
-    def encode_kw_value(self, key: str, val: Any) -> str:
+    def encode_kw_value(self, key: str, val: EncodableTypes) -> str:
         str_key = self.encode_kw_key(key)
         str_val = self.encode_value(val)
         return f'{str_key} = {str_val}'
@@ -140,20 +186,22 @@ class ArgsEncoder:
             return 'false'
         return self._JSON_ENCODER.encode(value)
 
-    def encode_sequence(self, value: Sequence[Any]) -> str:
+    def encode_sequence(self, value: Sequence[EncodableTypes]) -> str:
         result = []
         for i in value:
             result.append(self.encode_value(i))
 
         return f'[{", ".join(result)}]'
 
-    def encode_mapping(self, value: Mapping[str, Any]) -> str:
+    def encode_mapping(self, value: Mapping[EncodableTypes, EncodableTypes]) -> str:
         result = []
         for k, v in value.items():
-            if not isinstance(k, str):
-                raise ValueError('Mapping key must be a string!')  # todo
+            if isinstance(k, Call | Mapping) or (
+                isinstance(k, Sequence) and not isinstance(k, str)
+            ):
+                raise ArgsEncodeError(f'Mapping key {k!r} must be a non-container value.')
 
-            str_k = self.encode_string(k)
+            str_k = self.encode_value(k)
             str_v = self.encode_value(v)
             result.append(f'{str_k}: {str_v}')
         return f'{{{", ".join(result)}}}'
@@ -165,7 +213,9 @@ args_encoder = ArgsEncoder()
 class ArgsDecoder:
     _JSON_DECODER = _JSON_DECODER
 
-    def raw_decode(self, value: str, pos: int = 0) -> tuple[list[Any], dict[str, Any], int]:
+    def raw_decode(
+        self, value: str, pos: int = 0
+    ) -> tuple[tuple[DecodedTypes, ...], frozendict[str, DecodedTypes], int]:
         if pos >= len(value):
             self._error(f'Position {pos} is out of string length {len(value)}', pos)
 
@@ -177,10 +227,10 @@ class ArgsDecoder:
         if pos >= len(value):
             self._error('Unexpected end of string. Expected args list closure `)`.', pos)
         if value[pos] == ')':
-            return [], {}, pos + 1
+            return (), frozendict(), pos + 1
 
-        positional = []
-        keyword = {}
+        positional: list[DecodedTypes] = []
+        keyword: dict[str, DecodedTypes] = {}
         keyword_mode = False
         while True:
             start = pos
@@ -214,13 +264,15 @@ class ArgsDecoder:
             pos += 1
             pos = self._consume_spaces(value, pos)
 
-        return positional, keyword, pos + 1
+        return tuple(positional), frozendict(keyword), pos + 1
 
-    def decode_value(self, string: str, pos: int, simple_only: bool = False) -> tuple[Any, int]:
+    def decode_value(
+        self, string: str, pos: int, simple_only: bool = False
+    ) -> tuple[DecodedTypes, int]:
         if pos >= len(string):
             self._error('Unexpected end of string. Expected value.', pos)
 
-        result: Any
+        result: DecodedTypes
         if string[pos] == '"':
             result, pos = self.decode_enquoted_value(string, pos)
         elif string[pos] == '[':
@@ -239,7 +291,7 @@ class ArgsDecoder:
             result, pos = self.decode_bare_value(string, pos)
         return result, self._consume_spaces(string, pos)
 
-    def decode_kw_value(self, string: str, pos: int) -> tuple[str, Any, int]:
+    def decode_kw_value(self, string: str, pos: int) -> tuple[str, DecodedTypes, int]:
         key, pos = self.decode_kw_key(string, pos)
         pos = self._consume_spaces(string, pos)
         if pos >= len(string):
@@ -264,15 +316,17 @@ class ArgsDecoder:
         except json.JSONDecodeError as e:
             self._error('Bad enquoted string.', pos=e.pos)
 
-    def decode_mapping(self, string: str, pos: int) -> tuple[dict[Any, Any], int]:
+    def decode_mapping(
+        self, string: str, pos: int
+    ) -> tuple[frozendict[DecodedTypes, DecodedTypes], int]:
         pos += 1  # skip {
         pos = self._consume_spaces(string, pos)
         if pos >= len(string):
             self._error("Unexpected end of string. Expected end of a  mapping ('}').", pos)
         if string[pos] == '}':
-            return {}, pos + 1
+            return frozendict(), pos + 1
 
-        result = {}
+        result: dict[DecodedTypes, DecodedTypes] = {}
         while True:
             start = pos
             key, pos = self.decode_value(string, pos, simple_only=True)
@@ -301,18 +355,18 @@ class ArgsDecoder:
             pos += 1
             pos = self._consume_spaces(string, pos)
 
-        return result, pos + 1
+        return frozendict(result), pos + 1
 
-    def decode_sequence(self, string: str, pos: int) -> tuple[list[Any], int]:
+    def decode_sequence(self, string: str, pos: int) -> tuple[tuple[DecodedTypes, ...], int]:
         pos += 1  # skip [
         pos = self._consume_spaces(string, pos)
         if pos >= len(string):
             self._error("Unexpected end of string. Expected end of sequence (']').", pos)
 
         if string[pos] == ']':
-            return [], pos + 1
+            return (), pos + 1
 
-        result = []
+        result: list[DecodedTypes] = []
         while True:
             value, pos = self.decode_value(string, pos)
             result.append(value)
@@ -329,7 +383,7 @@ class ArgsDecoder:
             pos += 1
             pos = self._consume_spaces(string, pos)
 
-        return result, pos + 1
+        return tuple(result), pos + 1
 
     def decode_bare_value(
         self,
@@ -426,7 +480,7 @@ class CallDecoder:
         if pos < len(string) and string[pos] == '(':
             args, kwargs, pos = args_decoder.raw_decode(string, pos)
             return Call(name=name, args=args, kwargs=kwargs), pos
-        return Call(name=name, args=[], kwargs={}), pos
+        return Call(name=name, args=(), kwargs=frozendict()), pos
 
     def extract_calls(self, string: str) -> StringWithCalls:
         result: list[str | Call] = []
@@ -458,7 +512,7 @@ class CallDecoder:
         if buffer:
             result.append(''.join(buffer))
             buffer.clear()
-        return StringWithCalls(string=string, decoded=result, call_spans=spans)
+        return StringWithCalls(string=string, decoded=tuple(result), call_spans=frozendict(spans))
 
 
 call_decoder = CallDecoder()

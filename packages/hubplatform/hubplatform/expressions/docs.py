@@ -51,6 +51,8 @@ class ArgDocs:
         self._key = key
         self._overview = _DocsString(overview)
         self._default = _DocsString(default)
+
+        self._possible_values: _DocsString | Mapping[_DocsString, _DocsString]
         if isinstance(possible_values, str):
             self._possible_values = _DocsString(possible_values)
         else:

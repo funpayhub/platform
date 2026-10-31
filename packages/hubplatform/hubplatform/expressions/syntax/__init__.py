@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from .types import (
-    Call as Call,
-    StringWithCalls as StringWithCalls,
-)
 from .parsing import (
+    Call as Call,
     ArgsDecoder as ArgsDecoder,
     ArgsEncoder as ArgsEncoder,
     CallDecoder as CallDecoder,
@@ -13,6 +10,7 @@ from .parsing import (
     ArgsEncodeError as ArgsEncodeError,
     CallDecodeError as CallDecodeError,
     CallEncodeError as CallEncodeError,
+    StringWithCalls as StringWithCalls,
     args_decoder as args_decoder,
     args_encoder as args_encoder,
     call_decoder as call_decoder,

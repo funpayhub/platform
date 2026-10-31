@@ -11,7 +11,7 @@ from hubplatform.telegram.ui import (
     MenuBuildingSpec,
     KeyboardBlockSpec,
 )
-from hubplatform.expressions.registry import ArgDocs, ExpressionsRegistry
+from hubplatform.expressions.docs import ArgDocs, ExpressionsRegistry
 from hubplatform.app.components.telegram.menu_ids import MenuIDs
 from hubplatform.app.components.telegram.ui.callbacks import OpenMenu
 from hubplatform.app.components.telegram.ui.finalizers import StripAndNavigationFinalizer
