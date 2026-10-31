@@ -10,6 +10,7 @@ from hubplatform.expressions.manager import ExpressionsManager
 from hubplatform.expressions.call_context import ExpressionContext
 
 from .math_expressions import register_math_expressions
+from .text_expressions import register_text_expressions
 from .general_expressions import register_general_expressions
 
 
@@ -20,4 +21,5 @@ def create_default_expressions_manager(
     manager.add_context(ExpressionContext, 'root')
     register_general_expressions(manager)
     register_math_expressions(manager)
+    register_text_expressions(manager)
     return manager

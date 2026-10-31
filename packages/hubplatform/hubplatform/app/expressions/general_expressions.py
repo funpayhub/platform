@@ -3,6 +3,8 @@ from __future__ import annotations
 
 __all__ = ['register_general_expressions']
 
+import random as random_module
+from typing import Any
 from datetime import datetime
 from collections.abc import Mapping
 
@@ -25,6 +27,10 @@ TIME_MODES: Mapping[str, str] = {
 }
 
 
+_manager = ExpressionsManager({})
+
+
+@_manager.register(context_type=ExpressionContext, call_key='time', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         overview=I18nString(
@@ -89,5 +95,40 @@ async def time(ctx: ExpressionContext, mode: str) -> str:
     return datetime.now().strftime(template)
 
 
+@_manager.register(context_type=ExpressionContext, call_key='choice', category=CATEGORY)
+@expression(
+    docs=ExpressionDocs(
+        overview=I18nString(
+            'hubplatform.expressions.general.choice:description',
+            'Случайно выбирает один из переданных вариантов. Все варианты равновероятны. '
+            'Нужно передать хотя бы один вариант. '
+            'Пример: $choice(Привет, Здравствуйте, Добрый день)',
+        ),
+        args_doc={
+            'variants': ArgDocs(
+                name=I18nString(
+                    'hubplatform.expressions.general.choice.variants:name',
+                    'Варианты',
+                ),
+                key='variants',
+                overview=I18nString(
+                    'hubplatform.expressions.general.choice.variants:description',
+                    'Значения, из которых выбирается одно.',
+                ),
+                possible_values=I18nString(
+                    'hubplatform.expressions.general.choice.variants:possible_values',
+                    'Любой текст, число или результат другого выражения',
+                ),
+                kind='positional_only',
+            ),
+        },
+    )
+)
+async def choice(ctx: ExpressionContext, *variants: Any) -> Any:
+    if not variants:
+        raise ValueError('At least one variant is required.')
+    return random_module.choice(variants)
+
+
 def register_general_expressions(manager: ExpressionsManager) -> None:
-    manager.add_expression(time, ExpressionContext, 'time', category=CATEGORY)
+    manager.merge_from(_manager, skip_existing=False)
