@@ -49,7 +49,7 @@ type DecodedTypes = (
 
 
 type EncodableTypes = (
-    DecodedTypes | Sequence['EncodableTypes'] | Mapping['DecodedTypes', 'EncodableTypes']
+    DecodedTypes | Sequence['EncodableTypes'] | Mapping['EncodableTypes', 'EncodableTypes']
 )
 
 

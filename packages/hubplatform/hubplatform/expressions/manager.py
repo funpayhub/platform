@@ -369,19 +369,17 @@ class ExpressionsManager:
         if not skip_existing:
             for ctx_type in manager._expressions:
                 self_exprs = self._expressions.get(ctx_type, {})
-                if self_exprs and (
-                    collision := self_exprs.keys() & manager._expressions[ctx_type].keys()
-                ):
-                    raise RuntimeError(f'Expressions {collision!r} already registered.')
+                if col := self_exprs.keys() & manager._expressions[ctx_type].keys():
+                    raise RuntimeError(f'Expressions {col!r} already registered.')
 
-            if collision := self._categories.keys() & manager._categories.keys():
-                raise RuntimeError(f'Categories {collision!r} already registered.')
+            if col2 := self._categories.keys() & manager._categories.keys():
+                raise RuntimeError(f'Categories {col2!r} already registered.')
 
-            if collision := self._context_type_to_id.keys() & manager._context_type_to_id.keys():
-                raise RuntimeError(f'Context types {collision!r} already registered.')
+            if col3 := self._context_type_to_id.keys() & manager._context_type_to_id.keys():
+                raise RuntimeError(f'Context types {col3!r} already registered.')
 
-            if collision := self._id_to_context_type.keys() & manager._id_to_context_type.keys():
-                raise RuntimeError(f'Context type IDs {collision} already registered.')
+            if col4 := self._id_to_context_type.keys() & manager._id_to_context_type.keys():
+                raise RuntimeError(f'Context type IDs {col4} already registered.')
 
         for ctx_type in manager._expressions:
             if ctx_type not in self._expressions:

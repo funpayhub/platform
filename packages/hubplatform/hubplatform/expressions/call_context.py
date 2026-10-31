@@ -8,9 +8,23 @@ from typing import Any, ClassVar
 
 class ExpressionContext:
     _available_context_types: ClassVar[tuple[type[ExpressionContext], ...]] = ()
+    name: str = 'Root context'
+    description: str = 'Root context'
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
+    def __init_subclass__(
+        cls,
+        name: str | None = None,
+        description: str | None = None, **kwargs: Any
+    ) -> None:
         super().__init_subclass__(**kwargs)
+        if name is None:
+            raise ValueError('Context name is not specified.')
+        if description is None:
+            raise ValueError('Context description is not specified.')
+
+        cls.name = name
+        cls.description = description
+
         context_base: type[ExpressionContext] | None = None
         for i in cls.__bases__:
             if issubclass(i, ExpressionContext):
