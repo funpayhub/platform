@@ -53,7 +53,7 @@ class ExpressionDefinition:
             object.__setattr__(self, '_wrapped', CallableWrapper(self.call.__call__))
             object.__setattr__(self, '_wrapped_init', CallableWrapper(self.call.__init__))
             if hasattr(self.call, 'render') and inspect.iscoroutinefunction(self.call.render):
-                object.__setattr__(self, '_wrapped_render', CallableWrapper(self.call.render))
+                object.__setattr__(self, '_wrapped_renderer', CallableWrapper(self.call.render))
         else:
             object.__setattr__(self, '_is_class', False)
             object.__setattr__(self, '_wrapped', CallableWrapper(self.call))

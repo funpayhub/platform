@@ -288,10 +288,12 @@ class ExpressionsManager:
             return await self.execute_call(value, context, render=False)
 
         if isinstance(value, tuple):
-            return [await self.resolve_value(item, context) for item in value]
+            return tuple([await self.resolve_value(item, context) for item in value])
 
         if isinstance(value, frozendict):
-            return {key: await self.resolve_value(item, context) for key, item in value.items()}
+            return frozendict(
+                {key: await self.resolve_value(item, context) for key, item in value.items()}
+            )
 
         return value
 

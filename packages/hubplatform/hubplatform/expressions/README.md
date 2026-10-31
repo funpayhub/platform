@@ -92,12 +92,23 @@ However, the syntax for passing arguments directly is defined only for the follo
   Example: `[123, "123", [nested, list], [[true, false]]]`
 - **Mappings**: written using braces `{}`. An empty mapping `{}` is allowed.
   Key-value pairs must be separated with `:`, pairs with a comma. Trailing commas are not allowed.
-  Keys can be a value of any non-container supported type.
+  Keys can be a value of any supported type, including sequences, mappings and expression calls,
+  because a decoded sequence is a tuple, a decoded mapping is a `frozendict`, and a call is immutable,
+  so all of them are hashable. A key written with such a value can contain only values that are
+  hashable too, and that is always the case for the syntax above: for example,
+  `{[1, 2]: a, {x: [3]}: b, $call(1): c}`.
   Duplicate keys are not allowed and cause a parsing error.
   Keys are compared the same way as Python `dict` keys: values that are equal in Python are the
   same key. In particular, `1`, `1.0` and `true` are equal, as are `0`, `0.0` and `false`.
   So `{1: a, true: b}` and `{0: a, 0.0: b}` are duplicate-key errors, while `{1: a, "1": b}` is valid,
   because the string `"1"` is not equal to the integer `1`.
+  The same rule applies to keys that are sequences and mappings, compared element by element:
+  `{[1]: a, [true]: b}` and `{{1: x}: a, {true: x}: b}` are duplicate-key errors, `{[]: a, {}: b}` is valid
+  because an empty sequence is not equal to an empty mapping, and so are `{[1]: a, [[1]]: b}` and
+  `{[1]: a, ["1"]: b}`.
+  Calls are compared by their written form, the name and the arguments, and duplicates are detected
+  while parsing, before any expression is evaluated: `{$a: x, $a(): y}` is a duplicate-key error
+  (`$a` and `$a()` are the same call), and `{$a(1): x, $a(2): y}` is valid.
   Values can be of any supported type, including nested sequences, mappings and other expression calls.
   Example: `{some_key: 123, 1000: {another: mapping}, "some call": $other_expression(123, arg2)}`
 

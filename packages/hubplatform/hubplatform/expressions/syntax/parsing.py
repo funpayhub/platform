@@ -49,7 +49,7 @@ type DecodedTypes = (
 
 
 type EncodableTypes = (
-    DecodedTypes | Sequence['EncodableTypes'] | Mapping['EncodableTypes', 'EncodableTypes']
+    DecodedTypes | Sequence['EncodableTypes'] | Mapping['DecodedTypes', 'EncodableTypes']
 )
 
 
@@ -196,11 +196,6 @@ class ArgsEncoder:
     def encode_mapping(self, value: Mapping[EncodableTypes, EncodableTypes]) -> str:
         result = []
         for k, v in value.items():
-            if isinstance(k, Call | Mapping) or (
-                isinstance(k, Sequence) and not isinstance(k, str)
-            ):
-                raise ArgsEncodeError(f'Mapping key {k!r} must be a non-container value.')
-
             str_k = self.encode_value(k)
             str_v = self.encode_value(v)
             result.append(f'{str_k}: {str_v}')
@@ -266,9 +261,7 @@ class ArgsDecoder:
 
         return tuple(positional), frozendict(keyword), pos + 1
 
-    def decode_value(
-        self, string: str, pos: int, simple_only: bool = False
-    ) -> tuple[DecodedTypes, int]:
+    def decode_value(self, string: str, pos: int) -> tuple[DecodedTypes, int]:
         if pos >= len(string):
             self._error('Unexpected end of string. Expected value.', pos)
 
@@ -276,16 +269,10 @@ class ArgsDecoder:
         if string[pos] == '"':
             result, pos = self.decode_enquoted_value(string, pos)
         elif string[pos] == '[':
-            if simple_only:
-                self._error('Unexpected start of a sequence.', pos)
             result, pos = self.decode_sequence(string, pos)
         elif string[pos] == '{':
-            if simple_only:
-                self._error('Unexpected start of a mapping.', pos)
             result, pos = self.decode_mapping(string, pos)
         elif string[pos] == '$':
-            if simple_only:
-                self._error('Unexpected start of a call.', pos)
             result, pos = call_decoder.raw_decode(string, pos)
         else:
             result, pos = self.decode_bare_value(string, pos)
@@ -329,7 +316,7 @@ class ArgsDecoder:
         result: dict[DecodedTypes, DecodedTypes] = {}
         while True:
             start = pos
-            key, pos = self.decode_value(string, pos, simple_only=True)
+            key, pos = self.decode_value(string, pos)
             if key in result:
                 self._error(f'Duplicate mapping key {key!r}.', pos=start)
             if pos >= len(string):

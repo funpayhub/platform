@@ -7,7 +7,7 @@ from typing import Any, ClassVar
 
 
 class ExpressionContext:
-    _available_context_types: ClassVar[tuple[type[ExpressionContext], ...]] = tuple()
+    _available_context_types: ClassVar[tuple[type[ExpressionContext], ...]] = ()
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
