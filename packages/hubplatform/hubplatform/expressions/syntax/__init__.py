@@ -6,6 +6,7 @@ from .types import (
 )
 from .parsing import (
     ArgsDecoder as ArgsDecoder,
+    ArgsEncoder as ArgsEncoder,
     CallDecoder as CallDecoder,
     CallEncoder as CallEncoder,
     ArgsDecodeError as ArgsDecodeError,

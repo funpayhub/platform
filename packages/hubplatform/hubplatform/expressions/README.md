@@ -23,9 +23,13 @@ Expressions allow embedding evaluated values in string literals.
     keyword (`keyword.iskeyword()`: `class`, `if`, `None`, ...). Unlike expression names, it may contain
     non-ASCII letters, and it cannot start with a digit. Names that are not reserved keywords are
     allowed, including `match`, `type`, `print`, `true` and `null`.
+  - A keyword argument name is normalized to Unicode NFKC before it is checked, the same way Python
+    normalizes identifiers in source code, and the expression receives the normalized name. For example,
+    `ℌ=1` is passed as `H=1`, and the fullwidth `ｉｆ=1` becomes `if`, which is a keyword and a syntax
+    error. Normalization is applied before the keyword and duplicate checks.
   - A keyword argument value can be of any supported type, including another expression call.
   - Positional arguments must come before keyword arguments, and a keyword name
-    must not be repeated.
+    must not be repeated. Names are compared after normalization: `ℌ=1, H=2` is a duplicate.
 - Inside an argument list, whitespace around separators and brackets is allowed and is not part of the values:
   `$expression( a , b )` is the same as `$expression(a,b)`. Whitespace inside an unquoted
   string is kept: `$expression(hello world)` receives `hello world`. To keep leading or

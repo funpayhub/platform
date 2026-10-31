@@ -19,39 +19,24 @@ __all__ = [
 import json
 import string
 import keyword
+from json import JSONDecodeError
 from typing import Any, Mapping, NoReturn
 from collections.abc import Sequence
 
-from hubplatform.expressions.syntax.types import Call, StringWithCalls
+import unicodedata
+
+from .types import Call, StringWithCalls
+
+
+def _parse_constant(_: Any) -> NoReturn:
+    raise JSONDecodeError('', '', 0)
 
 
 _TOKEN_ALLOWED_CHARS = frozenset(string.ascii_letters + string.digits + '_')
-_JSON_DECODER = json.JSONDecoder(strict=False, parse_int=int, parse_float=float)
+_JSON_DECODER = json.JSONDecoder(strict=False, parse_constant=_parse_constant)
 _JSON_ENCODER = json.JSONEncoder(ensure_ascii=False, allow_nan=False)
 
-
-def _check_token(
-    token: Any,
-    name: str,
-    exception_type: type[Exception] = ValueError,
-    allow_leading_digit: bool = False,
-    *args: Any,
-    **kwargs: Any,
-) -> None:
-    if not isinstance(token, str):
-        raise exception_type(f'{name} must be a string, not {type(token)!r}.', *args, **kwargs)
-    if not token:
-        raise exception_type(f'{name} cannot be empty.', *args, **kwargs)
-    for index, c in enumerate(token):
-        if c not in _TOKEN_ALLOWED_CHARS:
-            raise exception_type(
-                f'{name} contains not allowed char {c!r} at position '
-                f"{index}. {name} can only contain ASCII letters, digits and '_'.",
-                *args,
-                **kwargs,
-            )
-    if not allow_leading_digit and token[0].isdigit():
-        raise exception_type(f'{name} cannot start with a digit.', *args, **kwargs)
+type Types = str | bool | int | float | None | Call | Sequence['Types'] | Mapping['Types', 'Types']
 
 
 class CallDecodeError(Exception):
@@ -83,11 +68,12 @@ class ArgsEncoder:
     _JSON_ENCODER = _JSON_ENCODER
     _JSON_DECODER = _JSON_DECODER
 
-    def encode(self, positional: Sequence[Any], keyword: dict[str, Any]) -> str:
-        strfied = [self.encode_value(i) for i in positional] + [
-            self.encode_kw_value(k, v) for k, v in keyword.items()
-        ]
-        return f'({", ".join(strfied)})'
+    def encode(self, positional: Sequence[Any], keyword: Mapping[str, Any]) -> str:
+        args = [self.encode_value(i) for i in positional]
+        if keyword:
+            args.append(self.encode_kw(keyword))
+        args_str = ', '.join(args)
+        return f'({args_str})'
 
     def encode_value(self, value: Any) -> str:
         if isinstance(value, str):
@@ -102,13 +88,32 @@ class ArgsEncoder:
             return value.encode()
         raise TypeError('Unexpected value type.')  # todo
 
+    def encode_kw(self, kw: Mapping[str, Any]) -> str:
+        normalized = {}
+        for k, v in kw.items():
+            k = unicodedata.normalize('NFKC', k)
+            if k in normalized:
+                raise ArgsEncodeError(f'Duplicate key {k!r} in keyword arguments.')
+            normalized[k] = v
+
+        encoded = [self.encode_kw_value(k, v) for k, v in normalized.items()]
+        return ', '.join(encoded)
+
     def encode_kw_value(self, key: str, val: Any) -> str:
         str_key = self.encode_kw_key(key)
         str_val = self.encode_value(val)
         return f'{str_key} = {str_val}'
 
     def encode_kw_key(self, val: str) -> str:
-        _check_token(val, 'Keyword arg name', CallEncodeError)
+        if not isinstance(val, str):
+            raise ArgsEncodeError(
+                f'Cannot encode keyword argument name {val!r}. '
+                f'Expected a string, got {type(val)!r}.'
+            )
+
+        val = unicodedata.normalize('NFKC', val)
+        if not val.isidentifier() or keyword.iskeyword(val):
+            raise ArgsEncodeError(f'Keyword argument name {val!r} is not valid.')
         return val
 
     def encode_string(self, value: str) -> str:
@@ -337,7 +342,7 @@ class ArgsDecoder:
 
         while True:
             if pos >= len(string):
-                self._error('Unexpected end of string. Expected end of bare value.', pos)
+                self._error('Unexpected end of string. Expected end of args list `)`.', pos)
             if not allow_spaces and string[pos].isspace():
                 break
             if string[pos] in _BARE_VALUE_STOP:
@@ -362,6 +367,7 @@ class ArgsDecoder:
     def decode_kw_key(self, string: str, pos: int) -> tuple[str, int]:
         start = pos
         result, pos = self.decode_bare_value(string, pos, json_decode=False, allow_spaces=False)
+        result = unicodedata.normalize('NFKC', result)
         if not result.isidentifier() or keyword.iskeyword(result):
             self._error('Invalid keyword argument name.', pos=start)
         return result, pos
@@ -413,7 +419,7 @@ class CallDecoder:
             pos += 1
 
         if pos == start:
-            raise CallDecodeError(msg='Unexpected end of string. Expected call name.', pos=start)
+            raise CallDecodeError(msg='Unexpected end of call. Expected call name.', pos=start)
 
         name = string[start:pos]
 
