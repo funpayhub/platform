@@ -7,7 +7,7 @@ from typing import Any, TextIO
 from numbers import Number
 from collections.abc import Mapping, Sequence
 
-from hubplatform.i18n import I18nString, Translator
+from hubplatform.i18n import Translator, TranslatableMixin
 
 
 RESET = '\x1b[0m'
@@ -101,7 +101,7 @@ def strip_control_sequences(text: str) -> str:
 
 
 def translate_message(message: object, translator: Translator | None) -> str:
-    if isinstance(message, I18nString):
+    if isinstance(message, TranslatableMixin):
         return message.translate_(translator=translator)
     return str(message)
 

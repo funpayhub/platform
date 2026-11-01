@@ -12,7 +12,7 @@ from abc import ABCMeta, abstractmethod
 from pathlib import Path
 from importlib.resources.abc import Traversable
 
-from hubplatform.i18n.types import I18nString, TranslationResult
+from hubplatform.i18n.types import I18nString, TranslatableMixin, TranslationResult
 
 
 type TranslationSource = str | Path | Traversable
@@ -32,7 +32,7 @@ class Translator(metaclass=ABCMeta):
         *,
         lang: str | None = None,
     ) -> TranslationResult:
-        if isinstance(val, I18nString):
+        if isinstance(val, TranslatableMixin):
             return val.translate_(self, lang=lang)
         return self.translate_string(val, variables, lang=lang)
 

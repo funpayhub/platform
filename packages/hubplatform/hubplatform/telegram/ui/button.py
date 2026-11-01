@@ -5,10 +5,10 @@ __all__ = ['Button']
 
 import html
 
-from pydantic import BaseModel
+from pydantic import BaseModel, InstanceOf
 from aiogram.types import InlineKeyboardButton
 
-from hubplatform.i18n import I18nString, Translator
+from hubplatform.i18n import Translator, TranslatableMixin
 from hubplatform.telegram.callback_data import CallbackData
 from hubplatform.telegram.ui.exceptions import ButtonRenderError
 from hubplatform.telegram.callback_data.hash import HashService
@@ -18,7 +18,7 @@ class Button(BaseModel):
     button_id: str
     """Button ID."""
 
-    text: str
+    text: InstanceOf[str]
     """Label text on the button"""
 
     style: str | None = None
@@ -97,7 +97,11 @@ class Button(BaseModel):
         if self.style is not None:
             attributes['style'] = self.style
 
-        text = self.text.translate_(translator) if isinstance(self.text, I18nString) else self.text
+        text = (
+            self.text.translate_(translator)
+            if isinstance(self.text, TranslatableMixin)
+            else self.text
+        )
 
         return (
             '<tg-button '
@@ -122,7 +126,9 @@ class Button(BaseModel):
             },
         )
         kwargs['text'] = (
-            self.text.translate_(translator) if isinstance(self.text, I18nString) else self.text
+            self.text.translate_(translator)
+            if isinstance(self.text, TranslatableMixin)
+            else self.text
         )
 
         if self.callback_data is not None:

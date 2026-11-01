@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 
-__all__ = ['I18nString', 'TranslationResult', 'safe_formatter']
+__all__ = [
+    'I18nString',
+    'I18nMultiString',
+    'TranslationResult',
+    'safe_formatter',
+    'TranslatableMixin',
+]
 
 from typing import TYPE_CHECKING, Any
+from abc import ABC, abstractmethod
 from string import Formatter
 from collections.abc import Mapping, Sequence
 
@@ -23,7 +30,17 @@ class SafeFormatter(Formatter):
 safe_formatter = SafeFormatter()
 
 
-class I18nString(str):
+class TranslatableMixin(ABC):
+    @abstractmethod
+    def translate_(
+        self,
+        translator: Translator | None = None,
+        *,
+        lang: str | None = None,
+    ) -> TranslationResult: ...
+
+
+class I18nString(str, TranslatableMixin):
     __slots__ = ('key', 'fallback', 'kwargs')
 
     key: str
@@ -71,9 +88,50 @@ class I18nString(str):
             return {}
 
         return {
-            k: v.translate_(translator=translator, lang=lang) if isinstance(v, I18nString) else v
+            k: v.translate_(translator=translator, lang=lang)
+            if isinstance(v, TranslatableMixin)
+            else v
             for k, v in self.kwargs.items()
         }
+
+
+class I18nMultiString(str, TranslatableMixin):
+    __slots__ = ('args',)
+
+    args: tuple[str, ...]
+    separator: str
+
+    def __new__(cls, *args: str, separator: str = '') -> I18nMultiString:
+        if not all(isinstance(arg, str) for arg in args):
+            raise TypeError('All parts of `I18nMultiString` must be strings.')
+        if not isinstance(separator, str):
+            raise TypeError('Separator must be a string.')
+
+        result = str.__new__(cls, separator.join(args))
+        result.args = args
+        result.separator = separator
+        return result
+
+    def translate_(
+        self,
+        translator: Translator | None = None,
+        *,
+        lang: str | None = None,
+    ) -> TranslationResult:
+        result = [
+            i.translate_(translator, lang=lang) if isinstance(i, TranslatableMixin) else i
+            for i in self.args
+        ]
+        return TranslationResult(self.separator.join(result), translated=True)
+
+    def __add__(self, other: str) -> I18nMultiString:
+        return I18nMultiString(*self.args, other, separator=self.separator)
+
+    def __iadd__(self, other: str) -> I18nMultiString:
+        return self + other
+
+    def __radd__(self, other: str) -> I18nMultiString:
+        return I18nMultiString(other, *self.args, separator=self.separator)
 
 
 class TranslationResult(str):

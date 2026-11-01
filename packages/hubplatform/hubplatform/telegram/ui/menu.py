@@ -14,11 +14,11 @@ __all__ = [
 from typing import Any, Mapping, MutableSequence
 from dataclasses import field as dataclass_field
 
-from pydantic import Field, BaseModel, JsonValue, ConfigDict
+from pydantic import Field, BaseModel, JsonValue, ConfigDict, InstanceOf
 from aiogram.types import InlineKeyboardButton
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from hubplatform.i18n import I18nString, Translator
+from hubplatform.i18n import Translator, TranslatableMixin
 from hubplatform.telegram.ui.session import MenuFrame
 from hubplatform.telegram.ui.keyboard import Keyboard, KeyboardBlockSpec
 from hubplatform.telegram.ui.exceptions import ButtonRenderError, KeyboardBlockBuildingError
@@ -29,11 +29,11 @@ from hubplatform.telegram.callback_data.hash import HashService
     config=ConfigDict(arbitrary_types_allowed=True, validate_assignment=True),
 )
 class MenuSpec:
-    header_text: str = ''
+    header_text: InstanceOf[str] = ''
     header_body_sep: str = '<hr/>\n'
-    body_text: str = ''
+    body_text: InstanceOf[str] = ''
     body_footer_sep: str = '\n<hr/>'
-    footer_text: str = ''
+    footer_text: InstanceOf[str] = ''
     header_footer_sep: str = '\n<hr/>\n'
     header_keyboard: MutableSequence[KeyboardBlockSpec] = dataclass_field(default_factory=list)
     main_keyboard: MutableSequence[KeyboardBlockSpec] = dataclass_field(default_factory=list)
@@ -103,17 +103,17 @@ class MenuSpec:
 
         header_text = (
             self.header_text
-            if not isinstance(self.header_text, I18nString)
+            if not isinstance(self.header_text, TranslatableMixin)
             else self.header_text.translate_(translator)
         )
         body_text = (
             self.body_text
-            if not isinstance(self.body_text, I18nString)
+            if not isinstance(self.body_text, TranslatableMixin)
             else self.body_text.translate_(translator)
         )
         footer_text = (
             self.footer_text
-            if not isinstance(self.footer_text, I18nString)
+            if not isinstance(self.footer_text, TranslatableMixin)
             else self.footer_text.translate_(translator)
         )
 

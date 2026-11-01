@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Literal
-from dataclasses import dataclass
-from html import escape
-from collections.abc import Mapping, Iterator
+from typing import Literal, Annotated
+from collections.abc import Mapping, Iterable
 
-from hubplatform.i18n import I18nString, Translator
+from eventry.asyncio.config import FromContext
+
+from hubplatform.i18n import I18nString, I18nMultiString
 from hubplatform.telegram.ui import (
     MenuSpec,
     UIRegistry,
@@ -111,87 +111,61 @@ def _resolve_scope(manager: ExpressionsManager, scope_id: str | None) -> Express
         return None
 
 
-def _scope_title(scope: ExpressionsScope, translator: Translator) -> str:
-    return translator.translate(scope.context_type.name)
-
-
-def _scope_path_title(scope: ExpressionsScope, translator: Translator) -> str:
-    chain = reversed(list(scope.chain_to_root))
-    return ' › '.join(_scope_title(i, translator) for i in chain)
-
-
-def _scope_description(scope: ExpressionsScope, translator: Translator) -> str:
-    return translator.translate(scope.context_type.description)
-
-
-def _category_name(node: ExpressionsCategoryNode, translator: Translator) -> str:
+def _category_name(node: ExpressionsCategoryNode) -> str:
     if node.category is None:
         return node.name or ''
-    return translator.translate(node.category.name)
+    return node.category.name
 
 
-def _category_description(node: ExpressionsCategoryNode, translator: Translator) -> str | None:
-    return None if node.category is None else translator.translate(node.category.description)
-
-
-def _info_block(emoji: str, label: str, title: str, description: str | None) -> str:
-    block = f'<p>{emoji} <b>{escape(label)}:</b> {escape(title)}</p>'
+def _info_block(emoji: str, label: str, title: str, description: str | None) -> I18nMultiString:
+    block = I18nMultiString('<p>', emoji, ' <b>', label, ':</b> ', title, '</p>')
     if description:
-        block += f'<p><i>{escape(description)}</i></p>'
+        block += I18nMultiString('<p><i>', description, '</i></p>')
     return block
 
 
-def _category_path_title(node: ExpressionsCategoryNode, translator: Translator) -> str:
+def _category_info_block(node: ExpressionsCategoryNode) -> I18nMultiString:
     chain = reversed([i for i in node.chain_to_root if not i.is_root])
-    return ' › '.join(_category_name(i, translator) for i in chain)
-
-
-@dataclass(frozen=True)
-class _CategoryFolder:
-    chain: tuple[ExpressionsCategoryNode, ...]
-    """Categories the folder stands for, from the topmost one. Empty categories with a single
-    subcategory are collapsed into the same folder."""
-
-    count: int
-
-    @property
-    def target(self) -> ExpressionsCategoryNode:
-        return self.chain[-1]
+    return _info_block(
+        CATEGORY_EMOJI,
+        CATEGORY_LABEL,
+        I18nMultiString(*(_category_name(i) for i in chain), separator=' › '),
+        None if node.category is None else node.category.description,
+    )
 
 
 _ByCategory = Mapping[str | None, Mapping[str, ExpressionEnvelope]]
 
 
-def _subtree(
-    node: ExpressionsCategoryNode, by_category: _ByCategory
-) -> Iterator[ExpressionEnvelope]:
+def _subtree(node: ExpressionsCategoryNode, by_category: _ByCategory) -> list[ExpressionEnvelope]:
     """Expressions of a category and its subcategories. For the root it is every expression."""
-    yield from by_category.get(node.id, {}).values()
+    result = list(by_category.get(node.id, {}).values())
     for subcategory in node.subcategories.values():
-        yield from _subtree(subcategory, by_category)
+        result += _subtree(subcategory, by_category)
+    return result
 
 
-def _folders(node: ExpressionsCategoryNode, by_category: _ByCategory) -> list[_CategoryFolder]:
-    """Non-empty subcategories of `node` as folders."""
+def _folders(
+    node: ExpressionsCategoryNode, by_category: _ByCategory
+) -> list[list[ExpressionsCategoryNode]]:
+    """Non-empty subcategories of `node` as folders. A folder is a chain of categories: empty
+    categories with a single non-empty subcategory are collapsed into the same folder."""
     folders = []
     for subcategory in node.subcategories.values():
-        count = sum(1 for _ in _subtree(subcategory, by_category))
-        if not count:
+        if not _subtree(subcategory, by_category):
             continue
 
         chain = [subcategory]
         while not by_category.get(chain[-1].id):
-            non_empty = [
-                i for i in chain[-1].subcategories.values() if any(_subtree(i, by_category))
-            ]
+            non_empty = [i for i in chain[-1].subcategories.values() if _subtree(i, by_category)]
             if len(non_empty) != 1:
                 break
             chain.append(non_empty[0])
-        folders.append(_CategoryFolder(chain=tuple(chain), count=count))
+        folders.append(chain)
     return folders
 
 
-def _by_call_key(envelopes: Iterator[ExpressionEnvelope]) -> list[ExpressionEnvelope]:
+def _by_call_key(envelopes: Iterable[ExpressionEnvelope]) -> list[ExpressionEnvelope]:
     return sorted(envelopes, key=lambda i: i.call_key)
 
 
@@ -212,17 +186,14 @@ def _open_list(
 )
 async def build_expressions_list_menu(
     ctx: MenuBuildContext[ExpressionsListMenuContext],
-    expressions_manager: ExpressionsManager,
-    translator: Translator,
+    expr: Annotated[ExpressionsManager, FromContext('expressions_manager')],
 ) -> MenuBuildingSpec:
-    menu_spec = MenuSpec()
-    finalizer = StripAndNavigationFinalizer()
-    menu_spec.header_text = f'<h2>{escape(translator.translate(MENU_TITLE))}</h2>'
+    menu_spec = MenuSpec(header_text=I18nMultiString('<h2>', MENU_TITLE, '</h2>'))
 
-    scope = _resolve_scope(expressions_manager, ctx.context.scope_id)
+    scope = _resolve_scope(expr, ctx.context.scope_id)
     if scope is None:
-        menu_spec.body_text = translator.translate(SCOPE_NOT_FOUND)
-        return MenuBuildingSpec(menu=menu_spec, finalizer=finalizer)
+        menu_spec.body_text = SCOPE_NOT_FOUND
+        return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
     by_category = scope.scope_expressions_by_category
     category = ctx.context.category
@@ -230,33 +201,29 @@ async def build_expressions_list_menu(
     scope_id = ctx.context.scope_id
 
     try:
-        node: ExpressionsCategoryNode | None = expressions_manager.get_category(category)
+        node: ExpressionsCategoryNode | None = expr.get_category(category)
     except KeyError:
         node = None
 
+    scope_chain = reversed(list(scope.chain_to_root))
     menu_spec.header_text += _info_block(
         SCOPE_EMOJI,
-        translator.translate(CONTEXT_LABEL),
-        _scope_path_title(scope, translator),
-        _scope_description(scope, translator),
+        CONTEXT_LABEL,
+        I18nMultiString(*(i.context_type.name for i in scope_chain), separator=' › '),
+        scope.context_type.description,
     )
     if node is not None and category is not None:
-        menu_spec.header_text += _info_block(
-            CATEGORY_EMOJI,
-            translator.translate(CATEGORY_LABEL),
-            _category_path_title(node, translator),
-            _category_description(node, translator),
-        )
+        menu_spec.header_text += _category_info_block(node)
 
     folders = _folders(node, by_category) if node is not None else []
-    uncategorized = _by_call_key(iter(by_category.get(None, {}).values()))
+    uncategorized = _by_call_key(by_category.get(None, {}).values())
     subtree = _by_call_key(_subtree(node, by_category)) if node is not None else []
     if view == 'all':
         shown = subtree
     elif view == 'uncategorized':
         shown = uncategorized
     elif category is not None:
-        shown = _by_call_key(iter(by_category.get(category, {}).values()))
+        shown = _by_call_key(by_category.get(category, {}).values())
     else:
         shown = [] if folders else uncategorized
 
@@ -264,22 +231,27 @@ async def build_expressions_list_menu(
         if category is None:
             for subscope in scope.populated_subscopes:
                 own = len(subscope.scope_expressions)
-                title = _scope_title(subscope, translator)
                 menu_spec.header_keyboard.append(
                     KeyboardBlockSpec.callback_button(
                         block_id=f'open_scope:{subscope.id}',
-                        text=f'{SCOPE_EMOJI} {title}' + (f' ({own})' if own else ''),
+                        text=I18nMultiString(
+                            f'{SCOPE_EMOJI} ',
+                            subscope.context_type.name,
+                            f' ({own})' if own else '',
+                        ),
                         callback_data=_open_list(subscope.id),
                     )
                 )
 
-        for folder in folders:
-            label = ' › '.join(_category_name(i, translator) for i in folder.chain)
+        for chain in folders:
+            name = I18nMultiString(*(_category_name(i) for i in chain), separator=' › ')
             menu_spec.header_keyboard.append(
                 KeyboardBlockSpec.callback_button(
-                    block_id=f'open_category:{folder.target.id}',
-                    text=f'{CATEGORY_EMOJI} {label} ({folder.count})',
-                    callback_data=_open_list(scope_id, folder.target.id),
+                    block_id=f'open_category:{chain[-1].id}',
+                    text=I18nMultiString(
+                        f'{CATEGORY_EMOJI} ', name, f' ({len(_subtree(chain[0], by_category))})'
+                    ),
+                    callback_data=_open_list(scope_id, chain[-1].id),
                 )
             )
 
@@ -287,8 +259,9 @@ async def build_expressions_list_menu(
             menu_spec.header_keyboard.append(
                 KeyboardBlockSpec.callback_button(
                     block_id='open_uncategorized',
-                    text=f'{CATEGORY_EMOJI} {translator.translate(UNCATEGORIZED_BUTTON)} '
-                    f'({len(uncategorized)})',
+                    text=I18nMultiString(
+                        f'{CATEGORY_EMOJI} ', UNCATEGORIZED_BUTTON, f' ({len(uncategorized)})'
+                    ),
                     callback_data=_open_list(scope_id, view='uncategorized'),
                 )
             )
@@ -297,21 +270,20 @@ async def build_expressions_list_menu(
             menu_spec.footer_keyboard.append(
                 KeyboardBlockSpec.callback_button(
                     block_id='show_all',
-                    text=f'{translator.translate(SHOW_ALL_BUTTON)} ({len(subtree)})',
+                    text=I18nMultiString(SHOW_ALL_BUTTON, f' ({len(subtree)})'),
                     callback_data=_open_list(scope_id, category, view='all'),
                     style='success',
                 )
             )
 
         if category is None and scope.is_root:
-            menu_spec.body_text = f'<p>{escape(translator.translate(MENU_DESCRIPTION))}</p>'
+            menu_spec.body_text += I18nMultiString('<p>', MENU_DESCRIPTION, '</p>')
 
     for envelope in shown:
-        name = translator.translate(envelope.expression.docs.name)
         menu_spec.main_keyboard.append(
             KeyboardBlockSpec.callback_button(
                 block_id=f'open_expression_docs:{envelope.call_key}',
-                text=f'{name} (${envelope.call_key})',
+                text=I18nMultiString(envelope.expression.docs.name, f' (${envelope.call_key})'),
                 callback_data=OpenMenu(
                     menu_id=MenuIDs.expressions.expression_docs_menu,
                     context=ExpressionDocsMenuContext(
@@ -322,9 +294,9 @@ async def build_expressions_list_menu(
         )
 
     if not shown and not menu_spec.header_keyboard:
-        menu_spec.body_text += f'<p>{escape(translator.translate(NO_EXPRESSIONS))}</p>'
+        menu_spec.body_text += I18nMultiString('<p>', NO_EXPRESSIONS, '</p>')
 
-    return MenuBuildingSpec(menu=menu_spec, finalizer=finalizer)
+    return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
 
 @expressions_ui_registry.add_menu_builder(
@@ -335,114 +307,91 @@ class ExpressionDocsMenuBuilder:
     async def __call__(
         self,
         ctx: MenuBuildContext[ExpressionDocsMenuContext],
-        expressions_manager: ExpressionsManager,
-        translator: Translator,
+        expr: Annotated[ExpressionsManager, FromContext('expressions_manager')],
     ) -> MenuBuildingSpec:
-        menu_spec = MenuSpec()
         call_key = ctx.context.call_key
-        menu_spec.header_text = (
-            f'<h2>{escape(translator.translate(EXPRESSION_TITLE))} '
-            f'<code>${escape(call_key)}</code></h2>'
+        menu_spec = MenuSpec(
+            header_text=I18nMultiString(
+                '<h2>', EXPRESSION_TITLE, f' <code>${call_key}</code></h2>'
+            )
         )
 
-        scope = _resolve_scope(expressions_manager, ctx.context.scope_id)
+        scope = _resolve_scope(expr, ctx.context.scope_id)
         envelope = scope.available_expressions.get(call_key) if scope is not None else None
         if scope is None or envelope is None:
-            menu_spec.body_text = translator.translate(EXPRESSION_NOT_FOUND)
+            menu_spec.body_text = EXPRESSION_NOT_FOUND
             return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
         if envelope.category is not None:
-            category_node = expressions_manager.get_category(envelope.category)
-            menu_spec.header_text += _info_block(
-                CATEGORY_EMOJI,
-                translator.translate(CATEGORY_LABEL),
-                _category_path_title(category_node, translator),
-                _category_description(category_node, translator),
-            )
+            menu_spec.header_text += _category_info_block(expr.get_category(envelope.category))
 
         defined_in = next(i for i in scope.chain_to_root if call_key in i.scope_expressions)
-        menu_spec.header_text += (
-            f'<p><i>{escape(translator.translate(DEFINED_IN))}: '
-            f'{escape(_scope_title(defined_in, translator))}</i></p>'
+        menu_spec.header_text += I18nMultiString(
+            '<p><i>', DEFINED_IN, ': ', defined_in.context_type.name, '</i></p>'
         )
 
         docs = envelope.expression.docs
-        menu_spec.body_text = escape(translator.translate(docs.overview))
+        menu_spec.body_text = docs.overview
         if docs.arg_docs:
-            menu_spec.body_text += f'<hr /><h3>{escape(translator.translate(PARAMETERS))}</h3>'
+            menu_spec.body_text += I18nMultiString('<hr /><h3>', PARAMETERS, '</h3>')
             for arg in docs.arg_docs.values():
-                menu_spec.body_text += self.build_arg_doc(arg, translator)
+                menu_spec.body_text += self.build_arg_doc(arg)
 
         menu_spec.footer_keyboard.append(
             KeyboardBlockSpec.copy_text_button(
                 block_id='copy_call',
-                text=f'{translator.translate(COPY_BUTTON)} ${call_key}',
+                text=I18nMultiString(COPY_BUTTON, f' ${call_key}'),
                 copy_text=f'${call_key}',
                 style='success',
             )
         )
         return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
-    def build_arg_doc(self, arg_doc: ArgDocs, translator: Translator) -> str:
-        def tr(text: str) -> str:
-            return escape(translator.translate(text))
-
-        required = (
-            PARAMS_TABLE_NOT_REQUIRED if arg_doc.default is not None else PARAMS_TABLE_REQUIRED
-        )
-        table = f"""
-<tr>
-    <th align="center">{tr(PARAMS_TABLE_PROPERTY)}</th>
-    <th align="center">{tr(PARAMS_TABLE_VALUE)}</th>
-</tr>
-<tr>
-    <td>{tr(PARAMS_TABLE_NAME)}</td>
-    <td><code>{escape(arg_doc.key)}</code></td>
-</tr>
-<tr>
-    <td>{tr(PARAMS_TABLE_IS_REQUIRED)}</td>
-    <td>{tr(required)}</td>
-</tr>
-<tr>
-    <td>{tr(PARAMS_TABLE_KIND)}</td>
-    <td>{tr(PARAMETER_KINDS.get(arg_doc.kind, arg_doc.kind))}</td>
-</tr>"""
+    def build_arg_doc(self, arg_doc: ArgDocs) -> I18nMultiString:
+        rows = [
+            (PARAMS_TABLE_NAME, f'<code>{arg_doc.key}</code>'),
+            (
+                PARAMS_TABLE_IS_REQUIRED,
+                PARAMS_TABLE_NOT_REQUIRED
+                if arg_doc.default is not None
+                else PARAMS_TABLE_REQUIRED,
+            ),
+            (PARAMS_TABLE_KIND, PARAMETER_KINDS.get(arg_doc.kind, arg_doc.kind)),
+        ]
         if isinstance(arg_doc.possible_values, str):
-            table += f"""
-<tr>
-    <td>{tr(PARAMS_TABLE_POSSIBLE_VALUES)}</td>
-    <td>{tr(arg_doc.possible_values)}</td>
-</tr>"""
+            rows.append((PARAMS_TABLE_POSSIBLE_VALUES, arg_doc.possible_values))
         if arg_doc.default is not None:
-            table += f"""
-<tr>
-    <td>{tr(PARAMS_TABLE_DEFAULT)}</td>
-    <td><code>{escape(arg_doc.default)}</code></td>
-</tr>
-"""
+            rows.append((PARAMS_TABLE_DEFAULT, f'<code>{arg_doc.default}</code>'))
 
-        total = f'<table bordered striped>{table}</table>'
+        result = I18nMultiString(
+            '<details><summary>',
+            arg_doc.name,
+            f' (<code>{arg_doc.key}</code>)</summary><i>',
+            arg_doc.overview,
+            '</i>\n<table bordered striped><tr><th align="center">',
+            PARAMS_TABLE_PROPERTY,
+            '</th><th align="center">',
+            PARAMS_TABLE_VALUE,
+            '</th></tr>',
+        )
+        for label, value in rows:
+            result += I18nMultiString('<tr><td>', label, '</td><td>', value, '</td></tr>')
+        result += '</table>'
 
         if isinstance(arg_doc.possible_values, Mapping):
-            values_table = f"""
-<tr>
-    <th align="center">{tr(POSSIBLE_VALUES_TABLE_VALUE)}</th>
-    <th align="center">{tr(POSSIBLE_VALUES_TABLE_DESC)}</th>
-</tr>
-"""
-            values_table += ''.join(
-                f'<tr><td><code>{escape(key)}</code></td><td>{tr(desc)}</td></tr>'
-                for key, desc in arg_doc.possible_values.items()
+            result += I18nMultiString(
+                '<hr /><h4>',
+                PARAMS_TABLE_POSSIBLE_VALUES,
+                '</h4><table bordered striped><tr><th align="center">',
+                POSSIBLE_VALUES_TABLE_VALUE,
+                '</th><th align="center">',
+                POSSIBLE_VALUES_TABLE_DESC,
+                '</th></tr>',
             )
-            total += (
-                f'<hr /><h4>{tr(PARAMS_TABLE_POSSIBLE_VALUES)}</h4>'
-                f'<table bordered striped>{values_table}</table>'
-            )
+            for key, desc in arg_doc.possible_values.items():
+                result += I18nMultiString(
+                    f'<tr><td><code>{key}</code></td><td>', desc, '</td></tr>'
+                )
+            result += '</table>'
 
-        total = f'<i>{tr(arg_doc.overview)}</i>\n{total}'
-        return (
-            f'<details>'
-            f'<summary>{tr(arg_doc.name)} (<code>{escape(arg_doc.key)}</code>)</summary>'
-            f'{total}'
-            f'</details>'
-        )
+        return result + '</details>'

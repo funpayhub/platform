@@ -6,6 +6,8 @@ __all__ = [
     'FluentTranslator',
     'global_translator',
     'I18nString',
+    'I18nMultiString',
+    'TranslatableMixin',
     'safe_formatter',
     'TranslationResult',
 ]
@@ -16,7 +18,13 @@ from importlib.resources import files
 from importlib.resources.abc import Traversable
 
 from .base import Translator
-from .types import I18nString, TranslationResult, safe_formatter
+from .types import (
+    I18nString,
+    I18nMultiString,
+    TranslatableMixin,
+    TranslationResult,
+    safe_formatter,
+)
 from .fluent import FluentTranslator
 
 
