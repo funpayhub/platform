@@ -13,7 +13,6 @@ class PropertiesMenuIDs:
 
 class ExpressionsMenuIDs:
     expressions_list_menu = 'hubplatform.expressions.list'
-    expression_categories_list_menu = 'hubplatform.expressions.list_categories'
     expression_docs_menu = 'hubplatform.expressions.docs'
 
 

@@ -19,15 +19,13 @@ _P = ParamSpec('_P')
 
 @runtime_checkable
 class ExpressionProto(Protocol[_P]):
-    async def __call__(self, _c: ExpressionContext, /, *_a: _P.args, **_kw: _P.kwargs) -> Any:
+    async def __call__(self, _c: Any, /, *_a: _P.args, **_kw: _P.kwargs) -> Any:
         pass
 
 
 @runtime_checkable
 class ExpressionWithRendererProto(ExpressionProto[_P], Protocol[_P]):
-    async def render(
-        self, _c: ExpressionContext, _v: Any, /, *_a: _P.args, **_kw: _P.kwargs
-    ) -> str:
+    async def render(self, _c: Any, _v: Any, /, *_a: _P.args, **_kw: _P.kwargs) -> str:
         pass
 
 

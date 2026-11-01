@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from hubplatform.i18n import I18nString
 from hubplatform.expressions.docs import ArgDocs, ExpressionDocs
 from hubplatform.expressions.manager import ExpressionsManager
+from hubplatform.expressions.category import ExpressionsCategory
 from hubplatform.expressions.definition import expression
 from hubplatform.expressions.call_context import ExpressionContext
 
@@ -25,6 +26,19 @@ MAX_ROUND_DIGITS = 20
 
 
 _manager = ExpressionsManager({})
+_manager.add_category(
+    CATEGORY,
+    ExpressionsCategory(
+        name=I18nString(
+            'hubplatform.expressions.general:math:name',
+            'Математика',
+        ),
+        description=I18nString(
+            'hubplatform.expressions.general:math:description',
+            'Арифметика, округление, проценты и случайные числа.',
+        ),
+    ),
+)
 
 
 def _require_number(value: object, name: str) -> Number:
@@ -95,6 +109,10 @@ def _div(a: Number, b: Number) -> Number:
 @_manager.register(context_type=ExpressionContext, call_key='random', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:math.random:name',
+            'Случайное число',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:math.random:description',
             'Случайное число от min до max, обе границы включены. Если оба числа целые, '
@@ -148,6 +166,10 @@ async def random(ctx: ExpressionContext, min: Number, max: Number) -> Number:
 @_manager.register(context_type=ExpressionContext, call_key='sum', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:math.sum:name',
+            'Сумма',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:math.sum:description',
             'Сумма всех переданных чисел. Вложенные списки тоже суммируются. '
@@ -183,6 +205,10 @@ async def sum_numbers(ctx: ExpressionContext, *args: object) -> Number:
 @_manager.register(context_type=ExpressionContext, call_key='min', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:math.min:name',
+            'Минимум',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:math.min:description',
             'Наименьшее из переданных чисел. Вложенные списки тоже учитываются. '
@@ -218,6 +244,10 @@ async def min_number(ctx: ExpressionContext, *args: object) -> Number:
 @_manager.register(context_type=ExpressionContext, call_key='max', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:math.max:name',
+            'Максимум',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:math.max:description',
             'Наибольшее из переданных чисел. Вложенные списки тоже учитываются. '
@@ -253,6 +283,10 @@ async def max_number(ctx: ExpressionContext, *args: object) -> Number:
 @_manager.register(context_type=ExpressionContext, call_key='round', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:math.round:name',
+            'Округление',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:math.round:description',
             'Округляет число до заданного количества знаков после запятой. '
@@ -317,6 +351,10 @@ async def round_number(ctx: ExpressionContext, number: Number, digits: int = 0) 
 @_manager.register(context_type=ExpressionContext, call_key='sub', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:math.sub:name',
+            'Разность',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:math.sub:description',
             'Разность двух чисел: a - b. Пример: $sub(10, 3)',
@@ -362,6 +400,10 @@ async def sub(ctx: ExpressionContext, a: Number, b: Number) -> Number:
 @_manager.register(context_type=ExpressionContext, call_key='mul', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:math.mul:name',
+            'Произведение',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:math.mul:description',
             'Произведение всех переданных чисел. Вложенные списки тоже перемножаются. '
@@ -397,6 +439,10 @@ async def mul(ctx: ExpressionContext, *args: object) -> Number:
 @_manager.register(context_type=ExpressionContext, call_key='div', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:math.div:name',
+            'Деление',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:math.div:description',
             'Делит a на b. Если оба числа целые и делятся нацело, результат целый, '
@@ -443,6 +489,10 @@ async def div(ctx: ExpressionContext, a: Number, b: Number) -> Number:
 @_manager.register(context_type=ExpressionContext, call_key='percent', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:math.percent:name',
+            'Процент',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:math.percent:description',
             'Вычисляет процент от числа: value * percent / 100. '

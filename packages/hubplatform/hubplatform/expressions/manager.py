@@ -8,6 +8,7 @@ __all__ = [
     'FormattingResult',
 ]
 
+import re
 from typing import Any, Literal, TypeAlias, overload
 from dataclasses import field, dataclass
 from types import MappingProxyType
@@ -15,14 +16,15 @@ from itertools import chain
 from collections.abc import Mapping, Callable, Iterable, Generator
 
 from .syntax import Call, StringWithCalls, call_decoder
-from .category import ExpressionsCategory
+from .category import ExpressionsCategory, ExpressionsCategoryNode
 from .definition import Expression, ExpressionDefinition, extract_expression_definition
 from .exceptions import ExpressionError, ExpressionExecutionError
 from .call_context import ExpressionContext
 
 
+_CATEGORY_ID_PATTERN = re.compile(r'[a-z0-9_]+(\.[a-z0-9_]+)*')
+
 _ContextTree: TypeAlias = dict[type[ExpressionContext], '_ContextTree']
-_CategoriesTree: TypeAlias = dict[str, '_CategoriesTree']
 _ExpressionsByCategory: TypeAlias = dict[str | None, dict[str, 'ExpressionEnvelope']]
 
 
@@ -34,8 +36,11 @@ class ExpressionEnvelope:
 
 
 class ExpressionsScope:
-    def __init__(self, context_type: type[ExpressionContext]) -> None:
+    def __init__(
+        self, context_type: type[ExpressionContext], context_id: str | None = None
+    ) -> None:
         self._context_type = context_type
+        self._id = context_id
         self._parent: ExpressionsScope | None = None
         self._subscopes: dict[type[ExpressionContext], ExpressionsScope] = {}
         self._subscopes_proxy = MappingProxyType(self._subscopes)
@@ -54,6 +59,11 @@ class ExpressionsScope:
         subscope._parent = self
 
     @property
+    def id(self) -> str | None:
+        """ID the context type was registered with, or `None` for an unregistered context."""
+        return self._id
+
+    @property
     def context_type(self) -> type[ExpressionContext]:
         return self._context_type
 
@@ -64,6 +74,26 @@ class ExpressionsScope:
     @property
     def subscopes(self) -> Mapping[type[ExpressionContext], ExpressionsScope]:
         return self._subscopes_proxy
+
+    @property
+    def populated_subscopes(self) -> list[ExpressionsScope]:
+        """Subscopes that, or whose descendants, bind expressions of their own.
+
+        A subscope of an unregistered context type has no ID and cannot be addressed, so its own
+        populated subscopes are listed instead of it.
+        """
+        result: list[ExpressionsScope] = []
+        for subscope in self._subscopes.values():
+            if subscope._id is None:
+                result.extend(subscope.populated_subscopes)
+            elif subscope._has_expressions_in_subtree():
+                result.append(subscope)
+        return result
+
+    def _has_expressions_in_subtree(self) -> bool:
+        return bool(self._expressions) or any(
+            i._has_expressions_in_subtree() for i in self._subscopes.values()
+        )
 
     @property
     def is_root(self) -> bool:
@@ -121,7 +151,7 @@ class ExpressionsManager:
         self._context_type_to_id: dict[type[ExpressionContext], str] = {}
         self._id_to_context_type: dict[str, type[ExpressionContext]] = {}
 
-        self._categories_tree: dict[Any, Any] = {}
+        self._categories_tree: ExpressionsCategoryNode = ExpressionsCategoryNode()
         self._scope_tree: ExpressionsScope = ExpressionsScope(ExpressionContext)
 
         self._frozen = False
@@ -140,6 +170,37 @@ class ExpressionsManager:
                     f'{context.__module__}.{context.__qualname__} does not exist in scopes tree.'
                 )
             curr = curr.subscopes[i]
+        return curr
+
+    def get_by_id(self, context_id: str) -> ExpressionsScope:
+        self._check_frozen()
+        if context_id not in self._id_to_context_type:
+            raise KeyError(f'Context ID {context_id!r} is not registered.')
+        return self.get(self._id_to_context_type[context_id])
+
+    @property
+    def categories(self) -> Mapping[str, ExpressionsCategory]:
+        return MappingProxyType(self._categories)
+
+    @property
+    def categories_tree(self) -> ExpressionsCategoryNode:
+        """Root of the categories tree. Available after freezing."""
+        self._check_frozen()
+        return self._categories_tree
+
+    def get_category(self, category_id: str | None = None) -> ExpressionsCategoryNode:
+        """Finds a category node by ID. `None` is the root. Raises `KeyError` if there is none."""
+        self._check_frozen()
+        curr = self._categories_tree
+        if category_id is None:
+            return curr
+
+        parts = category_id.split('.')
+        for i in range(1, len(parts) + 1):
+            node_id = '.'.join(parts[:i])
+            if node_id not in curr.subcategories:
+                raise KeyError(f'Category {category_id!r} does not exist in categories tree.')
+            curr = curr.subcategories[node_id]
         return curr
 
     def add_context(self, context_type: type[ExpressionContext], id: str) -> None:
@@ -207,8 +268,16 @@ class ExpressionsManager:
 
         return inner
 
-    def add_category(self) -> None:
+    def add_category(self, category_id: str, category: ExpressionsCategory) -> None:
         self._check_not_frozen()
+        if not _CATEGORY_ID_PATTERN.fullmatch(category_id):
+            raise ValueError(
+                f'Invalid category ID {category_id!r}. '
+                f'Expected dot-separated names of lowercase letters, digits and underscores.'
+            )
+        if category_id in self._categories:
+            raise ValueError(f'Category {category_id!r} is already registered.')
+        self._categories[category_id] = category
 
     def freeze(self) -> None:
         if self._frozen:
@@ -317,20 +386,27 @@ class ExpressionsManager:
                 curr = curr[curr_context_type]
         return result
 
-    def _build_categories_tree(self) -> _CategoriesTree:
-        result: _CategoriesTree = {}
-        for full_category in self._categories:
-            split = full_category.split('.')
-            curr = result
-            curr_name = ''
+    def _build_categories_tree(self) -> ExpressionsCategoryNode:
+        used = {
+            i.category
+            for exprs in self._expressions.values()
+            for i in exprs.values()
+            if i.category is not None
+        }
+        category_ids = [*self._categories, *sorted(used - self._categories.keys())]
 
-            for cat in split:
-                curr_name += ('.' if curr_name else '') + cat
-                if cat not in curr:
-                    curr[cat] = {}
-                curr = curr[cat]
-                continue
-        return result
+        root = ExpressionsCategoryNode()
+        for category_id in category_ids:
+            curr = root
+            parts = category_id.split('.')
+            for i in range(1, len(parts) + 1):
+                node_id = '.'.join(parts[:i])
+                if node_id not in curr.subcategories:
+                    curr._add_subcategory(
+                        ExpressionsCategoryNode(node_id, self._categories.get(node_id))
+                    )
+                curr = curr.subcategories[node_id]
+        return root
 
     def _check_all_context_types_are_registered(self) -> None:
         for context_type in self._expressions:
@@ -345,12 +421,14 @@ class ExpressionsManager:
     ) -> ExpressionsScope:
         tree = self._build_context_tree()[ExpressionContext] if tree is None else tree
         if attach_to is None:
-            attach_to = ExpressionsScope(ExpressionContext)
+            attach_to = ExpressionsScope(
+                ExpressionContext, self._context_type_to_id.get(ExpressionContext)
+            )
             expressions = self._expressions.get(ExpressionContext, {})
             attach_to._add_expressions(expressions.values())
 
         for context_type in tree:
-            subscope = ExpressionsScope(context_type)
+            subscope = ExpressionsScope(context_type, self._context_type_to_id.get(context_type))
             expressions = self._expressions.get(context_type, {})
             subscope._add_expressions(expressions.values())
             attach_to._add_subscope(self._build_scopes_tree(tree[context_type], subscope))

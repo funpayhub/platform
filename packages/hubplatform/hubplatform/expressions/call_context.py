@@ -5,16 +5,23 @@ __all__ = ['ExpressionContext']
 
 from typing import Any, ClassVar
 
+from hubplatform.i18n import I18nString
+
 
 class ExpressionContext:
     _available_context_types: ClassVar[tuple[type[ExpressionContext], ...]] = ()
-    name: str = 'Root context'
-    description: str = 'Root context'
+    name: ClassVar[str] = I18nString(
+        'hubplatform.expressions.contexts.root:name',
+        'Без контекста',
+    )
+    description: ClassVar[str] = I18nString(
+        'hubplatform.expressions.contexts.root:description',
+        'Выражения в этом контексте могут использоваться в любом тексте, '
+        'даже если у него нет контекста.',
+    )
 
     def __init_subclass__(
-        cls,
-        name: str | None = None,
-        description: str | None = None, **kwargs: Any
+        cls, name: str | None = None, description: str | None = None, **kwargs: Any
     ) -> None:
         super().__init_subclass__(**kwargs)
         if name is None:

@@ -19,8 +19,9 @@ from hubplatform.i18n import Translator, FluentTranslator
 from hubplatform.app.context import AppContext
 from hubplatform.goods_source import GoodsSourcesManager
 from hubplatform.app.environment import AppEnvironment, app_environment
+from hubplatform.app.expressions import create_default_expressions_manager
 from hubplatform.logging.loggers import app
-from hubplatform.expressions.registry import ExpressionsRegistry
+from hubplatform.expressions.manager import ExpressionsManager
 
 from .exceptions import AppSetupError, ComponentExtensionInstallError
 from .dispatching import (
@@ -48,7 +49,7 @@ class HubPlatformApp:
         properties: Properties,
         *,
         goods_manager: GoodsSourcesManager | None = None,
-        expressions_registry: ExpressionsRegistry | None = None,
+        expressions_manager: ExpressionsManager | None = None,
         translator: Translator | None = None,
         components: Sequence[HubPlatformAppComponent] = (),
     ):
@@ -64,8 +65,10 @@ class HubPlatformApp:
         self._component_extensions: dict[str, list[ComponentExtension]] = defaultdict(list)
 
         self._goods_manager = goods_manager if goods_manager is not None else GoodsSourcesManager()
-        self._expressions_registry = (
-            expressions_registry if expressions_registry is not None else ExpressionsRegistry()
+        self._expressions_manager = (
+            expressions_manager
+            if expressions_manager is not None
+            else create_default_expressions_manager()
         )
         self._translator = translator if translator is not None else FluentTranslator()
         self._app_context = AppContext()
@@ -121,8 +124,8 @@ class HubPlatformApp:
         return self._goods_manager
 
     @property
-    def expressions_registry(self) -> ExpressionsRegistry:
-        return self._expressions_registry
+    def expressions_manager(self) -> ExpressionsManager:
+        return self._expressions_manager
 
     @property
     def translator(self) -> Translator:
@@ -186,7 +189,7 @@ class HubPlatformApp:
         self.app_context.provide('App', 'translator', self.translator)
         self.app_context.provide('App', 'tr', self.translator)
         self.app_context.provide('App', 'properties', self.properties)
-        self.app_context.provide('App', 'expressions_registry', self.expressions_registry)
+        self.app_context.provide('App', 'expressions_manager', self.expressions_manager)
         self.app_context.provide('App', 'goods_manager', self.goods_manager)
         self.app_context.provide('App', 'app_context', self.app_context)
         self.app_context.provide('App', 'app_env', self.environment)
@@ -208,6 +211,7 @@ class HubPlatformApp:
                     ),
                 ):
                     await component.install_extension(extension)
+        self._expressions_manager.freeze()
         await self._app_context.lock()
         self._state = AppState.READY
 

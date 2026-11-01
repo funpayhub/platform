@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from hubplatform.i18n import I18nString
 from hubplatform.expressions.docs import ArgDocs, ExpressionDocs
 from hubplatform.expressions.manager import ExpressionsManager
+from hubplatform.expressions.category import ExpressionsCategory
 from hubplatform.expressions.definition import expression
 from hubplatform.expressions.call_context import ExpressionContext
 
@@ -28,11 +29,28 @@ TIME_MODES: Mapping[str, str] = {
 
 
 _manager = ExpressionsManager({})
+_manager.add_category(
+    CATEGORY,
+    ExpressionsCategory(
+        name=I18nString(
+            'hubplatform.expressions.general:name',
+            'Общие',
+        ),
+        description=I18nString(
+            'hubplatform.expressions.general:description',
+            'Выражения, которые не относятся к одной теме: дата и время, случайный выбор.',
+        ),
+    ),
+)
 
 
 @_manager.register(context_type=ExpressionContext, call_key='time', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general.time:name',
+            'Дата и время',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general.time:description',
             'Текущие дата и время в российском формате (день.месяц.год, 24-часовой формат). '
@@ -98,6 +116,10 @@ async def time(ctx: ExpressionContext, mode: str) -> str:
 @_manager.register(context_type=ExpressionContext, call_key='choice', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general.choice:name',
+            'Случайный вариант',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general.choice:description',
             'Случайно выбирает один из переданных вариантов. Все варианты равновероятны. '

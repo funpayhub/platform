@@ -20,12 +20,18 @@ class ExpressionDocs:
     def __init__(
         self,
         *,
+        name: str,
         overview: str,
         args_doc: Mapping[str, ArgDocs] | None = None,
     ) -> None:
+        self._name = _DocsString(name)
         self._overview = _DocsString(overview)
         self._arg_docs = dict(args_doc) if args_doc is not None else {}
         self._arg_docs_proxy = MappingProxyType(self._arg_docs)
+
+    @property
+    def name(self) -> _DocsString:
+        return self._name
 
     @property
     def overview(self) -> _DocsString:

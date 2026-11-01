@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from hubplatform.i18n import I18nString
 from hubplatform.expressions.docs import ArgDocs, ExpressionDocs
 from hubplatform.expressions.manager import ExpressionsManager
+from hubplatform.expressions.category import ExpressionsCategory
 from hubplatform.expressions.definition import expression
 from hubplatform.expressions.call_context import ExpressionContext
 
@@ -17,6 +18,19 @@ CATEGORY = 'general.text'
 
 
 _manager = ExpressionsManager({})
+_manager.add_category(
+    CATEGORY,
+    ExpressionsCategory(
+        name=I18nString(
+            'hubplatform.expressions.general:text:name',
+            'Текст',
+        ),
+        description=I18nString(
+            'hubplatform.expressions.general:text:description',
+            'Работа с текстом: регистр букв, пробелы, длина.',
+        ),
+    ),
+)
 
 
 def _require_text(value: object) -> str:
@@ -30,6 +44,10 @@ def _require_text(value: object) -> str:
 @_manager.register(context_type=ExpressionContext, call_key='upper', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:text.upper:name',
+            'Верхний регистр',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:text.upper:description',
             'Переводит текст в ВЕРХНИЙ РЕГИСТР. Пример: $upper(привет)',
@@ -60,6 +78,10 @@ async def upper(ctx: ExpressionContext, text: Any) -> str:
 @_manager.register(context_type=ExpressionContext, call_key='lower', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:text.lower:name',
+            'Нижний регистр',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:text.lower:description',
             'Переводит текст в нижний регистр. Пример: $lower(ПРИВЕТ)',
@@ -90,6 +112,10 @@ async def lower(ctx: ExpressionContext, text: Any) -> str:
 @_manager.register(context_type=ExpressionContext, call_key='capitalize', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:text.capitalize:name',
+            'Первая буква заглавная',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:text.capitalize:description',
             'Делает первую букву текста заглавной, остальные символы не меняет. '
@@ -122,6 +148,10 @@ async def capitalize(ctx: ExpressionContext, text: Any) -> str:
 @_manager.register(context_type=ExpressionContext, call_key='trim', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:text.trim:name',
+            'Обрезка пробелов',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:text.trim:description',
             'Удаляет пробелы и переводы строк в начале и конце текста. '
@@ -153,6 +183,10 @@ async def trim(ctx: ExpressionContext, text: Any) -> str:
 @_manager.register(context_type=ExpressionContext, call_key='length', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
+        name=I18nString(
+            'hubplatform.expressions.general:text.length:name',
+            'Длина',
+        ),
         overview=I18nString(
             'hubplatform.expressions.general:text.length:description',
             'Количество символов в тексте. Для списка возвращает количество элементов. '
