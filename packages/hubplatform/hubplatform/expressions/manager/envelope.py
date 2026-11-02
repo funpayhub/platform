@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from hubplatform.expressions.definition import ExpressionDefinition
 
-from .category_node import CategoryPath
+from .category import CategoryPath
 
 
 @dataclass(frozen=True)

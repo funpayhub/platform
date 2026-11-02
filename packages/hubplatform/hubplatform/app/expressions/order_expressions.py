@@ -6,10 +6,10 @@ __all__ = ['register_order_expressions']
 from hubplatform.i18n import I18nString
 from hubplatform.expressions.docs import ExpressionDocs
 from hubplatform.expressions.manager import ExpressionsManager
-from hubplatform.expressions.category import ExpressionsCategory
 from hubplatform.expressions.definition import expression
 
 from .contexts import GeneralOrderContext
+from ...expressions.manager.category import ExpressionsCategoryInfo
 
 
 CATEGORY = ('general', 'order')
@@ -18,7 +18,7 @@ _manager = ExpressionsManager({})
 _manager.add_context(GeneralOrderContext, 'general_order')
 _manager.add_category(
     CATEGORY,
-    ExpressionsCategory(
+    ExpressionsCategoryInfo(
         name=I18nString(
             'hubplatform.expressions.general:order:name',
             'Заказ',

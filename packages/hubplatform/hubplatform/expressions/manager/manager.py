@@ -14,12 +14,16 @@ from collections.abc import Mapping, Callable, Sequence
 
 from .scope import ExpressionsScope
 from ..syntax import Call, StringWithCalls, call_decoder
+from .category import (
+    CategoryPath,
+    ExpressionsCategoryInfo,
+    ExpressionsCategoryNode,
+    normalize_category_path,
+)
 from .envelope import ExpressionEnvelope
-from ..category import ExpressionsCategory
 from ..definition import Expression, ExpressionDefinition, extract_expression_definition
 from ..exceptions import ExpressionError, ExpressionExecutionError
 from ..call_context import ExpressionContext
-from .category_node import CategoryPath, ExpressionsCategoryNode, normalize_category_path
 
 
 _ContextTree: TypeAlias = dict[type[ExpressionContext], '_ContextTree']
@@ -38,7 +42,7 @@ class FormattingResult:
 class ExpressionsManager:
     def __init__(self, context: Mapping[str, Any]) -> None:
         self._expressions: dict[type[ExpressionContext], dict[str, ExpressionEnvelope]] = {}
-        self._categories: dict[CategoryPath, ExpressionsCategory] = {}
+        self._categories: dict[CategoryPath, ExpressionsCategoryInfo] = {}
 
         self._context_type_to_id: dict[type[ExpressionContext], str] = {}
         self._id_to_context_type: dict[str, type[ExpressionContext]] = {}
@@ -71,7 +75,7 @@ class ExpressionsManager:
         return self.get(self._id_to_context_type[context_id])
 
     @property
-    def categories(self) -> Mapping[CategoryPath, ExpressionsCategory]:
+    def categories(self) -> Mapping[CategoryPath, ExpressionsCategoryInfo]:
         return MappingProxyType(self._categories)
 
     @property
@@ -157,7 +161,9 @@ class ExpressionsManager:
 
         return inner
 
-    def add_category(self, category_path: Sequence[str], category: ExpressionsCategory) -> None:
+    def add_category(
+        self, category_path: Sequence[str], category: ExpressionsCategoryInfo
+    ) -> None:
         self._check_not_frozen()
         path = normalize_category_path(category_path)
         if path in self._categories:

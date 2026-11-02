@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import Mapping, Iterable, Generator
-from types import MappingProxyType
+from typing import Iterable, Generator
 
+from .category import CategoryPath
 from .envelope import ExpressionEnvelope
 from ..call_context import ExpressionContext
-from .category_node import CategoryPath
 
 
 type _ExpressionsByCategory = dict[CategoryPath | None, dict[str, 'ExpressionEnvelope']]
@@ -21,7 +20,6 @@ class ExpressionsScope:
         self._id = context_id
         self._parent: ExpressionsScope | None = None
         self._subscopes: dict[type[ExpressionContext], ExpressionsScope] = {}
-        self._subscopes_proxy = MappingProxyType(self._subscopes)
         self._expressions: dict[str, ExpressionEnvelope] = {}
         self._expressions_by_category: _ExpressionsByCategory = {}
 
@@ -42,7 +40,6 @@ class ExpressionsScope:
 
     @property
     def id(self) -> str | None:
-        """ID the context type was registered with, or `None` for an unregistered context."""
         return self._id
 
     @property
@@ -54,16 +51,11 @@ class ExpressionsScope:
         return self._parent
 
     @property
-    def subscopes(self) -> Mapping[type[ExpressionContext], ExpressionsScope]:
-        return self._subscopes_proxy
+    def subscopes(self) -> dict[type[ExpressionContext], ExpressionsScope]:
+        return self._subscopes.copy()
 
     @property
     def populated_subscopes(self) -> list[ExpressionsScope]:
-        """Subscopes that, or whose descendants, bind expressions of their own.
-
-        A subscope of an unregistered context type has no ID and cannot be addressed, so its own
-        populated subscopes are listed instead of it.
-        """
         result: list[ExpressionsScope] = []
         for subscope in self._subscopes.values():
             if subscope._id is None:

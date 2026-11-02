@@ -9,9 +9,9 @@ from collections.abc import Mapping
 from hubplatform.i18n import I18nString
 from hubplatform.expressions.docs import ArgDocs, ExpressionDocs
 from hubplatform.expressions.manager import ExpressionsManager
-from hubplatform.expressions.category import ExpressionsCategory
 from hubplatform.expressions.definition import expression
 from hubplatform.expressions.call_context import ExpressionContext
+from hubplatform.expressions.manager.category import ExpressionsCategoryInfo
 
 
 CATEGORY = ('general', 'text')
@@ -20,7 +20,7 @@ CATEGORY = ('general', 'text')
 _manager = ExpressionsManager({})
 _manager.add_category(
     CATEGORY,
-    ExpressionsCategory(
+    ExpressionsCategoryInfo(
         name=I18nString(
             'hubplatform.expressions.general:text:name',
             'Текст',

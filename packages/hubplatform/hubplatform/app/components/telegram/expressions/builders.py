@@ -22,8 +22,8 @@ from hubplatform.expressions.manager import (
 )
 from hubplatform.expressions.category import CategoryPath
 from hubplatform.expressions.call_context import ExpressionContext
+from hubplatform.expressions.manager.category import ExpressionsCategoryNode
 from hubplatform.app.components.telegram.menu_ids import MenuIDs
-from hubplatform.expressions.manager.category_node import ExpressionsCategoryNode
 from hubplatform.app.components.telegram.ui.callbacks import OpenMenu
 from hubplatform.app.components.telegram.ui.finalizers import StripAndNavigationFinalizer
 
@@ -113,9 +113,9 @@ def _resolve_scope(manager: ExpressionsManager, scope_id: str | None) -> Express
 
 
 def _category_name(node: ExpressionsCategoryNode) -> str:
-    if node.category is None:
+    if node.info is None:
         return node.id or ''
-    return node.category.name
+    return node.info.name
 
 
 def _info_block(emoji: str, label: str, title: str, description: str | None) -> I18nMultiString:
@@ -131,7 +131,7 @@ def _category_info_block(node: ExpressionsCategoryNode) -> I18nMultiString:
         CATEGORY_EMOJI,
         CATEGORY_LABEL,
         I18nMultiString(*(_category_name(i) for i in chain), separator=' › '),
-        None if node.category is None else node.category.description,
+        None if node.info is None else node.info.description,
     )
 
 
@@ -140,7 +140,7 @@ _ByCategory = Mapping[CategoryPath | None, Mapping[str, ExpressionEnvelope]]
 
 def _subtree(node: ExpressionsCategoryNode, by_category: _ByCategory) -> list[ExpressionEnvelope]:
     """Expressions of a category and its subcategories. For the root it is every expression."""
-    result = [j for i in node.subtree for j in by_category.get(i.path, {}).values()]
+    result = [j for i in node.chain_to_tails for j in by_category.get(i.path, {}).values()]
     if node.is_root:
         result += by_category.get(None, {}).values()
     return result

@@ -6,10 +6,10 @@ __all__ = ['register_message_expressions']
 from hubplatform.i18n import I18nString
 from hubplatform.expressions.docs import ExpressionDocs
 from hubplatform.expressions.manager import ExpressionsManager
-from hubplatform.expressions.category import ExpressionsCategory
 from hubplatform.expressions.definition import expression
 
 from .contexts import GeneralMessageContext
+from ...expressions.manager.category import ExpressionsCategoryInfo
 
 
 CATEGORY = ('general', 'message')
@@ -18,7 +18,7 @@ _manager = ExpressionsManager({})
 _manager.add_context(GeneralMessageContext, 'general_message')
 _manager.add_category(
     CATEGORY,
-    ExpressionsCategory(
+    ExpressionsCategoryInfo(
         name=I18nString(
             'hubplatform.expressions.general:message:name',
             'Сообщение',

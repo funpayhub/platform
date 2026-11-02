@@ -1,28 +1,29 @@
 from __future__ import annotations
 
-from typing import Mapping, Sequence, Container, Generator
-from types import MappingProxyType
-
-from hubplatform.expressions.category import ExpressionsCategory
+from typing import Sequence, Container, Generator
+from dataclasses import dataclass
 
 
 type CategoryPath = tuple[str, ...]
 
 
-class ExpressionsCategoryNode:
-    """A node of the categories tree. The root node has no ID, no category and an empty path."""
+@dataclass(frozen=True)
+class ExpressionsCategoryInfo:
+    name: str
+    description: str
 
+
+class ExpressionsCategoryNode:
     def __init__(
         self,
         category_id: str | None = None,
-        category: ExpressionsCategory | None = None,
+        info: ExpressionsCategoryInfo | None = None,
     ) -> None:
         self._id = category_id
-        self._category = category
+        self._info = info
         self._path: CategoryPath = () if category_id is None else (category_id,)
         self._parent: ExpressionsCategoryNode | None = None
         self._subcategories: dict[str, ExpressionsCategoryNode] = {}
-        self._subcategories_proxy = MappingProxyType(self._subcategories)
 
     def _add_subcategory(self, subcategory: ExpressionsCategoryNode) -> None:
         assert subcategory._id is not None
@@ -32,39 +33,40 @@ class ExpressionsCategoryNode:
 
     @property
     def id(self) -> str | None:
-        """ID of this category among the subcategories of its parent, or `None` for the root."""
         return self._id
 
     @property
     def path(self) -> CategoryPath:
-        """IDs of the categories from the topmost one to this one. Empty for the root."""
         return self._path
 
     @property
-    def category(self) -> ExpressionsCategory | None:
-        """The registered category, or `None` if it exists only as a part of another category's ID
-        or is used by expressions without being registered."""
-        return self._category
+    def info(self) -> ExpressionsCategoryInfo | None:
+        return self._info
 
     @property
     def parent(self) -> ExpressionsCategoryNode | None:
         return self._parent
 
     @property
-    def subcategories(self) -> Mapping[str, ExpressionsCategoryNode]:
-        """Direct subcategories by their IDs, in registration order."""
-        return self._subcategories_proxy
+    def subcategories(self) -> dict[str, ExpressionsCategoryNode]:
+        return self._subcategories.copy()
 
     @property
     def is_root(self) -> bool:
         return self._parent is None
 
     @property
-    def subtree(self) -> Generator[ExpressionsCategoryNode, None, None]:
-        """This node and all its descendants, parents first."""
+    def chain_to_root(self) -> Generator[ExpressionsCategoryNode, None, None]:
+        curr: ExpressionsCategoryNode | None = self
+        while curr is not None:
+            yield curr
+            curr = curr._parent
+
+    @property
+    def chain_to_tails(self) -> Generator[ExpressionsCategoryNode, None, None]:
         yield self
         for subcategory in self._subcategories.values():
-            yield from subcategory.subtree
+            yield from subcategory.chain_to_tails
 
     def subcategory_chains(
         self, populated: Container[CategoryPath | None]
@@ -80,7 +82,7 @@ class ExpressionsCategoryNode:
         """
 
         def has_expressions(node: ExpressionsCategoryNode) -> bool:
-            return any(i._path in populated for i in node.subtree)
+            return any(i._path in populated for i in node.chain_to_tails)
 
         chains = []
         for subcategory in self._subcategories.values():
@@ -95,14 +97,6 @@ class ExpressionsCategoryNode:
                 chain.append(non_empty[0])
             chains.append(chain)
         return chains
-
-    @property
-    def chain_to_root(self) -> Generator[ExpressionsCategoryNode, None, None]:
-        """This node and its ancestors, the root node included."""
-        curr: ExpressionsCategoryNode | None = self
-        while curr is not None:
-            yield curr
-            curr = curr._parent
 
 
 def normalize_category_path(path: Sequence[str] | str) -> CategoryPath:
