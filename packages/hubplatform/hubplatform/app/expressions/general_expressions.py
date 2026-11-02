@@ -16,7 +16,7 @@ from hubplatform.expressions.definition import expression
 from hubplatform.expressions.call_context import ExpressionContext
 
 
-CATEGORY = 'general'
+CATEGORY = ('general',)
 
 TIME_MODES: Mapping[str, str] = {
     'date': '%d.%m',

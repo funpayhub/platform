@@ -2,135 +2,27 @@ from __future__ import annotations
 
 
 __all__ = [
-    'ExpressionEnvelope',
-    'ExpressionsScope',
     'ExpressionsManager',
     'FormattingResult',
 ]
 
-import re
 from typing import Any, Literal, TypeAlias, overload
 from dataclasses import field, dataclass
 from types import MappingProxyType
 from itertools import chain
-from collections.abc import Mapping, Callable, Iterable, Generator
+from collections.abc import Mapping, Callable, Sequence
 
-from .syntax import Call, StringWithCalls, call_decoder
-from .category import ExpressionsCategory, ExpressionsCategoryNode
-from .definition import Expression, ExpressionDefinition, extract_expression_definition
-from .exceptions import ExpressionError, ExpressionExecutionError
-from .call_context import ExpressionContext
+from .scope import ExpressionsScope
+from ..syntax import Call, StringWithCalls, call_decoder
+from .envelope import ExpressionEnvelope
+from ..category import ExpressionsCategory
+from ..definition import Expression, ExpressionDefinition, extract_expression_definition
+from ..exceptions import ExpressionError, ExpressionExecutionError
+from ..call_context import ExpressionContext
+from .category_node import CategoryPath, ExpressionsCategoryNode, normalize_category_path
 
-
-_CATEGORY_ID_PATTERN = re.compile(r'[a-z0-9_]+(\.[a-z0-9_]+)*')
 
 _ContextTree: TypeAlias = dict[type[ExpressionContext], '_ContextTree']
-_ExpressionsByCategory: TypeAlias = dict[str | None, dict[str, 'ExpressionEnvelope']]
-
-
-@dataclass(frozen=True)
-class ExpressionEnvelope:
-    expression: ExpressionDefinition
-    call_key: str
-    category: str | None = None
-
-
-class ExpressionsScope:
-    def __init__(
-        self, context_type: type[ExpressionContext], context_id: str | None = None
-    ) -> None:
-        self._context_type = context_type
-        self._id = context_id
-        self._parent: ExpressionsScope | None = None
-        self._subscopes: dict[type[ExpressionContext], ExpressionsScope] = {}
-        self._subscopes_proxy = MappingProxyType(self._subscopes)
-        self._expressions: dict[str, ExpressionEnvelope] = {}
-        self._expressions_by_category: _ExpressionsByCategory = {}
-
-    def _add_expressions(self, expressions: Iterable[ExpressionEnvelope], /) -> None:
-        for expr in expressions:
-            self._expressions[expr.call_key] = expr
-            if expr.category not in self._expressions_by_category:
-                self._expressions_by_category[expr.category] = {}
-            self._expressions_by_category[expr.category][expr.call_key] = expr
-
-    def _add_subscope(self, subscope: ExpressionsScope) -> None:
-        self._subscopes[subscope._context_type] = subscope
-        subscope._parent = self
-
-    @property
-    def id(self) -> str | None:
-        """ID the context type was registered with, or `None` for an unregistered context."""
-        return self._id
-
-    @property
-    def context_type(self) -> type[ExpressionContext]:
-        return self._context_type
-
-    @property
-    def parent(self) -> ExpressionsScope | None:
-        return self._parent
-
-    @property
-    def subscopes(self) -> Mapping[type[ExpressionContext], ExpressionsScope]:
-        return self._subscopes_proxy
-
-    @property
-    def populated_subscopes(self) -> list[ExpressionsScope]:
-        """Subscopes that, or whose descendants, bind expressions of their own.
-
-        A subscope of an unregistered context type has no ID and cannot be addressed, so its own
-        populated subscopes are listed instead of it.
-        """
-        result: list[ExpressionsScope] = []
-        for subscope in self._subscopes.values():
-            if subscope._id is None:
-                result.extend(subscope.populated_subscopes)
-            elif subscope._has_expressions_in_subtree():
-                result.append(subscope)
-        return result
-
-    def _has_expressions_in_subtree(self) -> bool:
-        return bool(self._expressions) or any(
-            i._has_expressions_in_subtree() for i in self._subscopes.values()
-        )
-
-    @property
-    def is_root(self) -> bool:
-        return self._parent is None
-
-    @property
-    def chain_to_root(self) -> Generator[ExpressionsScope, None, None]:
-        curr: ExpressionsScope | None = self
-        while curr is not None:
-            yield curr
-            curr = curr._parent
-
-    @property
-    def scope_expressions(self) -> dict[str, ExpressionEnvelope]:
-        return self._expressions.copy()
-
-    @property
-    def scope_expressions_by_category(self) -> _ExpressionsByCategory:
-        return {k: v.copy() for k, v in self._expressions_by_category.items()}
-
-    @property
-    def available_expressions(self) -> dict[str, ExpressionEnvelope]:
-        expressions = [i._expressions for i in self.chain_to_root]
-        result = {}
-        for j in reversed(expressions):
-            result.update(j)
-        return result
-
-    @property
-    def available_expressions_by_category(self) -> _ExpressionsByCategory:
-        expressions = self.available_expressions
-        result: _ExpressionsByCategory = {}
-        for call_key, expr in expressions.items():
-            if expr.category not in result:
-                result[expr.category] = {}
-            result[expr.category][call_key] = expr
-        return result
 
 
 @dataclass(frozen=True)
@@ -146,7 +38,7 @@ class FormattingResult:
 class ExpressionsManager:
     def __init__(self, context: Mapping[str, Any]) -> None:
         self._expressions: dict[type[ExpressionContext], dict[str, ExpressionEnvelope]] = {}
-        self._categories: dict[str, ExpressionsCategory] = {}
+        self._categories: dict[CategoryPath, ExpressionsCategory] = {}
 
         self._context_type_to_id: dict[type[ExpressionContext], str] = {}
         self._id_to_context_type: dict[str, type[ExpressionContext]] = {}
@@ -179,7 +71,7 @@ class ExpressionsManager:
         return self.get(self._id_to_context_type[context_id])
 
     @property
-    def categories(self) -> Mapping[str, ExpressionsCategory]:
+    def categories(self) -> Mapping[CategoryPath, ExpressionsCategory]:
         return MappingProxyType(self._categories)
 
     @property
@@ -188,19 +80,15 @@ class ExpressionsManager:
         self._check_frozen()
         return self._categories_tree
 
-    def get_category(self, category_id: str | None = None) -> ExpressionsCategoryNode:
-        """Finds a category node by ID. `None` is the root. Raises `KeyError` if there is none."""
+    def get_category(self, category_path: Sequence[str] = ()) -> ExpressionsCategoryNode:
+        """Finds a category node by its path. The empty path is the root.
+        Raises `KeyError` if there is no such category."""
         self._check_frozen()
         curr = self._categories_tree
-        if category_id is None:
-            return curr
-
-        parts = category_id.split('.')
-        for i in range(1, len(parts) + 1):
-            node_id = '.'.join(parts[:i])
-            if node_id not in curr.subcategories:
-                raise KeyError(f'Category {category_id!r} does not exist in categories tree.')
-            curr = curr.subcategories[node_id]
+        for category_id in category_path:
+            if category_id not in curr.subcategories:
+                raise KeyError(f'Category {tuple(category_path)!r} does not exist.')
+            curr = curr.subcategories[category_id]
         return curr
 
     def add_context(self, context_type: type[ExpressionContext], id: str) -> None:
@@ -226,9 +114,10 @@ class ExpressionsManager:
         expression: Expression | ExpressionDefinition,
         context_type: type[ExpressionContext],
         call_key: str,
-        category: str | None = None,
+        category: Sequence[str] | None = None,
     ) -> None:
         self._check_not_frozen()
+        category_path = None if category is None else normalize_category_path(category)
 
         expression = (
             expression
@@ -247,7 +136,7 @@ class ExpressionsManager:
             )
 
         self._expressions[context_type][call_key] = ExpressionEnvelope(
-            call_key=call_key, category=category, expression=expression
+            call_key=call_key, category=category_path, expression=expression
         )
 
     def register[T: Expression | ExpressionDefinition](
@@ -255,7 +144,7 @@ class ExpressionsManager:
         *,
         context_type: type[ExpressionContext],
         call_key: str,
-        category: str | None = None,
+        category: Sequence[str] | None = None,
     ) -> Callable[[T], T]:
         def inner(expr: T) -> T:
             self.add_expression(
@@ -268,16 +157,12 @@ class ExpressionsManager:
 
         return inner
 
-    def add_category(self, category_id: str, category: ExpressionsCategory) -> None:
+    def add_category(self, category_path: Sequence[str], category: ExpressionsCategory) -> None:
         self._check_not_frozen()
-        if not _CATEGORY_ID_PATTERN.fullmatch(category_id):
-            raise ValueError(
-                f'Invalid category ID {category_id!r}. '
-                f'Expected dot-separated names of lowercase letters, digits and underscores.'
-            )
-        if category_id in self._categories:
-            raise ValueError(f'Category {category_id!r} is already registered.')
-        self._categories[category_id] = category
+        path = normalize_category_path(category_path)
+        if path in self._categories:
+            raise ValueError(f'Category {path!r} is already registered.')
+        self._categories[path] = category
 
     def freeze(self) -> None:
         if self._frozen:
@@ -393,19 +278,17 @@ class ExpressionsManager:
             for i in exprs.values()
             if i.category is not None
         }
-        category_ids = [*self._categories, *sorted(used - self._categories.keys())]
+        paths = [*self._categories, *sorted(used - self._categories.keys())]
 
         root = ExpressionsCategoryNode()
-        for category_id in category_ids:
+        for path in paths:
             curr = root
-            parts = category_id.split('.')
-            for i in range(1, len(parts) + 1):
-                node_id = '.'.join(parts[:i])
-                if node_id not in curr.subcategories:
+            for i, category_id in enumerate(path, 1):
+                if category_id not in curr.subcategories:
                     curr._add_subcategory(
-                        ExpressionsCategoryNode(node_id, self._categories.get(node_id))
+                        ExpressionsCategoryNode(category_id, self._categories.get(path[:i]))
                     )
-                curr = curr.subcategories[node_id]
+                curr = curr.subcategories[category_id]
         return root
 
     def _check_all_context_types_are_registered(self) -> None:

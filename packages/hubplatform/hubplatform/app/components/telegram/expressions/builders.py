@@ -20,9 +20,10 @@ from hubplatform.expressions.manager import (
     ExpressionEnvelope,
     ExpressionsManager,
 )
-from hubplatform.expressions.category import ExpressionsCategoryNode
+from hubplatform.expressions.category import CategoryPath
 from hubplatform.expressions.call_context import ExpressionContext
 from hubplatform.app.components.telegram.menu_ids import MenuIDs
+from hubplatform.expressions.manager.category_node import ExpressionsCategoryNode
 from hubplatform.app.components.telegram.ui.callbacks import OpenMenu
 from hubplatform.app.components.telegram.ui.finalizers import StripAndNavigationFinalizer
 
@@ -90,8 +91,8 @@ class ExpressionsListMenuContext(MenuContext):
     scope_id: str | None = None
     """ID of the context the expressions are shown for. `None` is the root context."""
 
-    category: str | None = None
-    """Category to open. `None` is the top level of the scope."""
+    category: tuple[str, ...] = ()
+    """Path of the category to open. The empty path is the top level of the scope."""
 
     view: Literal['browse', 'all', 'uncategorized'] = 'browse'
     """`browse` shows subscopes, subcategories and the expressions of the category,
@@ -113,7 +114,7 @@ def _resolve_scope(manager: ExpressionsManager, scope_id: str | None) -> Express
 
 def _category_name(node: ExpressionsCategoryNode) -> str:
     if node.category is None:
-        return node.name or ''
+        return node.id or ''
     return node.category.name
 
 
@@ -134,35 +135,15 @@ def _category_info_block(node: ExpressionsCategoryNode) -> I18nMultiString:
     )
 
 
-_ByCategory = Mapping[str | None, Mapping[str, ExpressionEnvelope]]
+_ByCategory = Mapping[CategoryPath | None, Mapping[str, ExpressionEnvelope]]
 
 
 def _subtree(node: ExpressionsCategoryNode, by_category: _ByCategory) -> list[ExpressionEnvelope]:
     """Expressions of a category and its subcategories. For the root it is every expression."""
-    result = list(by_category.get(node.id, {}).values())
-    for subcategory in node.subcategories.values():
-        result += _subtree(subcategory, by_category)
+    result = [j for i in node.subtree for j in by_category.get(i.path, {}).values()]
+    if node.is_root:
+        result += by_category.get(None, {}).values()
     return result
-
-
-def _folders(
-    node: ExpressionsCategoryNode, by_category: _ByCategory
-) -> list[list[ExpressionsCategoryNode]]:
-    """Non-empty subcategories of `node` as folders. A folder is a chain of categories: empty
-    categories with a single non-empty subcategory are collapsed into the same folder."""
-    folders = []
-    for subcategory in node.subcategories.values():
-        if not _subtree(subcategory, by_category):
-            continue
-
-        chain = [subcategory]
-        while not by_category.get(chain[-1].id):
-            non_empty = [i for i in chain[-1].subcategories.values() if _subtree(i, by_category)]
-            if len(non_empty) != 1:
-                break
-            chain.append(non_empty[0])
-        folders.append(chain)
-    return folders
 
 
 def _by_call_key(envelopes: Iterable[ExpressionEnvelope]) -> list[ExpressionEnvelope]:
@@ -171,7 +152,7 @@ def _by_call_key(envelopes: Iterable[ExpressionEnvelope]) -> list[ExpressionEnve
 
 def _open_list(
     scope_id: str | None,
-    category: str | None = None,
+    category: CategoryPath = (),
     view: Literal['browse', 'all', 'uncategorized'] = 'browse',
 ) -> OpenMenu:
     return OpenMenu(
@@ -212,23 +193,23 @@ async def build_expressions_list_menu(
         I18nMultiString(*(i.context_type.name for i in scope_chain), separator=' › '),
         scope.context_type.description,
     )
-    if node is not None and category is not None:
+    if node is not None and category:
         menu_spec.header_text += _category_info_block(node)
 
-    folders = _folders(node, by_category) if node is not None else []
+    chains = node.subcategory_chains(by_category) if node is not None else []
     uncategorized = _by_call_key(by_category.get(None, {}).values())
     subtree = _by_call_key(_subtree(node, by_category)) if node is not None else []
     if view == 'all':
         shown = subtree
     elif view == 'uncategorized':
         shown = uncategorized
-    elif category is not None:
+    elif category:
         shown = _by_call_key(by_category.get(category, {}).values())
     else:
-        shown = [] if folders else uncategorized
+        shown = [] if chains else uncategorized
 
     if view == 'browse':
-        if category is None:
+        if not category:
             for subscope in scope.populated_subscopes:
                 own = len(subscope.scope_expressions)
                 menu_spec.header_keyboard.append(
@@ -243,19 +224,19 @@ async def build_expressions_list_menu(
                     )
                 )
 
-        for chain in folders:
+        for chain in chains:
             name = I18nMultiString(*(_category_name(i) for i in chain), separator=' › ')
             menu_spec.header_keyboard.append(
                 KeyboardBlockSpec.callback_button(
-                    block_id=f'open_category:{chain[-1].id}',
+                    block_id=f'open_category:{".".join(chain[-1].path)}',
                     text=I18nMultiString(
                         f'{CATEGORY_EMOJI} ', name, f' ({len(_subtree(chain[0], by_category))})'
                     ),
-                    callback_data=_open_list(scope_id, chain[-1].id),
+                    callback_data=_open_list(scope_id, chain[-1].path),
                 )
             )
 
-        if category is None and uncategorized and folders:
+        if not category and uncategorized and chains:
             menu_spec.header_keyboard.append(
                 KeyboardBlockSpec.callback_button(
                     block_id='open_uncategorized',
@@ -276,7 +257,7 @@ async def build_expressions_list_menu(
                 )
             )
 
-        if category is None and scope.is_root:
+        if not category and scope.is_root:
             menu_spec.body_text += I18nMultiString('<p>', MENU_DESCRIPTION, '</p>')
 
     for envelope in shown:

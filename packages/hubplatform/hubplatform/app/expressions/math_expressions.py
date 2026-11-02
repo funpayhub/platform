@@ -18,7 +18,7 @@ from hubplatform.expressions.call_context import ExpressionContext
 
 type Number = int | float
 
-CATEGORY = 'general.math'
+CATEGORY = ('general', 'math')
 
 DECIMAL_PRECISION = 100
 ROUND_PRECISION = 400

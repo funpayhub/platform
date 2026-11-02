@@ -14,7 +14,7 @@ from hubplatform.expressions.definition import expression
 from hubplatform.expressions.call_context import ExpressionContext
 
 
-CATEGORY = 'general.text'
+CATEGORY = ('general', 'text')
 
 
 _manager = ExpressionsManager({})
