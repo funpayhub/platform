@@ -9,7 +9,7 @@ from datetime import datetime
 from collections.abc import Mapping
 
 from hubplatform.i18n import I18nString
-from hubplatform.expressions.docs import ArgDocs, ExpressionDocs
+from hubplatform.expressions.docs import ArgDocs, ExpressionDocs, ExampleUsage
 from hubplatform.expressions.manager import ExpressionsManager
 from hubplatform.expressions.definition import expression
 from hubplatform.expressions.call_context import ExpressionContext
@@ -38,7 +38,7 @@ _manager.add_category(
         ),
         description=I18nString(
             'hubplatform.expressions.general:description',
-            'Выражения, которые не относятся к одной теме: дата и время, случайный выбор.',
+            'Выражения, которые не удалось определить ни в какую другую категорию.',
         ),
     ),
 )
@@ -53,8 +53,7 @@ _manager.add_category(
         ),
         overview=I18nString(
             'hubplatform.expressions.general.time:description',
-            'Текущие дата и время в российском формате (день.месяц.год, 24-часовой формат). '
-            'Пример: $time(fulldate)',
+            'Позволяет подставлять текущие дату и время.',
         ),
         args_doc={
             'mode': ArgDocs(
@@ -65,8 +64,7 @@ _manager.add_category(
                 key='mode',
                 overview=I18nString(
                     'hubplatform.expressions.general.time.mode:description',
-                    'Один из готовых режимов или собственный шаблон Python strftime, '
-                    'например %d.%m.%Y %H:%M. Шаблон должен содержать "%".',
+                    'Один из заготовленных форматов или собственный шаблон по правилам Python strftime.',
                 ),
                 possible_values={
                     'date': I18nString(
@@ -118,13 +116,11 @@ async def time(ctx: ExpressionContext, mode: str) -> str:
     docs=ExpressionDocs(
         name=I18nString(
             'hubplatform.expressions.general.choice:name',
-            'Случайный вариант',
+            'Случайный выбор',
         ),
         overview=I18nString(
             'hubplatform.expressions.general.choice:description',
-            'Случайно выбирает один из переданных вариантов. Все варианты равновероятны. '
-            'Нужно передать хотя бы один вариант. '
-            'Пример: $choice(Привет, Здравствуйте, Добрый день)',
+            'Случайно выбирает один из переданных вариантов.',
         ),
         args_doc={
             'variants': ArgDocs(

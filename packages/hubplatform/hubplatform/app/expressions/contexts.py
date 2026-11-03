@@ -19,12 +19,12 @@ class GeneralActionContext(
     BaseModel,
     name=I18nString(
         'hubplatform.expressions.contexts.general_action:name',
-        'Общее действие',
+        'Базовый контекст события',
     ),
     description=I18nString(
         'hubplatform.expressions.contexts.general_action:description',
-        'Выражения в этом контексте могут использоваться, когда пользователь совершил '
-        'действие на маркетплейсе: отправил сообщение, сделал заказ, оставил отзыв и т.д.',
+        'Выражения в этом контексте могут быть использованы, когда произошло какое-либо событие '
+        'на любой торговой площадке: вы получили новое сообщение, новый заказ, новый отзыв и т.д.',
     ),
 ):
     initiator_id: str
@@ -36,12 +36,13 @@ class GeneralOrderContext(
     GeneralActionContext,
     name=I18nString(
         'hubplatform.expressions.contexts.general_order:name',
-        'Заказ',
+        'Контекст заказа',
     ),
     description=I18nString(
         'hubplatform.expressions.contexts.general_order:description',
-        'Выражения в этом контексте могут использоваться в тексте, '
-        'связанном с заказом на маркетплейсе.',
+        'Выражения в этом контексте могут быть использованы, когда произошло какое-то событие, '
+        'связанное с заказами, на любой торговой площадке. '
+        'Например: новый заказ, изменение статуса заказа и т.д.',
     ),
 ):
     order_id: str
@@ -53,11 +54,13 @@ class GeneralReviewContext(
     GeneralActionContext,
     name=I18nString(
         'hubplatform.expressions.contexts.general_review:name',
-        'Отзыв',
+        'Контекст отзыва',
     ),
     description=I18nString(
         'hubplatform.expressions.contexts.general_review:description',
-        'Выражения в этом контексте могут использоваться в тексте, связанном с отзывом на заказ.',
+        'Выражения в этом контексте могут быть использованы, когда произошло какое-то событие, '
+        'связанное с отзывами, на любой торговой площадке. '
+        'Например: новый отзыв, изменение отзыва и т.д.',
     ),
 ):
     order_id: str
@@ -69,12 +72,14 @@ class GeneralMessageContext(
     GeneralActionContext,
     name=I18nString(
         'hubplatform.expressions.contexts.general_message:name',
-        'Сообщение',
+        'Контекст сообщения',
     ),
     description=I18nString(
         'hubplatform.expressions.contexts.general_message:description',
         'Выражения в этом контексте могут использоваться в тексте, '
-        'связанном с сообщением пользователя.',
+        'Выражения в этом контексте могут быть использованы, когда произошло какое-то событие, '
+        'связанное с сообщениями, на любой торговой площадке. '
+        'Например: новое сообщение и т.д.',
     ),
 ):
     message_id: str

@@ -8,7 +8,7 @@ __all__ = [
 
 from typing import Literal
 from types import MappingProxyType
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 
 class _DocsString(str):
@@ -23,11 +23,13 @@ class ExpressionDocs:
         name: str,
         overview: str,
         args_doc: Mapping[str, ArgDocs] | None = None,
+        example_usages: Sequence[ExampleUsage] | None = None,
     ) -> None:
         self._name = _DocsString(name)
         self._overview = _DocsString(overview)
         self._arg_docs = dict(args_doc) if args_doc is not None else {}
         self._arg_docs_proxy = MappingProxyType(self._arg_docs)
+        self._example_usages = tuple(example_usages) if example_usages is not None else ()
 
     @property
     def name(self) -> _DocsString:
@@ -40,6 +42,29 @@ class ExpressionDocs:
     @property
     def arg_docs(self) -> Mapping[str, ArgDocs]:
         return self._arg_docs_proxy
+
+    @property
+    def example_usages(self) -> tuple[ExampleUsage, ...]:
+        return self._example_usages
+
+
+class ExampleUsage:
+    def __init__(
+        self,
+        *,
+        example: str,
+        description: str,
+    ) -> None:
+        self._example = _DocsString(example)
+        self._description = _DocsString(description)
+
+    @property
+    def example(self) -> _DocsString:
+        return self._example
+
+    @property
+    def description(self) -> _DocsString:
+        return self._description
 
 
 class ArgDocs:

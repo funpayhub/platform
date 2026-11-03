@@ -115,9 +115,8 @@ def _div(a: Number, b: Number) -> Number:
         ),
         overview=I18nString(
             'hubplatform.expressions.general:math.random:description',
-            'Случайное число от min до max, обе границы включены. Если оба числа целые, '
-            'результат целый, иначе дробный. Порядок min и max не важен. '
-            'Пример: $random(1, 100)',
+            'Случайное число от min до max включительно. Если оба числа целые, '
+            'результат целый, иначе дробный. Порядок min и max не важен.'
         ),
         args_doc={
             'min': ArgDocs(
