@@ -6,7 +6,7 @@ __all__ = ['Button']
 import html
 from string.templatelib import Template
 
-from pydantic import BaseModel, InstanceOf
+from pydantic import BaseModel, InstanceOf, ConfigDict
 from aiogram.types import InlineKeyboardButton
 
 from hubplatform.i18n import Translator, translate
@@ -16,10 +16,11 @@ from hubplatform.telegram.callback_data.hash import HashService
 
 
 class Button(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     button_id: str
     """Button ID."""
 
-    text: InstanceOf[str | Template]
+    text: InstanceOf[str] | Template
     """Label text on the button"""
 
     style: str | None = None

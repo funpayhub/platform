@@ -30,11 +30,11 @@ from hubplatform.telegram.callback_data.hash import HashService
     config=ConfigDict(arbitrary_types_allowed=True, validate_assignment=True),
 )
 class MenuSpec:
-    header_text: InstanceOf[str | Template] = ''
+    header_text: InstanceOf[str] | Template = ''
     header_body_sep: str = '<hr/>\n'
-    body_text: InstanceOf[str | Template] = ''
+    body_text: InstanceOf[str] | Template = ''
     body_footer_sep: str = '\n<hr/>'
-    footer_text: InstanceOf[str | Template] = ''
+    footer_text: InstanceOf[str] | Template = ''
     header_footer_sep: str = '\n<hr/>\n'
     header_keyboard: MutableSequence[KeyboardBlockSpec] = dataclass_field(default_factory=list)
     main_keyboard: MutableSequence[KeyboardBlockSpec] = dataclass_field(default_factory=list)
