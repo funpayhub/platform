@@ -14,7 +14,7 @@ __all__ = [
 from typing import TYPE_CHECKING, Any
 from abc import ABC, abstractmethod
 from string import Formatter
-from string.templatelib import Template, convert
+from string.templatelib import Template, convert, Interpolation
 from collections.abc import Mapping, Sequence
 
 if TYPE_CHECKING:
@@ -119,7 +119,7 @@ class I18nMultiString(str, TranslatableMixin):
             raise TypeError('Separator must be a string.')
 
         result = str.__new__(
-            cls, separator.join(convert(i, 's') if isinstance(i, Template) else i for i in args)
+            cls, separator.join(_convert(i) if isinstance(i, Template) else i for i in args)
         )
         result.args = args
         result.separator = separator
@@ -134,7 +134,7 @@ class I18nMultiString(str, TranslatableMixin):
         result = [
             prt.translate_(translator, lang=lang) if isinstance(prt, TranslatableMixin)
             else translator.translate(prt) if translator is not None and isinstance(prt, Template)
-            else convert(prt, 's') if isinstance(prt, Template) else prt
+            else _convert(prt, 's') if isinstance(prt, Template) else prt
             for prt in self.args
         ]
         return TranslationResult(self.separator.join(result), translated=True)
@@ -163,6 +163,13 @@ class TranslationResult(str):
         result.translated = translated
         return result
 
+
+def _convert(t: Template) -> str:
+    return "".join(
+        format(convert(part.value, part.conversion), part.format_spec)
+        if isinstance(part, Interpolation) else part
+        for part in t
+    )
 
 i = I18nString
 im = I18nMultiString
