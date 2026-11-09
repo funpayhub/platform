@@ -11,6 +11,8 @@ __all__ = [
     'safe_formatter',
     'TranslationResult',
     'translate',
+    'i',
+    'im',
 ]
 
 from functools import cache
@@ -25,6 +27,8 @@ from .types import (
     I18nMultiString,
     TranslatableMixin,
     TranslationResult,
+    i,
+    im,
     safe_formatter,
 )
 from .fluent import FluentTranslator

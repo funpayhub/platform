@@ -7,6 +7,8 @@ __all__ = [
     'TranslationResult',
     'safe_formatter',
     'TranslatableMixin',
+    'i',
+    'im',
 ]
 
 from typing import TYPE_CHECKING, Any
@@ -147,3 +149,7 @@ class TranslationResult(str):
         result = str.__new__(cls, value)
         result.translated = translated
         return result
+
+
+i = I18nString
+im = I18nMultiString
