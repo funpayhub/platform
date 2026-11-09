@@ -96,6 +96,15 @@ class I18nString(str, TranslatableMixin):
             for k, v in self.kwargs.items()
         }
 
+    def __add__(self, other: str) -> I18nMultiString:
+        return I18nMultiString(self, other)
+
+    def __iadd__(self, other: str) -> I18nMultiString:
+        return self + other
+
+    def __radd__(self, other: str) -> I18nMultiString:
+        return I18nMultiString(other, self)
+
 
 class I18nMultiString(str, TranslatableMixin):
     __slots__ = ('args',)
