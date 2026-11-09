@@ -46,12 +46,16 @@ class Translator(metaclass=ABCMeta):
     ) -> TranslationResult:
         result = []
         for i in val:
-            if not isinstance(i, Interpolation):
-                result.append(i)
-            elif isinstance(i.value, TranslatableMixin):
-                result.append(i.value.translate_(self, lang=lang))
+            if isinstance(i, TranslatableMixin):
+                result.append(i.translate_(self, lang=lang))
+            elif isinstance(i, Interpolation):
+                result.append(
+                    str(i.value)
+                    if not isinstance(i.value, TranslatableMixin)
+                    else i.value.translate_(self, lang=lang)
+                )
             else:
-                result.append(str(i.value))
+                result.append(i)
         return TranslationResult(value=''.join(result), translated=True)
 
     @abstractmethod
