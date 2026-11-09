@@ -4,6 +4,7 @@ from __future__ import annotations
 __all__ = ['Button']
 
 import html
+from string.templatelib import Template
 
 from pydantic import BaseModel, InstanceOf
 from aiogram.types import InlineKeyboardButton
@@ -18,7 +19,7 @@ class Button(BaseModel):
     button_id: str
     """Button ID."""
 
-    text: InstanceOf[str]
+    text: InstanceOf[str | Template]
     """Label text on the button"""
 
     style: str | None = None
@@ -57,7 +58,7 @@ class Button(BaseModel):
     hash: bool = True
     """*Optional*. Whether to hash and store value into callback_data database or not."""
 
-    copy_text: str | None = None
+    copy_text: InstanceOf[str | Template] | None = None
     """Description of the button that copies the specified text to the clipboard"""
 
     disabled: bool = False
@@ -102,6 +103,13 @@ class Button(BaseModel):
             if isinstance(self.text, TranslatableMixin)
             else self.text
         )
+
+        if isinstance(self.text, TranslatableMixin):
+            text = self.text.translate_(translator)
+        elif isinstance(self.text, Template):
+            text = ''.join(
+                i.translate_(translator) if isinstance(i, TranslatableMixin) else str(i) for i in iter(self.text))
+
 
         return (
             '<tg-button '
