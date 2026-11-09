@@ -132,10 +132,10 @@ class I18nMultiString(str, TranslatableMixin):
         lang: str | None = None,
     ) -> TranslationResult:
         result = [
-            i.translate_(translator, lang=lang) if isinstance(i, TranslatableMixin)
-            else translator.translate(i) if translator is not None and isinstance(i, Template)
-            else convert(i, 's') if isinstance(i, Template) else i
-            for i in self.args
+            prt.translate_(translator, lang=lang) if isinstance(prt, TranslatableMixin)
+            else translator.translate(prt) if translator is not None and isinstance(prt, Template)
+            else convert(prt, 's') if isinstance(prt, Template) else prt
+            for prt in self.args
         ]
         return TranslationResult(self.separator.join(result), translated=True)
 
