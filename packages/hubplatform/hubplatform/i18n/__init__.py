@@ -10,10 +10,12 @@ __all__ = [
     'TranslatableMixin',
     'safe_formatter',
     'TranslationResult',
+    'translate',
 ]
 
 from functools import cache
 from collections.abc import Iterator
+from string.templatelib import Template, convert
 from importlib.resources import files
 from importlib.resources.abc import Traversable
 
@@ -46,3 +48,17 @@ def global_translator() -> Translator:
     for source in _locale_sources(files('hubplatform')):
         translator.add_translations(source)
     return translator
+
+
+def translate(
+    val: str | Template, translator: Translator | None = None, translate_raw_string: bool = False
+) -> str:
+    if translator is None:
+        return val if isinstance(val, str) else convert(val, 's')
+
+    if isinstance(val, (TranslatableMixin, Template)):
+        return translator.translate(val)
+
+    if translate_raw_string:
+        return translator.translate(val)
+    return val

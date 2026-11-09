@@ -11,15 +11,15 @@ __all__ = [
     'MenuBuildContext',
 ]
 
-from string import Template
 from typing import Any, Mapping, MutableSequence
 from dataclasses import field as dataclass_field
+from string import Template
 
 from pydantic import Field, BaseModel, JsonValue, ConfigDict, InstanceOf
 from aiogram.types import InlineKeyboardButton
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from hubplatform.i18n import Translator, TranslatableMixin
+from hubplatform.i18n import Translator, translate
 from hubplatform.telegram.ui.session import MenuFrame
 from hubplatform.telegram.ui.keyboard import Keyboard, KeyboardBlockSpec
 from hubplatform.telegram.ui.exceptions import ButtonRenderError, KeyboardBlockBuildingError
@@ -102,21 +102,9 @@ class MenuSpec:
                 )
             keyboard_html = '\n'.join(keyboard_htmls)
 
-        header_text = (
-            self.header_text
-            if not isinstance(self.header_text, TranslatableMixin)
-            else self.header_text.translate_(translator)
-        )
-        body_text = (
-            self.body_text
-            if not isinstance(self.body_text, TranslatableMixin)
-            else self.body_text.translate_(translator)
-        )
-        footer_text = (
-            self.footer_text
-            if not isinstance(self.footer_text, TranslatableMixin)
-            else self.footer_text.translate_(translator)
-        )
+        header_text = translate(self.header_text)
+        body_text = translate(self.body_text)
+        footer_text = translate(self.footer_text)
 
         text = header_text
         if body_text:
