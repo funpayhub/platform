@@ -58,7 +58,7 @@ class Button(BaseModel):
     hash: bool = True
     """*Optional*. Whether to hash and store value into callback_data database or not."""
 
-    copy_text: InstanceOf[str | Template] | None = None
+    copy_text: InstanceOf[str] | None = None
     """Description of the button that copies the specified text to the clipboard"""
 
     disabled: bool = False

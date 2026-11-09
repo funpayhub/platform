@@ -20,9 +20,8 @@ from hubplatform.expressions.manager import (
     ExpressionEnvelope,
     ExpressionsManager,
 )
-from hubplatform.expressions.category import CategoryPath
 from hubplatform.expressions.call_context import ExpressionContext
-from hubplatform.expressions.manager.category import ExpressionsCategoryNode
+from hubplatform.expressions.manager.category import ExpressionsCategoryNode, CategoryPath
 from hubplatform.app.components.telegram.menu_ids import MenuIDs
 from hubplatform.app.components.telegram.ui.callbacks import OpenMenu
 from hubplatform.app.components.telegram.ui.finalizers import StripAndNavigationFinalizer

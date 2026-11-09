@@ -13,7 +13,7 @@ __all__ = [
 
 from typing import Any, Mapping, MutableSequence
 from dataclasses import field as dataclass_field
-from string import Template
+from string.templatelib import Template
 
 from pydantic import Field, BaseModel, JsonValue, ConfigDict, InstanceOf
 from aiogram.types import InlineKeyboardButton
