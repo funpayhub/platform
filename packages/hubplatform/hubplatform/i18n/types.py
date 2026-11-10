@@ -7,13 +7,15 @@ __all__ = [
     'TranslationResult',
     'safe_formatter',
     'TranslatableMixin',
+    'i',
+    'im',
 ]
 
 from typing import TYPE_CHECKING, Any
 from abc import ABC, abstractmethod
 from string import Formatter
+from string.templatelib import Template, convert, Interpolation
 from collections.abc import Mapping, Sequence
-
 
 if TYPE_CHECKING:
     from .base import Translator
@@ -94,20 +96,31 @@ class I18nString(str, TranslatableMixin):
             for k, v in self.kwargs.items()
         }
 
+    def __add__(self, other: str | Template) -> I18nMultiString:
+        return I18nMultiString(self, other)
+
+    def __iadd__(self, other: str | Template) -> I18nMultiString:
+        return self + other
+
+    def __radd__(self, other: str | Template) -> I18nMultiString:
+        return I18nMultiString(other, self)
+
 
 class I18nMultiString(str, TranslatableMixin):
     __slots__ = ('args',)
 
-    args: tuple[str, ...]
+    args: tuple[str | Template, ...]
     separator: str
 
-    def __new__(cls, *args: str, separator: str = '') -> I18nMultiString:
-        if not all(isinstance(arg, str) for arg in args):
-            raise TypeError('All parts of `I18nMultiString` must be strings.')
+    def __new__(cls, *args: str | Template, separator: str = '') -> I18nMultiString:
+        if not all(isinstance(arg, (str, Template)) for arg in args):
+            raise TypeError('All parts of `I18nMultiString` must be strings or t-strings.')
         if not isinstance(separator, str):
             raise TypeError('Separator must be a string.')
 
-        result = str.__new__(cls, separator.join(args))
+        result = str.__new__(
+            cls, separator.join(_convert(i) if isinstance(i, Template) else i for i in args)
+        )
         result.args = args
         result.separator = separator
         return result
@@ -119,18 +132,20 @@ class I18nMultiString(str, TranslatableMixin):
         lang: str | None = None,
     ) -> TranslationResult:
         result = [
-            i.translate_(translator, lang=lang) if isinstance(i, TranslatableMixin) else i
-            for i in self.args
+            prt.translate_(translator, lang=lang) if isinstance(prt, TranslatableMixin)
+            else translator.translate(prt) if translator is not None and isinstance(prt, Template)
+            else _convert(prt, 's') if isinstance(prt, Template) else prt
+            for prt in self.args
         ]
         return TranslationResult(self.separator.join(result), translated=True)
 
-    def __add__(self, other: str) -> I18nMultiString:
+    def __add__(self, other: str | Template) -> I18nMultiString:
         return I18nMultiString(*self.args, other, separator=self.separator)
 
-    def __iadd__(self, other: str) -> I18nMultiString:
+    def __iadd__(self, other: str | Template) -> I18nMultiString:
         return self + other
 
-    def __radd__(self, other: str) -> I18nMultiString:
+    def __radd__(self, other: str | Template) -> I18nMultiString:
         return I18nMultiString(other, *self.args, separator=self.separator)
 
 
@@ -147,3 +162,14 @@ class TranslationResult(str):
         result = str.__new__(cls, value)
         result.translated = translated
         return result
+
+
+def _convert(t: Template) -> str:
+    return "".join(
+        format(convert(part.value, part.conversion), part.format_spec)
+        if isinstance(part, Interpolation) else part
+        for part in t
+    )
+
+i = I18nString
+im = I18nMultiString

@@ -102,7 +102,7 @@ class ExpressionsCategoryNode:
 def normalize_category_path(path: Sequence[str] | str) -> CategoryPath:
     """Validates a non-empty category path and turns it into a tuple."""
     if isinstance(path, str):
-        result = (path,)
+        result: tuple[str, ...] = (path,)
     else:
         result = tuple(path)
 

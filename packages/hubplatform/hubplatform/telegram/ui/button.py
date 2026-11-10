@@ -4,21 +4,23 @@ from __future__ import annotations
 __all__ = ['Button']
 
 import html
+from string.templatelib import Template
 
-from pydantic import BaseModel, InstanceOf
+from pydantic import BaseModel, InstanceOf, ConfigDict
 from aiogram.types import InlineKeyboardButton
 
-from hubplatform.i18n import Translator, TranslatableMixin
+from hubplatform.i18n import Translator, translate
 from hubplatform.telegram.callback_data import CallbackData
 from hubplatform.telegram.ui.exceptions import ButtonRenderError
 from hubplatform.telegram.callback_data.hash import HashService
 
 
 class Button(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     button_id: str
     """Button ID."""
 
-    text: InstanceOf[str]
+    text: InstanceOf[str] | Template
     """Label text on the button"""
 
     style: str | None = None
@@ -57,7 +59,7 @@ class Button(BaseModel):
     hash: bool = True
     """*Optional*. Whether to hash and store value into callback_data database or not."""
 
-    copy_text: str | None = None
+    copy_text: InstanceOf[str] | None = None
     """Description of the button that copies the specified text to the clipboard"""
 
     disabled: bool = False
@@ -97,16 +99,10 @@ class Button(BaseModel):
         if self.style is not None:
             attributes['style'] = self.style
 
-        text = (
-            self.text.translate_(translator)
-            if isinstance(self.text, TranslatableMixin)
-            else self.text
-        )
-
         return (
             '<tg-button '
             + ' '.join(f'{k}="{html.escape(v)}"' for k, v in attributes.items())
-            + f'>{text}</tg-button>'
+            + f'>{translate(self.text, translator)}</tg-button>'
         )
 
     def _to_aiogram_button(
@@ -125,11 +121,7 @@ class Button(BaseModel):
                 'disabled',
             },
         )
-        kwargs['text'] = (
-            self.text.translate_(translator)
-            if isinstance(self.text, TranslatableMixin)
-            else self.text
-        )
+        kwargs['text'] = translate(self.text, translator)
 
         if self.callback_data is not None:
             kwargs['callback_data'] = self._pack_callback(hash_service=hash_service)

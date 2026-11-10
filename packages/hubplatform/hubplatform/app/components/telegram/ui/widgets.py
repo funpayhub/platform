@@ -7,6 +7,8 @@ __all__ = [
     'cancel_button',
 ]
 
+from random import shuffle
+
 from hubplatform.i18n import I18nString
 from hubplatform.telegram.ui import Button, MenuContext
 from hubplatform.telegram.callback_data import CallbackData
@@ -24,20 +26,44 @@ def confirmable_button(
     text: str,
     callback_data: CallbackData = Dummy(),
     style: str | None = None,
+    cancel_buttons: int = 1,
+    randomize_confirm_button_pos: bool = False,
+    cancel_callback_data: CallbackData | None = None,
+    cancel_button_style: str | None = None,
+    cancel_button_text: str = 'Отмена',
 ) -> list[Button]:
     key = f'open_confirmation:{id}'
     confirmation_opened = ctx.data.get(key)
+    if cancel_buttons < 1 or cancel_buttons > 10:
+        raise ValueError('`cancel_buttons` must be between 1 and 10 inclusive.')
+
 
     btn = Button(
-        text=text if not confirmation_opened else 'Отмена',
+        text=text,
         button_id=f'toggle_confirmation:{id}',
         callback_data=ToggleConfirmation(confirmation_id=id),
-        style=style if not confirmation_opened else None,
+        style=style,
     )
 
-    if confirmation_opened:
-        return [Button(button_id=id, text=text, callback_data=callback_data, style=style), btn]
-    return [btn]
+    if not confirmation_opened:
+        return [btn]
+
+    cancel = Button(
+        text=cancel_button_text,
+        button_id=f'toggle_confirmation:{id}',
+        callback_data=ToggleConfirmation(confirmation_id=id)
+        if cancel_callback_data is None
+        else cancel_callback_data,
+        style=cancel_button_style,
+    )
+
+    result = [
+        Button(button_id=id, text=text, callback_data=callback_data, style=style),
+        *[cancel.model_copy() for _ in range(cancel_buttons)]
+    ]
+    if randomize_confirm_button_pos:
+        shuffle(result)
+    return result
 
 
 def _nav_button(button_id: str, text_id: str, text: str, enabled: bool, page: int) -> Button:
