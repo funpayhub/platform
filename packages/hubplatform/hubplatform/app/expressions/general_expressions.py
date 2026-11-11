@@ -9,7 +9,7 @@ from datetime import datetime
 from collections.abc import Mapping
 
 from hubplatform.i18n import I18nString
-from hubplatform.expressions.docs import ArgDocs, ExpressionDocs, ExampleUsage
+from hubplatform.expressions.docs import ArgDocs, ExpressionDocs
 from hubplatform.expressions.manager import ExpressionsManager
 from hubplatform.expressions.definition import expression
 from hubplatform.expressions.call_context import ExpressionContext

@@ -53,7 +53,6 @@ class MenuSpec:
         di_context: Mapping[str, Any],
         hash_service: HashService | None = None,
         translator: Translator | None = None,
-        render_as_inline_keyboard: bool = False,
     ) -> MenuRenderResult:
         building_errors: list[KeyboardBlockBuildingError] = []
         keyboard: Keyboard = []
@@ -69,7 +68,6 @@ class MenuSpec:
                 new_building_e.__cause__ = e
                 building_errors.append(new_building_e)
 
-        kb: list[list[InlineKeyboardButton]] = []
         rendered_keyboard: list[list[str]] = []
         render_errors: list[ButtonRenderError] = []
         for line in keyboard:
@@ -77,9 +75,7 @@ class MenuSpec:
             for button in line:
                 try:
                     result_line.append(
-                        button._to_aiogram_button(hash_service=hash_service, translator=translator)
-                        if render_as_inline_keyboard
-                        else button._to_html(hash_service=hash_service, translator=translator)
+                        button._to_html(hash_service=hash_service, translator=translator)
                     )
                 except ButtonRenderError as e:
                     render_errors.append(e)
@@ -88,19 +84,12 @@ class MenuSpec:
                     new_render_e.__cause__ = e
                     render_errors.append(new_render_e)
             if result_line:
-                if not render_as_inline_keyboard:
-                    rendered_keyboard.append(result_line)
-                else:
-                    kb.append(result_line)
+                rendered_keyboard.append(result_line)
 
-        keyboard_html = ''
-        if not render_as_inline_keyboard:
-            keyboard_htmls = []
-            for converted_line in rendered_keyboard:
-                keyboard_htmls.append(
-                    f'<tg-button-row>{"\n".join(converted_line)}</tg-button-row>'
-                )
-            keyboard_html = '\n'.join(keyboard_htmls)
+        keyboard_htmls = []
+        for converted_line in rendered_keyboard:
+            keyboard_htmls.append(f'<tg-button-row>{"\n".join(converted_line)}</tg-button-row>')
+        keyboard_html = '\n'.join(keyboard_htmls)
 
         header_text = translate(self.header_text)
         body_text = translate(self.body_text)
@@ -126,7 +115,6 @@ class MenuSpec:
 
         return MenuRenderResult(
             text=text,
-            keyboard=kb,
             building_errors=building_errors,
             render_errors=render_errors,
         )

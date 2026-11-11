@@ -425,7 +425,6 @@ class UIRegistry:
         menu_context: MenuContext | MenuBuildContext,
         hash_service: HashService | None = None,
         translator: Translator | None = None,
-        render_as_inline_keyboard: bool = False,
     ) -> MenuRenderResult:
         if menu_id not in self._menus:
             raise KeyError(f'Menu {menu_id!r} not registered.')
@@ -466,7 +465,6 @@ class UIRegistry:
                 di_context=self._context,
                 hash_service=hash_service,
                 translator=translator,
-                render_as_inline_keyboard=render_as_inline_keyboard,
             )
 
         if result.building_errors:

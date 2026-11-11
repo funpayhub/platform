@@ -37,7 +37,6 @@ def confirmable_button(
     if cancel_buttons < 1 or cancel_buttons > 10:
         raise ValueError('`cancel_buttons` must be between 1 and 10 inclusive.')
 
-
     btn = Button(
         text=text,
         button_id=f'toggle_confirmation:{id}',
@@ -59,7 +58,7 @@ def confirmable_button(
 
     result = [
         Button(button_id=id, text=text, callback_data=callback_data, style=style),
-        *[cancel.model_copy() for _ in range(cancel_buttons)]
+        *[cancel.model_copy() for _ in range(cancel_buttons)],
     ]
     if randomize_confirm_button_pos:
         shuffle(result)

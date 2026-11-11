@@ -6,7 +6,7 @@ __all__ = ['Button']
 import html
 from string.templatelib import Template
 
-from pydantic import BaseModel, InstanceOf, ConfigDict
+from pydantic import BaseModel, ConfigDict, InstanceOf
 from aiogram.types import InlineKeyboardButton
 
 from hubplatform.i18n import Translator, translate

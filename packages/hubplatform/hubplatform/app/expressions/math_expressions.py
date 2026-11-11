@@ -116,7 +116,7 @@ def _div(a: Number, b: Number) -> Number:
         overview=I18nString(
             'hubplatform.expressions.general:math.random:description',
             'Случайное число от min до max включительно. Если оба числа целые, '
-            'результат целый, иначе дробный. Порядок min и max не важен.'
+            'результат целый, иначе дробный. Порядок min и max не важен.',
         ),
         args_doc={
             'min': ArgDocs(

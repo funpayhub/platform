@@ -14,8 +14,9 @@ __all__ = [
 from typing import TYPE_CHECKING, Any
 from abc import ABC, abstractmethod
 from string import Formatter
-from string.templatelib import Template, convert, Interpolation
 from collections.abc import Mapping, Sequence
+from string.templatelib import Template, Interpolation, convert
+
 
 if TYPE_CHECKING:
     from .base import Translator
@@ -132,9 +133,13 @@ class I18nMultiString(str, TranslatableMixin):
         lang: str | None = None,
     ) -> TranslationResult:
         result = [
-            prt.translate_(translator, lang=lang) if isinstance(prt, TranslatableMixin)
-            else translator.translate(prt) if translator is not None and isinstance(prt, Template)
-            else _convert(prt, 's') if isinstance(prt, Template) else prt
+            prt.translate_(translator, lang=lang)
+            if isinstance(prt, TranslatableMixin)
+            else translator.translate(prt)
+            if translator is not None and isinstance(prt, Template)
+            else _convert(prt, 's')
+            if isinstance(prt, Template)
+            else prt
             for prt in self.args
         ]
         return TranslationResult(self.separator.join(result), translated=True)
@@ -165,11 +170,13 @@ class TranslationResult(str):
 
 
 def _convert(t: Template) -> str:
-    return "".join(
+    return ''.join(
         format(convert(part.value, part.conversion), part.format_spec)
-        if isinstance(part, Interpolation) else part
+        if isinstance(part, Interpolation)
+        else part
         for part in t
     )
+
 
 i = I18nString
 im = I18nMultiString
