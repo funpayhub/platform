@@ -11,3 +11,4 @@ uv.lock
 .*
 !.gitignore
 !.pre-commit-config.yaml
+!.github/
