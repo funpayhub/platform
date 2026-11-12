@@ -5,15 +5,10 @@ __all__ = ['GitHubVersionsManager']
 
 
 import re
-import json
-from shutil import copyfileobj
-from asyncio import to_thread
 from pathlib import Path
-from tempfile import NamedTemporaryFile
-from urllib.error import HTTPError
-from urllib.parse import quote, urlsplit, urlencode
-from urllib.request import Request, urlopen
+from urllib.parse import quote, urlsplit
 
+import aiohttp
 from packaging.version import Version
 
 from hubplatform.core import convert_exceptions
@@ -28,61 +23,43 @@ _VERSION_TAG_RE = re.compile(r'v([0-9]+)\.([0-9]+)\.([0-9]+)')
 _API_ROOT = 'https://api.github.com'
 _API_VERSION = '2026-03-10'
 _RELEASES_PER_PAGE = 100
-_REQUEST_TIMEOUT = 30
-
-
-def _request(url: str, accept: str = 'application/vnd.github+json') -> Request:
-    return Request(
-        url,
-        headers={
-            'Accept': accept,
-            'User-Agent': 'hubplatform',
-            'X-GitHub-Api-Version': _API_VERSION,
-        },
-    )
-
-
-def _read_json(url: str) -> object:
-    with urlopen(_request(url), timeout=_REQUEST_TIMEOUT) as response:
-        result: object = json.load(response)
-    return result
-
-
-def _download(url: str, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path: Path | None = None
-
-    try:
-        with (
-            urlopen(
-                _request(url, accept='application/octet-stream'),
-                timeout=_REQUEST_TIMEOUT,
-            ) as response,
-            NamedTemporaryFile(
-                mode='wb',
-                prefix=f'.{path.name}.',
-                suffix='.tmp',
-                dir=path.parent,
-                delete=False,
-            ) as temporary_file,
-        ):
-            temporary_path = Path(temporary_file.name)
-            copyfileobj(response, temporary_file)
-
-        assert temporary_path is not None
-        temporary_path.replace(path)
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
+_REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=30)
+_DOWNLOAD_CHUNK_SIZE = 64 * 1024
+_HEADERS = {
+    'Accept': 'application/vnd.github+json',
+    'User-Agent': 'hubplatform',
+    'X-GitHub-Api-Version': _API_VERSION,
+}
 
 
 class GitHubVersionsManager(VersionsManager):
     def __init__(self, repo_url: str) -> None:
+        super().__init__()
         self._repo_url = repo_url
         owner, repo = self._parse_repo_url(repo_url)
         self._repo = repo
         self._api_repo_url = f'{_API_ROOT}/repos/{quote(owner, safe="")}/{quote(repo, safe="")}'
         self._cache: dict[Version, AppVersionInfo] = {}
+        self._session: aiohttp.ClientSession | None = None
+
+    async def close(self) -> None:
+        if self._session is not None and not self._session.closed:
+            await self._session.close()
+        self._session = None
+
+    def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                headers=_HEADERS,
+                timeout=_REQUEST_TIMEOUT,
+                raise_for_status=True,
+            )
+        return self._session
+
+    async def _read_json(self, url: str, params: dict[str, int] | None = None) -> object:
+        async with self._get_session().get(url, params=params) as response:
+            result: object = await response.json()
+        return result
 
     @property
     def repo_url(self) -> str:
@@ -121,9 +98,9 @@ class GitHubVersionsManager(VersionsManager):
         url = f'{self._api_repo_url}/releases/tags/{quote(tag, safe="")}'
 
         try:
-            release = await to_thread(_read_json, url)
-        except HTTPError as error:
-            if error.code == 404:
+            release = await self._read_json(url)
+        except aiohttp.ClientResponseError as error:
+            if error.status == 404:
                 raise exc.VersionNotFoundError(
                     version=version,
                     msg=I18nString(
@@ -159,10 +136,9 @@ class GitHubVersionsManager(VersionsManager):
         page = 1
 
         while True:
-            query = urlencode({'per_page': _RELEASES_PER_PAGE, 'page': page})
-            releases = await to_thread(
-                _read_json,
-                f'{self._api_repo_url}/releases?{query}',
+            releases = await self._read_json(
+                f'{self._api_repo_url}/releases',
+                params={'per_page': _RELEASES_PER_PAGE, 'page': page},
             )
             if not isinstance(releases, list):
                 raise ValueError('GitHub returned an invalid releases response.')
@@ -182,24 +158,14 @@ class GitHubVersionsManager(VersionsManager):
             versions = [version for version in versions if version > from_]
         return tuple(versions)
 
-    async def download_version(
-        self,
-        version: Version | str | AppVersionInfo,
-        path: str | Path | None = None,
-    ) -> Path:
-        if isinstance(version, AppVersionInfo):
-            version_info = version
-        else:
-            version_info = await self.get_version_info(version)
-
-        filename = f'{self._repo}-{self._version_to_tag(version_info.version)}.zip'
-        destination = Path.cwd() / filename if path is None else Path(path)
-        destination = destination.expanduser().resolve()
-        if destination.is_dir():
-            destination /= filename
-
-        await to_thread(_download, version_info.url, destination)
-        return destination
+    async def _download_file(self, version_info: AppVersionInfo, path: Path) -> None:
+        async with self._get_session().get(
+            version_info.url,
+            headers={'Accept': 'application/octet-stream'},
+        ) as response:
+            with path.open('xb') as file:
+                async for chunk in response.content.iter_chunked(_DOWNLOAD_CHUNK_SIZE):
+                    file.write(chunk)
 
     @staticmethod
     def _parse_repo_url(repo_url: str) -> tuple[str, str]:
