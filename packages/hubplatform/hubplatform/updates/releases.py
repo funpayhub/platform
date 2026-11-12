@@ -1,24 +1,17 @@
-"""Installation layout: the file part of the launcher protocol (see :mod:`hubplatform.runtime`).
+"""Releases directory: the file part of the launcher protocol (see :mod:`hubplatform.runtime`).
 
-::
+Layout::
 
     releases/
-        1.4.0/              app code, lib/ (first-party packages), release.json, .installed
-        1.5.0/
+        1.3.2/              installed release: sources, pyproject.toml, .venv/, .installed
+        1.4.0/
         .downloads/         downloaded archives (app)
         state.json          current / previous release (written by the launcher only)
         staged.json         release to switch to on ExitCodes.UPDATE (written by the app only)
         result.json         outcome of the last switch (launcher writes, app removes)
-    runtimes/
-        rt-3f9a1c2b7d4e/    python/ (interpreter + third-party packages), runtime.json,
-                            constraints.txt, .installed
-    envs/
-        rt-3f9a1c2b7d4e/    optional venv (--system-site-packages) on top of the runtime,
-                            for plugin packages; used by the launcher if it exists
 
-A release / runtime directory is complete only when its ``.installed`` marker exists;
-anything else is a leftover of an interrupted installation and may be removed.
-Releases and runtimes are installed by the app and removed by the launcher.
+A release directory is complete only when its ``.installed`` marker exists; anything else
+in ``releases/`` is a leftover of an interrupted installation and may be removed.
 
 Each file has a single writer, so the app and the launcher never write the same file.
 All files are written atomically (temporary file + rename).
@@ -29,19 +22,18 @@ from __future__ import annotations
 
 __all__ = [
     'RELEASES_SCHEMA',
+    'ReleaseManifest',
     'ReleaseState',
     'UpdateResult',
-    'Installation',
+    'Releases',
     'write_json_atomic',
-    'replace_with_retry',
-    'runtime_python',
 ]
 
 import os
-import sys
 import json
 import time
 import secrets
+import tomllib
 from typing import Any, Literal
 from dataclasses import dataclass
 from pathlib import Path
@@ -55,6 +47,60 @@ RELEASES_SCHEMA = 1
 
 _REPLACE_ATTEMPTS = 10
 _REPLACE_DELAY = 0.5
+
+
+@dataclass(frozen=True)
+class ReleaseManifest:
+    """Release metadata, read from the release ``pyproject.toml``.
+
+    .. code-block:: toml
+
+        [project]
+        version = "1.4.0"
+
+        [tool.hubplatform.release]
+        entrypoint = "app.py"     # optional, default: app.py
+        launcher-protocol = 1     # optional, minimal launcher protocol, default: 1
+    """
+
+    version: Version
+    entrypoint: str
+    launcher_protocol: int
+
+    FILENAME = 'pyproject.toml'
+
+    @classmethod
+    def read(cls, release_dir: Path) -> ReleaseManifest:
+        """:raises ValueError: the manifest is missing or invalid."""
+        path = release_dir / cls.FILENAME
+        try:
+            with path.open('rb') as f:
+                data = tomllib.load(f)
+        except FileNotFoundError:
+            raise ValueError(f'Release has no {cls.FILENAME}.') from None
+        except tomllib.TOMLDecodeError as e:
+            raise ValueError(f'Release {cls.FILENAME} is invalid: {e}.') from e
+
+        try:
+            version = Version(data['project']['version'])
+        except (KeyError, TypeError, InvalidVersion) as e:
+            raise ValueError(f'Release {cls.FILENAME} has no valid project.version.') from e
+
+        release = data.get('tool', {}).get('hubplatform', {}).get('release', {})
+        entrypoint = release.get('entrypoint', 'app.py')
+        protocol = release.get('launcher-protocol', 1)
+        if (
+            not isinstance(entrypoint, str)
+            or Path(entrypoint).is_absolute()
+            or '..' in Path(entrypoint).parts
+        ):
+            raise ValueError(f'Invalid release entrypoint: {entrypoint!r}.')
+        if not (release_dir / entrypoint).is_file():
+            raise ValueError(f'Release entrypoint {entrypoint!r} does not exist.')
+        if not isinstance(protocol, int) or isinstance(protocol, bool):
+            raise ValueError(f'Invalid release launcher-protocol: {protocol!r}.')
+
+        return cls(version=version, entrypoint=entrypoint, launcher_protocol=protocol)
 
 
 @dataclass(frozen=True)
@@ -114,90 +160,73 @@ class UpdateResult:
             raise ValueError(f'Invalid update result: {data!r}.') from e
 
 
-class Installation:
-    """Releases, runtimes and environments on disk, as seen by the app."""
+class Releases:
+    """Access to a releases directory from the app."""
 
     STATE_FILE = 'state.json'
     STAGED_FILE = 'staged.json'
     RESULT_FILE = 'result.json'
     DOWNLOADS_DIR = '.downloads'
     MARKER_FILE = '.installed'
+    VENV_DIR = '.venv'
     TEMP_PREFIX = '.tmp-'
 
-    def __init__(
-        self,
-        releases_dir: str | Path,
-        runtimes_dir: str | Path,
-        envs_dir: str | Path,
-    ) -> None:
-        self._releases_dir = Path(releases_dir).expanduser().resolve()
-        self._runtimes_dir = Path(runtimes_dir).expanduser().resolve()
-        self._envs_dir = Path(envs_dir).expanduser().resolve()
+    def __init__(self, path: str | Path) -> None:
+        self._path = Path(path).expanduser().resolve()
 
     @property
-    def releases_dir(self) -> Path:
-        return self._releases_dir
-
-    @property
-    def runtimes_dir(self) -> Path:
-        return self._runtimes_dir
-
-    @property
-    def envs_dir(self) -> Path:
-        return self._envs_dir
+    def path(self) -> Path:
+        return self._path
 
     @property
     def downloads_dir(self) -> Path:
-        return self._releases_dir / self.DOWNLOADS_DIR
+        return self._path / self.DOWNLOADS_DIR
 
     def release_dir(self, version: Version) -> Path:
-        return self._releases_dir / str(version)
+        return self._path / str(version)
 
-    def runtime_dir(self, runtime_id: str) -> Path:
-        return self._runtimes_dir / runtime_id
+    def venv_dir(self, version: Version) -> Path:
+        return self.release_dir(version) / self.VENV_DIR
 
-    def is_release_installed(self, version: Version) -> bool:
+    def is_installed(self, version: Version) -> bool:
         return (self.release_dir(version) / self.MARKER_FILE).is_file()
 
-    def is_runtime_installed(self, runtime_id: str) -> bool:
-        return (self.runtime_dir(runtime_id) / self.MARKER_FILE).is_file()
-
-    def installed_releases(self) -> tuple[Version, ...]:
+    def installed(self) -> tuple[Version, ...]:
         """Installed releases, newest first."""
-        if not self._releases_dir.is_dir():
-            return ()
         result: list[Version] = []
-        for i in self._releases_dir.iterdir():
+        if not self._path.is_dir():
+            return ()
+        for i in self._path.iterdir():
             try:
                 version = Version(i.name)
             except InvalidVersion:
                 continue
-            if str(version) == i.name and self.is_release_installed(version):
+            if str(version) == i.name and self.is_installed(version):
                 result.append(version)
         return tuple(sorted(result, reverse=True))
 
-    @staticmethod
-    def mark_installed(directory: Path, sha256: str) -> None:
+    def mark_installed(self, version: Version, sha256: str | None) -> None:
         write_json_atomic(
-            directory / Installation.MARKER_FILE,
+            self.release_dir(version) / self.MARKER_FILE,
             {
                 'schema': RELEASES_SCHEMA,
+                'version': str(version),
                 'sha256': sha256,
                 'installed_at': datetime.now(UTC).isoformat(),
             },
         )
 
-    def temp_dir(self, parent: Path, name: str) -> Path:
-        """New unique temporary directory path in ``parent``."""
-        return parent / f'{self.TEMP_PREFIX}{name}-{secrets.token_hex(8)}'
+    def temp_dir(self, version: Version) -> Path:
+        """New unique directory name for unpacking ``version``."""
+        return self._path / f'{self.TEMP_PREFIX}{version}-{secrets.token_hex(8)}'
 
     def read_state(self) -> ReleaseState | None:
         """:return: ``None`` if there is no state (nothing installed with the launcher yet)."""
-        data = _read_json(self._releases_dir / self.STATE_FILE)
+        data = _read_json(self._path / self.STATE_FILE)
         return ReleaseState.from_json(data) if data is not None else None
 
     def staged(self) -> Version | None:
-        data = _read_json(self._releases_dir / self.STAGED_FILE)
+        data = _read_json(self._path / self.STAGED_FILE)
         if data is None:
             return None
         try:
@@ -207,31 +236,24 @@ class Installation:
 
     def stage(self, version: Version) -> None:
         """Mark installed ``version`` as the release to switch to on ``ExitCodes.UPDATE``."""
-        if not self.is_release_installed(version):
+        if not self.is_installed(version):
             raise ValueError(f'Release {version} is not installed.')
         write_json_atomic(
-            self._releases_dir / self.STAGED_FILE,
+            self._path / self.STAGED_FILE,
             {'schema': RELEASES_SCHEMA, 'version': str(version)},
         )
 
     def unstage(self) -> None:
-        (self._releases_dir / self.STAGED_FILE).unlink(missing_ok=True)
+        (self._path / self.STAGED_FILE).unlink(missing_ok=True)
 
     def pop_result(self) -> UpdateResult | None:
         """Read and remove the result of the last release switch."""
-        path = self._releases_dir / self.RESULT_FILE
+        path = self._path / self.RESULT_FILE
         try:
             data = _read_json(path)
             return UpdateResult.from_json(data) if data is not None else None
         finally:
             path.unlink(missing_ok=True)
-
-
-def runtime_python(runtime_dir: Path) -> Path:
-    """Interpreter of an installed runtime."""
-    if sys.platform == 'win32':
-        return runtime_dir / 'python' / 'python.exe'
-    return runtime_dir / 'python' / 'bin' / 'python3'
 
 
 def _read_json(path: Path) -> Any:

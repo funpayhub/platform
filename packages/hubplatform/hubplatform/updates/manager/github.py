@@ -20,29 +20,30 @@ from ..types import AppVersionInfo
 
 
 _VERSION_TAG_RE = re.compile(r'v([0-9]+)\.([0-9]+)\.([0-9]+)')
+_SHA256_DIGEST_RE = re.compile(r'sha256:([0-9a-fA-F]{64})')
 _API_ROOT = 'https://api.github.com'
 _API_VERSION = '2026-03-10'
 _RELEASES_PER_PAGE = 100
 _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=30)
 _DOWNLOAD_CHUNK_SIZE = 64 * 1024
-_API_HEADERS = {
+_HEADERS = {
     'Accept': 'application/vnd.github+json',
+    'User-Agent': 'hubplatform',
     'X-GitHub-Api-Version': _API_VERSION,
 }
-_MAX_FETCH_SIZE = 1024 * 1024
 
 
 class GitHubVersionsManager(VersionsManager):
-    def __init__(self, repo_url: str, manifest_asset: str = 'manifest.json') -> None:
-        """Versions are releases tagged ``vX.Y.Z``.
-
-        :param repo_url: ``https://github.com/<owner>/<repo>``.
-        :param manifest_asset: name of the release asset with the update manifest.
-            Releases without it can not be installed automatically.
+    def __init__(self, repo_url: str, asset_name: str | None = None) -> None:
+        """:param repo_url: ``https://github.com/<owner>/<repo>``.
+        :param asset_name: name of the release asset with the release archive.
+            Its SHA-256 digest is verified on install. Releases without such asset
+            (and all releases if ``None``) use the source archive GitHub generates for the tag,
+            which has no digest.
         """
         super().__init__()
         self._repo_url = repo_url
-        self._manifest_asset = manifest_asset
+        self._asset_name = asset_name
         owner, repo = self._parse_repo_url(repo_url)
         self._repo = repo
         self._api_repo_url = f'{_API_ROOT}/repos/{quote(owner, safe="")}/{quote(repo, safe="")}'
@@ -57,14 +58,14 @@ class GitHubVersionsManager(VersionsManager):
     def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(
-                headers={'User-Agent': 'hubplatform'},
+                headers=_HEADERS,
                 timeout=_REQUEST_TIMEOUT,
                 raise_for_status=True,
             )
         return self._session
 
     async def _read_json(self, url: str, params: dict[str, int] | None = None) -> object:
-        async with self._get_session().get(url, params=params, headers=_API_HEADERS) as response:
+        async with self._get_session().get(url, params=params) as response:
             result: object = await response.json()
         return result
 
@@ -118,7 +119,7 @@ class GitHubVersionsManager(VersionsManager):
                 ) from error
             raise
 
-        version_info = self._parse_release(release, self._manifest_asset)
+        version_info = self._parse_release(release, self._asset_name)
         if version_info is None or version_info.version != version:
             raise exc.VersionNotFoundError(
                 version=version,
@@ -151,7 +152,7 @@ class GitHubVersionsManager(VersionsManager):
                 raise ValueError('GitHub returned an invalid releases response.')
 
             for release in releases:
-                version_info = self._parse_release(release, self._manifest_asset)
+                version_info = self._parse_release(release, self._asset_name)
                 if version_info is not None:
                     cache.setdefault(version_info.version, version_info)
 
@@ -165,15 +166,8 @@ class GitHubVersionsManager(VersionsManager):
             versions = [version for version in versions if version > from_]
         return tuple(versions)
 
-    async def _fetch(self, url: str) -> bytes:
-        async with self._get_session().get(url) as response:
-            data = await response.content.read(_MAX_FETCH_SIZE + 1)
-        if len(data) > _MAX_FETCH_SIZE:
-            raise ValueError(f'{url} is larger than {_MAX_FETCH_SIZE} bytes.')
-        return data
-
-    async def _download_file(self, url: str, path: Path) -> None:
-        async with self._get_session().get(url) as response:
+    async def _download_file(self, version_info: AppVersionInfo, path: Path) -> None:
+        async with self._get_session().get(version_info.url) as response:
             with path.open('xb') as file:
                 async for chunk in response.content.iter_chunked(_DOWNLOAD_CHUNK_SIZE):
                     file.write(chunk)
@@ -207,7 +201,7 @@ class GitHubVersionsManager(VersionsManager):
         return tag
 
     @staticmethod
-    def _parse_release(release: object, manifest_asset: str) -> AppVersionInfo | None:
+    def _parse_release(release: object, asset_name: str | None) -> AppVersionInfo | None:
         if not isinstance(release, dict):
             raise ValueError('GitHub returned an invalid release.')
 
@@ -225,18 +219,25 @@ class GitHubVersionsManager(VersionsManager):
         if not isinstance(notes, str):
             raise ValueError(f'GitHub returned invalid notes for release {tag_name}.')
 
-        manifest_url: str | None = None
-        asset = _find_asset(release, manifest_asset)
+        url: object = release.get('zipball_url')
+        if not isinstance(url, str):
+            raise ValueError(f'GitHub returned an invalid URL for release {tag_name}.')
+
+        sha256: str | None = None
+        asset = _find_asset(release, asset_name) if asset_name is not None else None
         if asset is not None:
             asset_url: object = asset.get('browser_download_url')
-            if not isinstance(asset_url, str):
+            digest: object = asset.get('digest')
+            digest_match = _SHA256_DIGEST_RE.fullmatch(digest) if isinstance(digest, str) else None
+            if not isinstance(asset_url, str) or digest_match is None:
                 raise ValueError(f'GitHub returned an invalid asset for release {tag_name}.')
-            manifest_url = asset_url
+            url, sha256 = asset_url, digest_match.group(1).lower()
 
         return AppVersionInfo(
             version=Version('.'.join(match.groups())),
             notes=notes,
-            manifest_url=manifest_url,
+            url=url,
+            sha256=sha256,
         )
 
 
