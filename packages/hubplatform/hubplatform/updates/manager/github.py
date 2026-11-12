@@ -20,6 +20,7 @@ from ..types import AppVersionInfo
 
 
 _VERSION_TAG_RE = re.compile(r'v([0-9]+)\.([0-9]+)\.([0-9]+)')
+_SHA256_DIGEST_RE = re.compile(r'sha256:([0-9a-fA-F]{64})')
 _API_ROOT = 'https://api.github.com'
 _API_VERSION = '2026-03-10'
 _RELEASES_PER_PAGE = 100
@@ -33,9 +34,16 @@ _HEADERS = {
 
 
 class GitHubVersionsManager(VersionsManager):
-    def __init__(self, repo_url: str) -> None:
+    def __init__(self, repo_url: str, asset_name: str | None = None) -> None:
+        """:param repo_url: ``https://github.com/<owner>/<repo>``.
+        :param asset_name: name of the release asset with the release archive.
+            Its SHA-256 digest is verified on install. Releases without such asset
+            (and all releases if ``None``) use the source archive GitHub generates for the tag,
+            which has no digest.
+        """
         super().__init__()
         self._repo_url = repo_url
+        self._asset_name = asset_name
         owner, repo = self._parse_repo_url(repo_url)
         self._repo = repo
         self._api_repo_url = f'{_API_ROOT}/repos/{quote(owner, safe="")}/{quote(repo, safe="")}'
@@ -111,7 +119,7 @@ class GitHubVersionsManager(VersionsManager):
                 ) from error
             raise
 
-        version_info = self._parse_release(release)
+        version_info = self._parse_release(release, self._asset_name)
         if version_info is None or version_info.version != version:
             raise exc.VersionNotFoundError(
                 version=version,
@@ -144,7 +152,7 @@ class GitHubVersionsManager(VersionsManager):
                 raise ValueError('GitHub returned an invalid releases response.')
 
             for release in releases:
-                version_info = self._parse_release(release)
+                version_info = self._parse_release(release, self._asset_name)
                 if version_info is not None:
                     cache.setdefault(version_info.version, version_info)
 
@@ -193,7 +201,7 @@ class GitHubVersionsManager(VersionsManager):
         return tag
 
     @staticmethod
-    def _parse_release(release: object) -> AppVersionInfo | None:
+    def _parse_release(release: object, asset_name: str | None) -> AppVersionInfo | None:
         if not isinstance(release, dict):
             raise ValueError('GitHub returned an invalid release.')
 
@@ -215,8 +223,29 @@ class GitHubVersionsManager(VersionsManager):
         if not isinstance(url, str):
             raise ValueError(f'GitHub returned an invalid URL for release {tag_name}.')
 
+        sha256: str | None = None
+        asset = _find_asset(release, asset_name) if asset_name is not None else None
+        if asset is not None:
+            asset_url: object = asset.get('browser_download_url')
+            digest: object = asset.get('digest')
+            digest_match = _SHA256_DIGEST_RE.fullmatch(digest) if isinstance(digest, str) else None
+            if not isinstance(asset_url, str) or digest_match is None:
+                raise ValueError(f'GitHub returned an invalid asset for release {tag_name}.')
+            url, sha256 = asset_url, digest_match.group(1).lower()
+
         return AppVersionInfo(
             version=Version('.'.join(match.groups())),
             notes=notes,
             url=url,
+            sha256=sha256,
         )
+
+
+def _find_asset(release: dict[object, object], name: str) -> dict[object, object] | None:
+    assets = release.get('assets')
+    if not isinstance(assets, list):
+        return None
+    for asset in assets:
+        if isinstance(asset, dict) and asset.get('name') == name:
+            return asset
+    return None

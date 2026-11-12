@@ -9,6 +9,7 @@ dependencies = [
     "fluent-runtime~=0.4.0",
     "pyconfigtree[toml]~=0.5.1",
     "pydantic>=2.13.4",
+    "uv>=0.13.6",
 ]
 
 

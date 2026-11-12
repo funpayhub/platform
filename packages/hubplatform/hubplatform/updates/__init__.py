@@ -5,3 +5,10 @@ from .manager import (
     VersionsManager as VersionsManager,
     GitHubVersionsManager as GitHubVersionsManager,
 )
+from .releases import (
+    Releases as Releases,
+    ReleaseState as ReleaseState,
+    UpdateResult as UpdateResult,
+    ReleaseManifest as ReleaseManifest,
+)
+from .installer import InstallStage as InstallStage, ReleaseInstaller as ReleaseInstaller

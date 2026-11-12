@@ -16,6 +16,7 @@ from pyconfigtree.parameter.base import ParameterHookTypes
 
 from hubplatform.core import convert_exceptions
 from hubplatform.i18n import Translator, FluentTranslator
+from hubplatform.runtime import ExitCodes, signal_healthy
 from hubplatform.app.context import AppContext
 from hubplatform.goods_source import GoodsSourcesManager
 from hubplatform.app.environment import AppEnvironment, app_environment
@@ -85,6 +86,7 @@ class HubPlatformApp:
         self._stop_signal = asyncio.Event()
         self._stopped_signal = asyncio.Event()
         self._state = AppState.INITIALIZED
+        self._exit_code: int = ExitCodes.SHUTDOWN
 
     async def _on_node_attached_hook(self, attached_node: Node, attached_to: Node) -> None:
         event = NodeAttachedEvent(attached_node=attached_node, attached_to=attached_to)
@@ -108,6 +110,11 @@ class HubPlatformApp:
     def state(self) -> AppState:
         """Current app state."""
         return self._state
+
+    @property
+    def exit_code(self) -> int:
+        """Exit code requested by the last :meth:`stop` call, for the launcher."""
+        return self._exit_code
 
     @property
     def version(self) -> Version:
@@ -228,6 +235,10 @@ class HubPlatformApp:
         tasks.add(stop_task)
 
         self._state = AppState.RUNNING
+        try:
+            signal_healthy()
+        except Exception as e:
+            app.main.error('Unable to send health signal to the launcher.', exc_info=e)
         to_wait: set[asyncio.Task[Any]] = tasks
 
         done: set[asyncio.Task[Any]] = set()  # for type checking
@@ -296,8 +307,14 @@ class HubPlatformApp:
         self._state = AppState.READY
         app.main.info('App stopped.')
 
-    def stop(self) -> None:
+    def stop(self, exit_code: int = ExitCodes.SHUTDOWN) -> None:
+        """Stop the app.
+
+        :param exit_code: exit code the process should exit with after the app stopped
+            (see :attr:`exit_code`); tells the launcher what to do next.
+        """
         self._check_state(AppState.RUNNING)
+        self._exit_code = exit_code
         self._state = AppState.STOPPING
         self._stop_signal.set()
 
