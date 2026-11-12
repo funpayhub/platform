@@ -7,7 +7,10 @@ __all__ = [
     'VersionDownloadError',
     'VersionDownloadInProgressError',
     'VersionInstallError',
+    'VersionNotInstallableError',
     'LauncherOutdatedError',
+    'UnsupportedPlatformError',
+    'FileDownloadError',
 ]
 
 from typing import TYPE_CHECKING
@@ -109,4 +112,52 @@ class LauncherOutdatedError(VersionInstallError):
                     'launcher_protocol': launcher_protocol,
                 },
             ),
+        )
+
+
+class VersionNotInstallableError(VersionInstallError):
+    """The version has no update manifest (e.g. released before automatic updates)."""
+
+    def __init__(self, version: Version, msg: str | None = None) -> None:
+        super().__init__(
+            version,
+            msg
+            if msg is not None
+            else I18nString(
+                key='hubplatform-version-not_installable_error',
+                fallback=f'Version {version} can not be installed automatically.',
+                kwargs={'version': str(version)},
+            ),
+        )
+
+
+class UnsupportedPlatformError(VersionInstallError):
+    """The release has no runtime for this machine."""
+
+    def __init__(self, version: Version, platform: str | None, msg: str | None = None) -> None:
+        self.platform = platform
+        super().__init__(
+            version,
+            msg
+            if msg is not None
+            else I18nString(
+                key='hubplatform-version-unsupported_platform_error',
+                fallback=f'Version {version} is not available for this platform '
+                f'({platform or "unknown"}).',
+                kwargs={'version': str(version), 'platform': platform or 'unknown'},
+            ),
+        )
+
+
+class FileDownloadError(VersionManagerError):
+    def __init__(self, url: str, msg: str | None = None) -> None:
+        self.url = url
+        super().__init__(
+            msg
+            if msg is not None
+            else I18nString(
+                key='hubplatform-version-file_download_error',
+                fallback=f'An error occurred while downloading {url}.',
+                kwargs={'url': url},
+            )
         )

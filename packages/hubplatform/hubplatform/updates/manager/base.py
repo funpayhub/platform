@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-__all__ = ['VersionsManager', 'DEFAULT_UPDATE_FILENAME']
+__all__ = ['VersionsManager']
 
 
 import os
@@ -21,9 +21,9 @@ from hubplatform.core import convert_exceptions
 from hubplatform.updates import exceptions as exc
 
 from ..types import AppVersionInfo
+from ..manifest import UpdateManifest
 
 
-DEFAULT_UPDATE_FILENAME = 'update.zip'
 _TEMP_SUFFIX_ALPHABET = string.ascii_letters + string.digits
 _TEMP_SUFFIX_LENGTH = 24
 
@@ -70,7 +70,7 @@ class VersionsManager(ABC):
         pass
 
     @classmethod
-    def is_downloading(cls, path: str | Path, filename: str = DEFAULT_UPDATE_FILENAME) -> bool:
+    def is_downloading(cls, path: str | Path, filename: str) -> bool:
         """Whether **any** manager is downloading into ``path / filename`` right now."""
         file_lock = _DOWNLOAD_LOCKS.get(os.path.normcase(cls._destination(path, filename)))
         return file_lock is not None and file_lock.lock.locked()
@@ -88,17 +88,49 @@ class VersionsManager(ABC):
         pass
 
     @abstractmethod
-    async def _download_file(self, version_info: AppVersionInfo, path: Path) -> None:
-        """Download ``version_info`` into ``path``. ``path`` is a temporary file."""
+    async def _fetch(self, url: str) -> bytes:
+        """Download a small file (e.g. a manifest) into memory."""
 
-    async def download_version(
+    @abstractmethod
+    async def _download_file(self, url: str, path: Path) -> None:
+        """Download ``url`` into ``path``. ``path`` is a temporary file."""
+
+    async def get_manifest(self, version: Version | str | AppVersionInfo) -> UpdateManifest:
+        """Update manifest of ``version`` (what to download to install it).
+
+        :raises VersionNotInstallableError: the version has no manifest.
+        :raises VersionManagerError: downloading or parsing the manifest failed.
+        """
+        info = (
+            version
+            if isinstance(version, AppVersionInfo)
+            else await self.get_version_info(version)
+        )
+        manifest_url = info.manifest_url
+        if manifest_url is None:
+            raise exc.VersionNotInstallableError(info.version)
+
+        async with convert_exceptions(
+            except_=exc.VersionManagerError,
+            exception_factory=lambda: exc.VersionManagerError(
+                f'Unable to get update manifest of version {info.version}.'
+            ),
+        ):
+            manifest = UpdateManifest.from_bytes(await self._fetch(manifest_url))
+        if manifest.version != info.version:
+            raise exc.VersionManagerError(
+                f'Update manifest of version {info.version} is for version {manifest.version}.'
+            )
+        return manifest
+
+    async def download(
         self,
-        version: Version | str | AppVersionInfo,
+        url: str,
         path: str | Path,
-        filename: str = DEFAULT_UPDATE_FILENAME,
+        filename: str,
         wait: bool = False,
     ) -> Path:
-        """Download ``version`` into folder ``path`` as ``filename``.
+        """Download ``url`` into folder ``path`` as ``filename``.
 
         The data is first written to ``<filename>.<random suffix>`` in the same folder
         and renamed to ``filename`` only after the download succeeded.
@@ -111,7 +143,7 @@ class VersionsManager(ABC):
         :raises VersionDownloadInProgressError: the file is being downloaded and ``wait`` is False.
         :raises NotADirectoryError: ``path`` exists and is not a directory.
         :raises ValueError: ``filename`` is not a plain file name.
-        :raises VersionDownloadError: download failed.
+        :raises FileDownloadError: download failed.
         """
         destination = self._destination(path, filename)
         directory = destination.parent
@@ -121,18 +153,13 @@ class VersionsManager(ABC):
         async with _lock_file(destination, wait):
             directory.mkdir(parents=True, exist_ok=True)
 
-            if isinstance(version, AppVersionInfo):
-                version_info = version
-            else:
-                version_info = await self.get_version_info(version)
-
             temp_path = directory / f'{filename}.{self._random_suffix()}'
             try:
                 async with convert_exceptions(
                     except_=exc.VersionManagerError,
-                    exception_factory=lambda: exc.VersionDownloadError(version_info.version),
+                    exception_factory=lambda: exc.FileDownloadError(url),
                 ):
-                    await self._download_file(version_info, temp_path)
+                    await self._download_file(url, temp_path)
                     temp_path.replace(destination)
             finally:
                 temp_path.unlink(missing_ok=True)

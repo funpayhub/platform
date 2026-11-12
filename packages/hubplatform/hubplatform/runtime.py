@@ -60,14 +60,21 @@ class LauncherEnvironment:
     protocol: int
     """Protocol version of the launcher that started the app."""
     releases_dir: Path
+    runtimes_dir: Path
+    envs_dir: Path
     release: Version
     """Version of the release the launcher started."""
+    runtime: str
+    """Id of the runtime the release runs on."""
     health_file: Path
     """File the app creates once it started (see :func:`signal_healthy`)."""
 
     ENV_PROTOCOL = 'HUBPLATFORM_LAUNCHER_PROTOCOL'
     ENV_RELEASES_DIR = 'HUBPLATFORM_RELEASES_DIR'
+    ENV_RUNTIMES_DIR = 'HUBPLATFORM_RUNTIMES_DIR'
+    ENV_ENVS_DIR = 'HUBPLATFORM_ENVS_DIR'
     ENV_RELEASE = 'HUBPLATFORM_RELEASE'
+    ENV_RUNTIME = 'HUBPLATFORM_RUNTIME'
     ENV_HEALTH_FILE = 'HUBPLATFORM_HEALTH_FILE'
 
     @classmethod
@@ -84,7 +91,10 @@ class LauncherEnvironment:
         return cls(
             protocol=int(env[cls.ENV_PROTOCOL]),
             releases_dir=Path(env[cls.ENV_RELEASES_DIR]),
+            runtimes_dir=Path(env[cls.ENV_RUNTIMES_DIR]),
+            envs_dir=Path(env[cls.ENV_ENVS_DIR]),
             release=Version(env[cls.ENV_RELEASE]),
+            runtime=env[cls.ENV_RUNTIME],
             health_file=Path(env[cls.ENV_HEALTH_FILE]),
         )
 
