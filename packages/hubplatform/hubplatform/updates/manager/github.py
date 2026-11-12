@@ -159,10 +159,7 @@ class GitHubVersionsManager(VersionsManager):
         return tuple(versions)
 
     async def _download_file(self, version_info: AppVersionInfo, path: Path) -> None:
-        async with self._get_session().get(
-            version_info.url,
-            headers={'Accept': 'application/octet-stream'},
-        ) as response:
+        async with self._get_session().get(version_info.url) as response:
             with path.open('xb') as file:
                 async for chunk in response.content.iter_chunked(_DOWNLOAD_CHUNK_SIZE):
                     file.write(chunk)
