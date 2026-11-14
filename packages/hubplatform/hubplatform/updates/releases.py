@@ -35,7 +35,7 @@ import shutil
 import time
 import secrets
 import tomllib
-from typing import Any, Literal, Annotated
+from typing import Any, Literal, Annotated, ClassVar
 from pathlib import Path
 from datetime import UTC, datetime
 
@@ -60,7 +60,7 @@ class ReleaseManifest(BaseModel):
     version: VERSION_TYPE
     entrypoint: str
     launcher_protocol: int
-    FILENAME = 'pyproject.toml'
+    FILENAME: ClassVar[str] = 'pyproject.toml'
 
     def model_post_init(self, context: Any, /) -> None:
         entry_path = Path(self.entrypoint)
