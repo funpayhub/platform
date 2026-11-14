@@ -15,7 +15,6 @@ from collections.abc import Callable, Awaitable
 
 from packaging.version import Version, InvalidVersion
 
-from hubplatform.runtime import LauncherEnvironment, launcher_environment
 from hubplatform.updates import exceptions as exc
 from hubplatform.logging.loggers import updates as updates_loggers
 
@@ -28,7 +27,6 @@ logger = updates_loggers.installer
 
 _UV_SYNC_TIMEOUT = 30 * 60
 _CHECK_TIMEOUT = 5 * 60
-_HASH_CHUNK_SIZE = 1024 * 1024
 
 
 class InstallStage(StrEnum):
@@ -43,22 +41,6 @@ type StageCallback = Callable[[InstallStage], Awaitable[None]]
 
 
 class ReleaseInstaller:
-    """Installs releases into the releases directory while the current release keeps running.
-
-    Installing a release:
-
-    1. downloads its archive into ``releases/.downloads``;
-    2. verifies the archive (SHA-256 if the source provides it, zip CRC);
-    3. unpacks it into a temporary directory and checks its manifest;
-    4. renames the directory to ``releases/<version>`` (a venv can not be moved after creation);
-    5. creates ``releases/<version>/.venv`` with ``uv sync``;
-    6. byte-compiles the release with the new interpreter;
-    7. writes the ``.installed`` marker.
-
-    Nothing of it affects the running release. To switch to an installed release,
-    :meth:`stage` it and stop the app with ``ExitCodes.UPDATE``.
-    """
-
     def __init__(
         self,
         versions_manager: VersionsManager,
@@ -66,27 +48,11 @@ class ReleaseInstaller:
         launcher_protocol: int,
         uv_bin: str | Path | None = None,
     ) -> None:
-        """:param launcher_protocol: protocol of the launcher that will start installed releases.
-        :param uv_bin: ``uv`` executable. By default: ``$HUBPLATFORM_UV_BIN``,
-            the ``uv`` Python package, ``uv`` from ``PATH``.
-        """
         self._versions_manager = versions_manager
         self._releases = releases
         self._launcher_protocol = launcher_protocol
         self._uv_bin = Path(uv_bin) if uv_bin is not None else None
         self._lock = asyncio.Lock()
-
-    @classmethod
-    def from_launcher(
-        cls,
-        versions_manager: VersionsManager,
-        env: LauncherEnvironment | None = None,
-    ) -> ReleaseInstaller | None:
-        """Installer for the launcher that started the app, ``None`` if started directly."""
-        env = env if env is not None else launcher_environment()
-        if env is None:
-            return None
-        return cls(versions_manager, Releases(env.releases_dir), env.protocol)
 
     @property
     def releases(self) -> Releases:
@@ -96,32 +62,27 @@ class ReleaseInstaller:
     def is_installing(self) -> bool:
         return self._lock.locked()
 
+    @property
+    def versions_manager(self) -> VersionsManager:
+        return self._versions_manager
+
     async def install(
         self,
         version: Version | str | AppVersionInfo,
         on_stage: StageCallback | None = None,
     ) -> Path:
-        """Download and install ``version``. Does nothing if it is already installed.
-
-        Only one installation runs at a time, others wait for it.
-
-        :param on_stage: called before each stage.
-        :return: release directory.
-        :raises VersionInstallError: installation failed.
-        :raises VersionManagerError: getting version info or downloading failed.
-        """
         async with self._lock:
             info = (
                 version
                 if isinstance(version, AppVersionInfo)
-                else await self._versions_manager.get_version_info(version)
+                else await self.versions_manager.get_version_info(version)
             )
-            target = self._releases.release_dir(info.version)
-            if self._releases.is_installed(info.version):
+            target = self.releases.release_dir(info.version)
+            if self.releases.is_installed(info.version):
                 return target
 
             try:
-                await asyncio.to_thread(self._remove_leftovers)
+                await asyncio.to_thread(self.releases.remove_leftovers)
                 await self._install(info, target, on_stage)
             except exc.VersionManagerError:
                 raise
@@ -157,13 +118,12 @@ class ReleaseInstaller:
             await asyncio.to_thread(_verify_archive, archive, info.sha256)
 
             await stage(InstallStage.EXTRACTING)
-            temp = self._releases.temp_dir(info.version)
+            temp = self.releases.temp_dir(info.version)
             try:
                 await asyncio.to_thread(_extract_archive, archive, temp)
                 manifest = ReleaseManifest.read(temp)
                 self._check_manifest(manifest, info.version)
                 if target.exists():
-                    # Not installed (checked above): a leftover of an interrupted installation.
                     await asyncio.to_thread(shutil.rmtree, target)
                 await asyncio.to_thread(replace_with_retry, temp, target)
             finally:
@@ -223,20 +183,6 @@ class ReleaseInstaller:
             return Path(path_bin)
         raise FileNotFoundError('Unable to find uv executable.')
 
-    def _remove_leftovers(self) -> None:
-        """Remove temporary dirs and release dirs without ``.installed`` marker."""
-        if not self._releases.path.is_dir():
-            return
-        for i in self._releases.path.iterdir():
-            if i.is_symlink() or i.is_junction() or not i.is_dir():
-                continue
-            leftover = i.name.startswith(Releases.TEMP_PREFIX) or (
-                _is_version_name(i.name) and not (i / Releases.MARKER_FILE).exists()
-            )
-            if leftover:
-                logger.info('Removing leftover %s.', i)
-                shutil.rmtree(i, ignore_errors=True)
-
     @staticmethod
     async def _run(
         args: list[str],
@@ -273,13 +219,6 @@ class ReleaseInstaller:
             logger.debug('%s output:\n%s', Path(args[0]).name, text)
 
 
-def _is_version_name(name: str) -> bool:
-    try:
-        return str(Version(name)) == name
-    except InvalidVersion:
-        return False
-
-
 def _venv_python(venv: Path) -> Path:
     if sys.platform == 'win32':
         return venv / 'Scripts' / 'python.exe'
@@ -287,21 +226,16 @@ def _venv_python(venv: Path) -> Path:
 
 
 def _verify_archive(path: Path, sha256: str | None) -> None:
-    if sha256 is not None:
-        digest = hashlib.sha256()
-        with path.open('rb') as f:
-            while chunk := f.read(_HASH_CHUNK_SIZE):
-                digest.update(chunk)
-        if digest.hexdigest() != sha256.lower():
-            raise ValueError(
-                f'Archive SHA-256 mismatch: expected {sha256}, got {digest.hexdigest()}.'
-            )
-    else:
+    if sha256 is None:
         logger.warning('No SHA-256 for %s, only checking archive integrity.', path.name)
+    else:
+        with path.open('rb') as f:
+            actual = hashlib.file_digest(f, 'sha256').hexdigest()
+        if actual != sha256.lower():
+            raise ValueError(f'Archive SHA-256 mismatch: expected {sha256}, got {actual}.')
 
     with zipfile.ZipFile(path) as archive:
-        bad = archive.testzip()
-        if bad is not None:
+        if (bad := archive.testzip()) is not None:
             raise ValueError(f'Archive is corrupted: {bad}.')
 
 
@@ -316,18 +250,18 @@ def _extract_archive(path: Path, destination: Path) -> None:
         if not members:
             raise ValueError('Archive is empty.')
 
-        paths = [PurePosixPath(i.filename) for i in members]
-        for i in paths:
-            if i.is_absolute() or '..' in i.parts or ':' in i.parts[0]:
-                raise ValueError(f'Archive contains unsafe path: {i}.')
+        parts = [PurePosixPath(i.filename).parts for i in members]
+        if len({p[0] for p in parts}) == 1 and all(len(p) > 1 for p in parts):
+            parts = [p[1:] for p in parts]
 
-        tops = {i.parts[0] for i in paths}
-        strip = len(tops) == 1 and all(len(i.parts) > 1 for i in paths)
+        root = destination.resolve()
+        targets = [root.joinpath(*p).resolve() for p in parts]
+        for member, target in zip(members, targets, strict=True):
+            if not target.is_relative_to(root):
+                raise ValueError(f'Archive contains unsafe path: {member.filename}.')
 
         destination.mkdir(parents=True)
-        for member, member_path in zip(members, paths, strict=True):
-            relative = PurePosixPath(*member_path.parts[1:]) if strip else member_path
-            target = destination.joinpath(*relative.parts)
+        for member, target in zip(members, targets, strict=True):
             target.parent.mkdir(parents=True, exist_ok=True)
             with archive.open(member) as src, target.open('wb') as dst:
                 shutil.copyfileobj(src, dst)

@@ -31,6 +31,7 @@ __all__ = [
 
 import os
 import json
+import shutil
 import time
 import secrets
 import tomllib
@@ -212,6 +213,29 @@ class Releases:
             return UpdateResult.model_validate_json(data) if data is not None else None
         finally:
             path.unlink(missing_ok=True)
+
+    def remove_leftovers(self) -> None:
+        """Remove temporary dirs and release dirs without ``.installed`` marker."""
+        if not self.path.is_dir():
+            return
+        for i in self.path.iterdir():
+            if i.is_symlink() or i.is_junction() or not i.is_dir():
+                continue
+            leftover = i.name.startswith(self.TEMP_PREFIX) or (
+                self.is_version_name(i) and not (i / self.MARKER_FILE).exists()
+            )
+            if leftover:
+                shutil.rmtree(i, ignore_errors=True)
+
+    @classmethod
+    def is_version_name(cls, name: str | Path) -> bool:
+        if isinstance(name, Path):
+            name = name.name
+
+        try:
+            return str(Version(name)) == name
+        except InvalidVersion:
+            return False
 
 
 def _read_json(path: Path) -> Any:

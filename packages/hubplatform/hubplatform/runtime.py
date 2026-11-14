@@ -30,8 +30,6 @@ from enum import IntEnum, unique
 from pathlib import Path
 from functools import cache
 
-from packaging.version import Version
-
 
 LAUNCHER_PROTOCOL = 1
 """Protocol version this app implements."""
@@ -59,8 +57,7 @@ class ExitCodes(IntEnum):
 class LauncherEnvironment:
     protocol: int = int(os.environ.get('HUBPLATFORM_LAUNCHER_PROTOCOL', 1))
     releases_dir: Path = Path(os.environ.get('HUBPLATFORM_RELEASES_DIR', Path('./releases')))
-    release: Version = Version(os.environ['HUBPLATFORM_RELEASE'])
-    health_file: Path = Path(os.environ['HUBPLATFORM_HEALTH_FILE'])
+    health_file: str = str(os.environ.get('HUBPLATFORM_HEALTH_FILE', 'health_check'))
 
 
 @cache
