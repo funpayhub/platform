@@ -132,7 +132,7 @@ class Releases:
     VENV_DIR = '.venv'
     TEMP_PREFIX = '.tmp-'
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path = 'releases') -> None:
         self._path = Path(path).expanduser().resolve()
 
     @property
