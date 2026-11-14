@@ -57,42 +57,16 @@ class ExitCodes(IntEnum):
 
 @dataclass(frozen=True)
 class LauncherEnvironment:
-    protocol: int
-    """Protocol version of the launcher that started the app."""
-    releases_dir: Path
-    release: Version
-    """Version of the release the launcher started."""
-    health_file: Path
-    """File the app creates once it started (see :func:`signal_healthy`)."""
-
-    ENV_PROTOCOL = 'HUBPLATFORM_LAUNCHER_PROTOCOL'
-    ENV_RELEASES_DIR = 'HUBPLATFORM_RELEASES_DIR'
-    ENV_RELEASE = 'HUBPLATFORM_RELEASE'
-    ENV_HEALTH_FILE = 'HUBPLATFORM_HEALTH_FILE'
-
-    @classmethod
-    def from_env(cls, env: dict[str, str] | None = None) -> LauncherEnvironment | None:
-        """Read the environment set by the launcher.
-
-        :return: ``None`` if the app was not started by a launcher.
-        :raises ValueError: the launcher set an invalid environment.
-        """
-        env = env if env is not None else dict(os.environ)
-        if cls.ENV_PROTOCOL not in env:
-            return None
-
-        return cls(
-            protocol=int(env[cls.ENV_PROTOCOL]),
-            releases_dir=Path(env[cls.ENV_RELEASES_DIR]),
-            release=Version(env[cls.ENV_RELEASE]),
-            health_file=Path(env[cls.ENV_HEALTH_FILE]),
-        )
+    protocol: int = int(os.environ.get('HUBPLATFORM_LAUNCHER_PROTOCOL', 1))
+    releases_dir: Path = Path(os.environ.get('HUBPLATFORM_RELEASES_DIR', Path('./releases')))
+    release: Version = Version(os.environ['HUBPLATFORM_RELEASE'])
+    health_file: Path = Path(os.environ['HUBPLATFORM_HEALTH_FILE'])
 
 
 @cache
-def launcher_environment() -> LauncherEnvironment | None:
+def launcher_environment() -> LauncherEnvironment:
     """Environment of the launcher that started the app, ``None`` if started directly."""
-    return LauncherEnvironment.from_env()
+    return LauncherEnvironment()
 
 
 def signal_healthy() -> None:
@@ -103,7 +77,5 @@ def signal_healthy() -> None:
     Does nothing if the app was not started by a launcher.
     """
     env = launcher_environment()
-    if env is None:
-        return
     env.health_file.parent.mkdir(parents=True, exist_ok=True)
     env.health_file.touch()

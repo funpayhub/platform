@@ -34,44 +34,41 @@ import json
 import time
 import secrets
 import tomllib
-from typing import Any, Literal
-from dataclasses import dataclass
+from typing import Any, Literal, Annotated
 from pathlib import Path
 from datetime import UTC, datetime
 
+from pydantic import BaseModel, ConfigDict, AfterValidator
 from packaging.version import Version, InvalidVersion
 
 
 RELEASES_SCHEMA = 1
 """Version of the files format."""
 
+
 _REPLACE_ATTEMPTS = 10
 _REPLACE_DELAY = 0.5
+VERSION_TYPE = Annotated[
+    Version, AfterValidator(lambda v: v if isinstance(v, Version) else Version(v))
+]
 
 
-@dataclass(frozen=True)
-class ReleaseManifest:
-    """Release metadata, read from the release ``pyproject.toml``.
+class ReleaseManifest(BaseModel):
+    model_config = ConfigDict(frozen=True)
 
-    .. code-block:: toml
-
-        [project]
-        version = "1.4.0"
-
-        [tool.hubplatform.release]
-        entrypoint = "app.py"     # optional, default: app.py
-        launcher-protocol = 1     # optional, minimal launcher protocol, default: 1
-    """
-
-    version: Version
+    version: VERSION_TYPE
     entrypoint: str
     launcher_protocol: int
-
     FILENAME = 'pyproject.toml'
 
+    def model_post_init(self, context: Any, /) -> None:
+        entry_path = Path(self.entrypoint)
+        if entry_path.is_absolute() or '..' in entry_path.parts:
+            raise ValueError('Invalid entry point.')
+
     @classmethod
-    def read(cls, release_dir: Path) -> ReleaseManifest:
-        """:raises ValueError: the manifest is missing or invalid."""
+    def read(cls, release_dir: Path | str) -> ReleaseManifest:
+        release_dir = Path(release_dir)
         path = release_dir / cls.FILENAME
         try:
             with path.open('rb') as f:
@@ -81,83 +78,46 @@ class ReleaseManifest:
         except tomllib.TOMLDecodeError as e:
             raise ValueError(f'Release {cls.FILENAME} is invalid: {e}.') from e
 
-        try:
-            version = Version(data['project']['version'])
-        except (KeyError, TypeError, InvalidVersion) as e:
-            raise ValueError(f'Release {cls.FILENAME} has no valid project.version.') from e
-
         release = data.get('tool', {}).get('hubplatform', {}).get('release', {})
-        entrypoint = release.get('entrypoint', 'app.py')
-        protocol = release.get('launcher-protocol', 1)
-        if (
-            not isinstance(entrypoint, str)
-            or Path(entrypoint).is_absolute()
-            or '..' in Path(entrypoint).parts
-        ):
-            raise ValueError(f'Invalid release entrypoint: {entrypoint!r}.')
-        if not (release_dir / entrypoint).is_file():
-            raise ValueError(f'Release entrypoint {entrypoint!r} does not exist.')
-        if not isinstance(protocol, int) or isinstance(protocol, bool):
-            raise ValueError(f'Invalid release launcher-protocol: {protocol!r}.')
+        manifest = ReleaseManifest(
+            version=data.get('project', {}).get('version'),
+            entrypoint=release.get('entrypoint', 'app.py'),
+            launcher_protocol=release.get('launcher-protocol', 1),
+        )
 
-        return cls(version=version, entrypoint=entrypoint, launcher_protocol=protocol)
+        if not (release_dir / manifest.entrypoint).is_file():
+            raise ValueError(f'Release entrypoint {manifest.entrypoint!r} does not exist.')
+        return manifest
 
 
-@dataclass(frozen=True)
-class ReleaseState:
+class ReleaseState(BaseModel):
     """Content of ``state.json``."""
 
-    current: Version
-    previous: Version | None
-    pending: bool
+    model_config = ConfigDict(frozen=True)
+
+    current: VERSION_TYPE
+    previous: VERSION_TYPE | None = None
+    pending: bool = False
     """Current release has not confirmed it starts yet (it was just switched to)."""
-    attempts: int
+    attempts: int = 0
     """Failed starts of a pending release."""
-    failed: tuple[Version, ...]
+    failed: tuple[VERSION_TYPE, ...] = ()
     """Releases that were rolled back."""
 
-    @classmethod
-    def from_json(cls, data: Any) -> ReleaseState:
-        try:
-            return cls(
-                current=Version(data['current']),
-                previous=Version(data['previous']) if data.get('previous') else None,
-                pending=bool(data.get('pending', False)),
-                attempts=int(data.get('attempts', 0)),
-                failed=tuple(Version(i) for i in data.get('failed', ())),
-            )
-        except (KeyError, TypeError, ValueError, InvalidVersion) as e:
-            raise ValueError(f'Invalid releases state: {data!r}.') from e
 
-
-@dataclass(frozen=True)
-class UpdateResult:
+class UpdateResult(BaseModel):
     """Content of ``result.json``."""
 
+    model_config = ConfigDict(frozen=True)
     status: Literal['updated', 'rolled_back', 'failed']
     """
     * ``updated``: switched to ``version`` (from ``previous``);
     * ``rolled_back``: ``version`` failed to start, switched back to ``previous``;
     * ``failed``: could not switch to ``version``, still on ``previous``.
     """
-    version: Version
-    previous: Version | None
+    version: VERSION_TYPE
+    previous: VERSION_TYPE | None = None
     message: str | None
-
-    @classmethod
-    def from_json(cls, data: Any) -> UpdateResult:
-        try:
-            status = data['status']
-            if status not in ('updated', 'rolled_back', 'failed'):
-                raise ValueError(f'Unknown status {status!r}.')
-            return cls(
-                status=status,
-                version=Version(data['version']),
-                previous=Version(data['previous']) if data.get('previous') else None,
-                message=data.get('message') or None,
-            )
-        except (KeyError, TypeError, ValueError, InvalidVersion) as e:
-            raise ValueError(f'Invalid update result: {data!r}.') from e
 
 
 class Releases:
@@ -217,13 +177,11 @@ class Releases:
         )
 
     def temp_dir(self, version: Version) -> Path:
-        """New unique directory name for unpacking ``version``."""
         return self._path / f'{self.TEMP_PREFIX}{version}-{secrets.token_hex(8)}'
 
     def read_state(self) -> ReleaseState | None:
-        """:return: ``None`` if there is no state (nothing installed with the launcher yet)."""
         data = _read_json(self._path / self.STATE_FILE)
-        return ReleaseState.from_json(data) if data is not None else None
+        return ReleaseState.model_validate(data) if data is not None else None
 
     def staged(self) -> Version | None:
         data = _read_json(self._path / self.STAGED_FILE)
@@ -251,16 +209,15 @@ class Releases:
         path = self._path / self.RESULT_FILE
         try:
             data = _read_json(path)
-            return UpdateResult.from_json(data) if data is not None else None
+            return UpdateResult.model_validate_json(data) if data is not None else None
         finally:
             path.unlink(missing_ok=True)
 
 
 def _read_json(path: Path) -> Any:
-    try:
-        return json.loads(path.read_text(encoding='utf-8'))
-    except FileNotFoundError:
+    if not path.is_file():
         return None
+    return json.loads(path.read_text(encoding='utf-8'))
 
 
 def write_json_atomic(path: Path, data: Any) -> None:

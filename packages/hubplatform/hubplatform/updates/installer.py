@@ -130,14 +130,6 @@ class ReleaseInstaller:
                 raise exc.VersionInstallError(info.version) from e
             return target
 
-    def stage(self, version: Version | str) -> None:
-        """Make installed ``version`` the release the launcher switches to on
-        ``ExitCodes.UPDATE``.
-
-        :raises ValueError: ``version`` is not installed.
-        """
-        self._releases.stage(Version(str(version)))
-
     async def _install(
         self,
         info: AppVersionInfo,
