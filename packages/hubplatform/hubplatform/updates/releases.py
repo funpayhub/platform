@@ -55,7 +55,7 @@ VERSION_TYPE = Annotated[
 
 
 class ReleaseManifest(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     version: VERSION_TYPE
     entrypoint: str
@@ -94,7 +94,7 @@ class ReleaseManifest(BaseModel):
 class ReleaseState(BaseModel):
     """Content of ``state.json``."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     current: VERSION_TYPE
     previous: VERSION_TYPE | None = None
@@ -109,7 +109,7 @@ class ReleaseState(BaseModel):
 class UpdateResult(BaseModel):
     """Content of ``result.json``."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     status: Literal['updated', 'rolled_back', 'failed']
     """
     * ``updated``: switched to ``version`` (from ``previous``);
