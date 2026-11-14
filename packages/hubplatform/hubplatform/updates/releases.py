@@ -31,15 +31,15 @@ __all__ = [
 
 import os
 import json
-import shutil
 import time
+import shutil
 import secrets
 import tomllib
-from typing import Any, Literal, Annotated, ClassVar
+from typing import Any, Literal, ClassVar, Annotated
 from pathlib import Path
 from datetime import UTC, datetime
 
-from pydantic import BaseModel, ConfigDict, AfterValidator
+from pydantic import BaseModel, ConfigDict, BeforeValidator
 from packaging.version import Version, InvalidVersion
 
 
@@ -50,7 +50,7 @@ RELEASES_SCHEMA = 1
 _REPLACE_ATTEMPTS = 10
 _REPLACE_DELAY = 0.5
 VERSION_TYPE = Annotated[
-    Version, AfterValidator(lambda v: v if isinstance(v, Version) else Version(v))
+    Version, BeforeValidator(lambda v: v if isinstance(v, Version) else Version(v))
 ]
 
 

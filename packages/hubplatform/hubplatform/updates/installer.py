@@ -13,7 +13,7 @@ from enum import StrEnum, auto
 from pathlib import Path, PurePosixPath
 from collections.abc import Callable, Awaitable
 
-from packaging.version import Version, InvalidVersion
+from packaging.version import Version
 
 from hubplatform.updates import exceptions as exc
 from hubplatform.logging.loggers import updates as updates_loggers
