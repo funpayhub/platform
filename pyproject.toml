@@ -11,7 +11,6 @@ package = false
 [tool.uv.workspace]
 members = [
     'packages/hubplatform',
-    'packages/hubplatform_runtime'
 ]
 
 
@@ -45,7 +44,6 @@ strict = true
 pretty = true
 files = [
     'packages/hubplatform',
-    'packages/hubplatform_runtime'
 ]
 
 
@@ -53,7 +51,6 @@ files = [
 line-length = 99
 include = [
     'packages/hubplatform/**/*.py',
-    'packages/hubplatform_runtime/**/*.py'
 ]
 
 

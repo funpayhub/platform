@@ -71,7 +71,6 @@ class VersionsManager(ABC):
 
     @classmethod
     def is_downloading(cls, path: str | Path, filename: str = DEFAULT_UPDATE_FILENAME) -> bool:
-        """Whether **any** manager is downloading into ``path / filename`` right now."""
         file_lock = _DOWNLOAD_LOCKS.get(os.path.normcase(cls._destination(path, filename)))
         return file_lock is not None and file_lock.lock.locked()
 
@@ -98,21 +97,6 @@ class VersionsManager(ABC):
         filename: str = DEFAULT_UPDATE_FILENAME,
         wait: bool = False,
     ) -> Path:
-        """Download ``version`` into folder ``path`` as ``filename``.
-
-        The data is first written to ``<filename>.<random suffix>`` in the same folder
-        and renamed to ``filename`` only after the download succeeded.
-
-        Only one download into the same file may run at a time, across all managers
-        (the lock is held from the start of the temporary download until the rename).
-        If one is running, ``wait=True`` waits for it to finish and then downloads again,
-        overwriting the file; ``wait=False`` raises immediately.
-
-        :raises VersionDownloadInProgressError: the file is being downloaded and ``wait`` is False.
-        :raises NotADirectoryError: ``path`` exists and is not a directory.
-        :raises ValueError: ``filename`` is not a plain file name.
-        :raises VersionDownloadError: download failed.
-        """
         destination = self._destination(path, filename)
         directory = destination.parent
         if directory.exists() and not directory.is_dir():
