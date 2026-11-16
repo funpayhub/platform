@@ -70,7 +70,7 @@ class ReleaseManifest(BaseModel):
             launcher_protocol=release.get('launcher-protocol', 1),
         )
 
-        if not (path / manifest.entrypoint).is_file():
+        if not (path.with_name(manifest.entrypoint)).is_file():
             raise ValueError(f'Release entrypoint {manifest.entrypoint!r} does not exist.')
         return manifest
 
