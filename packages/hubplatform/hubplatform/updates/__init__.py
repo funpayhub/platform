@@ -7,8 +7,8 @@ from .manager import (
 )
 from .releases import (
     Releases as Releases,
-    LauncherState as ReleaseState,
     UpdateResult as UpdateResult,
+    LauncherState as ReleaseState,
     ReleaseManifest as ReleaseManifest,
 )
 from .installer import InstallStage as InstallStage, ReleaseInstaller as ReleaseInstaller

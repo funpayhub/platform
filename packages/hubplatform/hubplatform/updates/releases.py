@@ -18,9 +18,8 @@ import secrets
 import tomllib
 from typing import Any, Literal, ClassVar, Annotated
 from pathlib import Path
-from datetime import UTC, datetime
 
-from pydantic import BaseModel, ConfigDict, BeforeValidator, Field, PlainSerializer
+from pydantic import Field, BaseModel, ConfigDict, BeforeValidator, PlainSerializer
 from packaging.version import Version, InvalidVersion
 
 
@@ -33,7 +32,7 @@ _REPLACE_DELAY = 0.5
 VERSION_TYPE = Annotated[
     Version,
     BeforeValidator(lambda v: v if isinstance(v, Version) else Version(v)),
-    PlainSerializer(lambda v: str(v), return_type=str, when_used='json-unless-none')
+    PlainSerializer(lambda v: str(v), return_type=str, when_used='json-unless-none'),
 ]
 
 
@@ -152,7 +151,7 @@ class Releases:
     def mark_installed(self, version: Version, sha256: str | None) -> None:
         write_json_atomic(
             self.release_dir(version) / self.MARKER_FILE,
-            InstalledMarker(version=version, sha256=sha256).model_dump(mode='json')
+            InstalledMarker(version=version, sha256=sha256).model_dump(mode='json'),
         )
 
     def temp_dir(self, version: Version) -> Path:
@@ -175,8 +174,7 @@ class Releases:
         if not self.is_installed(version):
             raise ValueError(f'Release {version} is not installed.')
         write_json_atomic(
-            self._path / self.UPDATE_INFO_FILE,
-            UpdateInfo(version=version).model_dump(mode='json')
+            self._path / self.UPDATE_INFO_FILE, UpdateInfo(version=version).model_dump(mode='json')
         )
 
     def unmark_to_update(self) -> None:

@@ -13,6 +13,7 @@ from collections.abc import Callable, Awaitable
 
 from aiogram import Bot
 from pyconfigtree import Properties
+from aiogram.client.session.aiohttp import AiohttpSession
 
 from hubplatform.telegram import Router, Dispatcher
 from hubplatform.telegram.ui import UIManager, UIRegistry, global_ui_manager
@@ -33,12 +34,13 @@ class TelegramComponent(HubPlatformAppComponent):
         dispatcher: Dispatcher | None = None,
         ui_manager: UIManager = global_ui_manager(),
         commands_registry: CommandsRegistry = global_commands_registry(),
+        proxy: str | None = None,
     ) -> None:
         self._token = token
         self._dispatcher = dispatcher if dispatcher is not None else Dispatcher()
         self._ui_manager = ui_manager
         self._commands_registry = commands_registry
-        self._bot = Bot(token=self._token)
+        self._bot = Bot(token=self._token, session=AiohttpSession(proxy=proxy))
 
         from . import TELEGRAM_APP_ROUTER, TELEGRAM_APP_UI_REGISTRY  # todo: fix it!
 
