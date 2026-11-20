@@ -5,6 +5,7 @@ __all__ = [
     'telegram',
     'app',
     'updates',
+    'expressions',
 ]
 
 from logging import getLogger
@@ -20,3 +21,7 @@ class app:  # noqa: N801
 
 class updates:  # noqa: N801
     installer = getLogger('hubplatform.updates.installer')
+
+
+class expressions:  # noqa: N801
+    manager = getLogger('hubplatform.expressions.manager')
