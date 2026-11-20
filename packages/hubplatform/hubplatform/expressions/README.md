@@ -114,185 +114,210 @@ However, the syntax for passing arguments directly is defined only for the follo
 
 ## Implementation
 
-> Code examples below are pseudocode. They show the shape of the API, not final names or signatures.
+> Code examples show the current API. Parts marked **(planned)** describe the target design that is
+> not implemented yet; their examples are pseudocode.
 
 ### Overview
-Expressions are resolved like Python methods. Each handler renders a text with exactly one
-**context object**. The set of available expressions, and the implementation that each name
-refers to, is determined by the context's class and its ancestors: the nearest definition wins.
+A text is evaluated with a **container of traits**. A trait is a small piece of data: an order,
+a message, the user who did something, ... Each expression declares the trait types it needs and
+is available for every container that has them. If several expressions with the same name are
+available, the most specific one wins.
 
 The system consists of the following parts:
 
-1. `ExpressionsContext` - the root class of all contexts. A context object carries the data
-   that expressions need. Context classes form a single-inheritance tree.
-2. `ExpressionDefinition` - an expression function together with its metadata: a unique ID,
-   documentation, a category, an optional renderer and its owner.
-3. `ExpressionsScope` - the set of name bindings for one context type. There is exactly one scope
-   per context class. Scopes are not created or nested manually: the scope tree is the context
-   class tree.
-4. `ExpressionsManager` - an orchestrator that owns all scopes, validates them, compiles them
-   into an immutable snapshot and renders texts.
+1. `Trait` (`hubplatform.expressions.traits`) - the base class of all traits. A trait is a pydantic
+   model with a name and a description, which the documentation UI shows.
+2. `TraitsContainer` - the traits a text is evaluated with. Handlers create it.
+3. `Requirement` (`hubplatform.expressions.requirement`) - the set of trait types an expression
+   needs.
+4. `ExpressionDefinition` - an expression function together with its documentation, its requirement
+   and an optional renderer. Created by the `@expression` decorator.
+5. `ExpressionsScope` - the expressions available for one container shape, with overrides already
+   resolved. Scopes are computed and cached by the manager.
+6. `ExpressionsManager` - an orchestrator that owns all traits and expressions, validates them,
+   resolves names and renders texts.
 
-### Contexts
+### Traits
 ```python
-class ExpressionsContext: ...                          # root; used by texts without any context
-
-@dataclass(kw_only=True)
-class GenericOrderContext(ExpressionsContext):        # concrete, can be used directly by handlers
+class OrderTrait(Trait, name=I18nString(...), description=I18nString(...)):
     order_id: str                                      # normalized, cross-marketplace form
-    counterparty_username: str
-    order_sum: Decimal | None = None                   # data that not every marketplace provides
+    order_name: str
+    order_amount: int
 
-@dataclass(kw_only=True)
-class FunPayOrderContext(GenericOrderContext):
+
+class FunPayOrderTrait(OrderTrait, name=..., description=...):  # a FunPay order IS an order
     order: funpay.Order                                # native object with native types
 
-    @classmethod
-    def from_order(cls, order: funpay.Order) -> FunPayOrderContext:
-        return cls(
-            order=order,
-            order_id=str(order.id),                    # funpay.Order.id is an int
-            counterparty_username=order.buyer.username,
-        )
+
+class InitiatorTrait(Trait, name=..., description=...):  # the user is a separate trait
+    initiator_id: str
+    initiator_username: str
 ```
 
 Rules:
 
-- **One context per handler.** A handler creates exactly one context object, for exactly one
-  logical context. An order handler creates an order context and nothing else, even if the
-  marketplace API reports orders through messages.
-- **Single inheritance.** A context class has at most one base class that is a subclass of
-  `ExpressionsContext`; this is checked in `ExpressionsContext.__init_subclass__`, at class
-  definition. Mixins that are not contexts are allowed.
-- **Generic contexts are concrete.** A generic context (`GenericOrderContext`,
-  `GenericMessageContext`, `GenericReviewContext`, ...) is a plain data class with normalized
-  fields that every marketplace can provide. A handler can create it directly: a new component
-  can start with `GenericOrderContext` and introduce a specific context later. All generic
-  expressions (`$username`, `$order_id`, ...) are implemented in the generic scope, and more
-  specific scopes may override them.
-- **Field types are never changed in child contexts.** Required generic fields are filled by the
-  child context's constructor in their normalized form (`order_id=str(order.id)`). Data that not
-  every marketplace provides is optional (`None` by default). Marketplace-specific data with
-  native types is stored separately, usually as the native object itself
-  (`FunPayOrderContext.order`), and is used by marketplace-specific expressions.
+- **Inheritance means "is a".** A trait inherits from another trait only when it really is one:
+  `FunPayOrderTrait(OrderTrait)`. A trait never inherits from another one just to share fields.
+  Data about another entity (the user who made the order, the order a review is about) is a
+  separate trait in the same container.
+- **Generic traits.** The traits shared by every marketplace (`InitiatorTrait`, `OrderTrait`,
+  `ReviewTrait`, `MessageTrait`, ...) are defined in one place: `hubplatform.app.expressions`.
+  They are plain data classes with normalized fields that every marketplace can provide, so a
+  handler can use them directly. Marketplace components and plugins refine them by subclassing
+  and do not define parallel generic traits.
+- **Field types are never changed in subclasses.** Required generic fields are filled by the
+  subclass in their normalized form (`order_id=str(order.id)`). Data that not every marketplace
+  provides is optional (`None` by default). Marketplace-specific data with native types is stored
+  in extra fields, usually as the native object itself (`FunPayOrderTrait.order`), and is used by
+  marketplace-specific expressions.
 - **Expensive data.** Data that has to be fetched is exposed as an `async` method with a default
-  implementation in the generic context (for example, returning `None`). Specific contexts
-  override it and cache the result.
-- **The context tree is open.** "Root → generic logical contexts → marketplace contexts" is a
-  convention, not a fixed structure:
-  - A marketplace can introduce a completely new logical context by subclassing
-    `ExpressionsContext` directly (for example `G2GDisputeContext(ExpressionsContext)`).
-    It gets the root expressions and its own ones.
-  - When a second marketplace gets the same concept, a generic context is extracted
-    (`GenericDisputeContext(ExpressionsContext)`), and both marketplace contexts are reparented to
-    it. Common expressions move to the generic scope under the same names, so saved texts keep
-    working. A marketplace binding that now shadows a generic one without `override=True` is
-    reported at freeze, so every collision is reviewed during the migration.
-  - The tree can be deeper where it's useful
-    (`FunPayOrderContext → FunPayStarsOrderContext`).
-  - To avoid two parallel generic hierarchies for the same concept, generic contexts are defined
-    in one place: `hubplatform` or one shared package. Marketplace components and plugins only
-    extend them.
-- **Composition instead of multiple inheritance.** If one context is also about another logical
-  entity (a review is about an order), it holds that entity as an attribute
-  (`GenericReviewContext.order: GenericOrderContext`) and can re-export its expressions
-  (see [Re-exporting expressions](#re-exporting-expressions)).
+  implementation in the generic trait (for example, returning `None`). Subclasses override it
+  and cache the result.
+- **Registration.** Every trait type that an expression requires must be registered with
+  `manager.add_trait(trait_type, id)`. Registered traits are the filters of the documentation UI,
+  and their IDs are stored in its callback data.
+
+### Containers
+```python
+traits = TraitsContainer(
+    FunPayOrderTrait(order_id='123', order_name='Gold', order_amount=5, order=order),
+    InitiatorTrait(initiator_id='42', initiator_username='bob'),
+)
+traits[OrderTrait]                 # the FunPayOrderTrait: subclasses are resolved
+traits.get(ReviewTrait)            # None
+traits.get_all_traits(OrderTrait)  # every OrderTrait in the container
+OrderTrait in traits               # True
+```
+
+- **One container per handler.** A handler creates exactly one container for exactly one event.
+  An order handler creates an order container, even if the marketplace API reports orders
+  through messages.
+- `container[T]` returns the first trait that is an instance of `T` (including its subclasses)
+  and raises `KeyError` if there is none. A container can hold several traits of the same type
+  or with the same base class; `get_all_traits(T)` returns all of them.
+- The **shape** of a container is the set of types of its traits. Expressions are resolved by
+  the shape, and the result is cached per shape.
+- A text without any data is evaluated with an empty container:
+  `manager.evaluate(text)` is `manager.evaluate(text, TraitsContainer())`.
 
 ### Expressions
 ```python
-@manager.scope(GenericOrderContext).expression(
-    'order_id',
-    id='hubplatform:order_id',
-    category='order',                      # documentation only
-    docs=Docs('expr-order_id'),            # i18n keys, not literal text
-)
-async def order_id(ctx: GenericOrderContext) -> str:
-    return ctx.order_id
+@manager.register(call_key='order_id', category=('general', 'order'))
+@expression(requires=OrderTrait, docs=ExpressionDocs(...))
+async def order_id(traits: TraitsContainer) -> str:
+    return traits[OrderTrait].order_id
+
+
+@manager.register(call_key='order_link', category=('funpay',))
+@expression(requires=FunPayOrderTrait, docs=ExpressionDocs(...))
+async def order_link(traits: TraitsContainer) -> str: ...
 ```
 
-- The first positional parameter is the context object. Its type is the scope's context type
-  (or a superclass of it), so the expression is type-safe.
-- All other parameters are filled from the template arguments. Arguments are bound with
-  `inspect.Signature.bind`; binding errors are expression errors.
-- There is no dependency injection by name. Components and plugins register expressions during
-  their setup and capture the services they need (bound methods, closures, instances).
-- An expression ID is unique within the app. IDs are used in error messages, logs and documentation,
-  and to refer to an expression from code. They never appear in templates.
+- `requires` lists the trait types the expression needs: one type or several. Without
+  `requires`, the expression is available everywhere, including texts without data.
+  The requirement is part of the definition, so it is the same wherever the expression is
+  registered.
+- The first positional parameter receives a **view** of the container: a `TraitsView` that holds
+  only the traits of the required types. Asking it for any other trait type raises
+  `UndeclaredTraitError`, so an expression cannot depend on a trait it did not declare.
+  Asking for a base class of a required type is allowed: an expression that requires
+  `FunPayOrderTrait` can use `traits[OrderTrait]`.
+- All other parameters are filled from the template arguments.
 - `category` is a documentation field only (`math`, `string`, `order`, ...). It groups expressions
   in the documentation UI and never affects resolution.
-- `renderer` is an optional function that converts the raw result of a top-level call into a string
+- `renderer` is an optional method that converts the raw result of a top-level call into a string
   or a [fragment](#fragments). Without it, a fragment is kept and any other value is converted with
   `str()`. Results of nested calls are passed to the outer expression as-is.
-- The owner of a definition (a component name or a plugin ID) is recorded automatically and used in
-  error messages and to isolate plugin errors.
-- The same definition can be bound under several names (aliases).
+- **(planned)** An expression ID that is unique within the app, used in error messages, logs and
+  documentation. The owner of a definition (a component name or a plugin ID), recorded
+  automatically and used in error messages and to isolate plugin errors. Binding one definition
+  under several names (aliases).
 
-### Scopes and resolution
-`manager.scope(T)` returns the scope of context type `T`, creating it if needed.
-Its parent scope is the scope of `T`'s base context class.
+### Resolution
+A container satisfies a requirement if, for every required type, it holds a trait of that type
+or of its subclass. For a call `$name`, the candidates are the expressions registered under
+`name` whose requirements the container satisfies. **The most specific candidate wins.**
 
-Rendering with a context object `ctx` uses the scopes of all classes in `type(ctx).__mro__`
-that are subclasses of `ExpressionsContext`, from the most specific to `ExpressionsContext`.
-For each name, **the nearest binding wins**.
+A requirement `A` is more specific than a requirement `B` if every type of `B` is covered by the
+same type or a subclass in `A`, and not the other way round. So a requirement with a subclass
+wins over one with its base class, and a requirement with more types wins over one with fewer:
+
+- `FunPayOrderTrait` is more specific than `OrderTrait`.
+- `(OrderTrait, InitiatorTrait)` is more specific than `OrderTrait` and than `InitiatorTrait`.
+- `OrderTrait` and `ReviewTrait` are not comparable.
+
+The order of traits in a container, the order of types in a requirement and the order of
+registration never affect the result.
+
+If one candidate is more specific than all the others, it is called. If there is no candidate,
+the call raises `UnknownExpressionError`. If several candidates are equally specific (for
+example, `$x` is registered for `OrderTrait` and for `ReviewTrait` and the container has both),
+the call raises `AmbiguousExpressionError`. Register an override for the traits of all of them
+(`(OrderTrait, ReviewTrait)`) to fix it.
 
 Examples:
-- `$upper` is bound in the scope of `ExpressionsContext` and works everywhere.
-- `$order_id` is bound in the scope of `GenericOrderContext` and works in every marketplace's
-  order context, including marketplaces and plugins added later.
-- `$order_sum` can be bound in the scope of `FunPayOrderContext` only; it does not exist in
-  other contexts.
+- `$upper` requires nothing and works everywhere.
+- `$order_id` requires `OrderTrait` and works in the order containers of every marketplace,
+  including marketplaces and plugins added later.
+- `$order_link` requires `FunPayOrderTrait` and does not exist for orders of other marketplaces.
+
+`manager.get_scope(traits)` returns the resolved expressions for a container or for a set of
+trait types (`scope.expressions`, `scope.ambiguous`, `scope.expressions_by_category`).
 
 #### Overrides
-A child scope may replace an expression of an ancestor scope, but only explicitly:
+A more specific expression may replace a less specific one with the same name, but only explicitly:
 
-- Binding a name that is already bound in an ancestor scope requires `override=True`.
-  Without it, the binding is a configuration error that names both owners. This prevents a plugin
-  from silently shadowing an existing expression.
-- `override=True` on a name that no ancestor binds is also an error
-  (usually it means the overridden expression was renamed or removed).
-- Two bindings of the same name in the same scope are an error.
+- An expression that is more specific than another expression with the same name must be
+  registered with `override=True`. Without it, `freeze()` fails with an error that names both
+  expressions. This prevents a plugin from silently shadowing an existing expression.
+- `override=True` on an expression that is not more specific than any other expression with the
+  same name is also an error (usually it means the overridden expression was renamed or removed).
+- Two expressions with the same name and the same requirement are an error.
 - An override must accept every argument that the overridden expression accepts.
-- An override can call the overridden implementation:
 
 ```python
-@manager.scope(G2GOrderContext).expression('username', id='g2g:username', override=True)
-async def g2g_username(ctx: G2GOrderContext, *, parent: ParentExpression) -> str:
-    return f'@{await parent(ctx)}'
+@manager.register(call_key='order_id', category=('general', 'order'), override=True)
+@expression(requires=FunPayOrderTrait, docs=ExpressionDocs(...))
+async def funpay_order_id(traits: TraitsContainer) -> str:
+    return f'#{traits[FunPayOrderTrait].order_id}'
 ```
 
-#### Re-exporting expressions
-A scope can make expressions of a composed context available under its own names:
-
-```python
-manager.scope(GenericReviewContext).reexport(
-    GenericOrderContext, via=lambda ctx: ctx.order, names=['order_id', 'order'],
-)
-```
-
-At render time a re-exported name is resolved against `type(via(ctx))`, so
-in a FunPay review context, `$order_id` uses the FunPay order context and its overrides.
-Re-exported names follow the same collision and override rules as other bindings.
+- **(planned)** An override can call the overridden implementation
+  (`*, parent: ParentExpression`).
 
 ### Lifecycle
-1. **Registration.** During app setup, components and component extensions (plugins)
-   create contexts, register expressions, aliases and re-exports. Registration order
-   does not matter.
+1. **Registration.** During app setup, components and component extensions (plugins) register
+   traits, categories and expressions. Registration order does not matter.
 2. **Freeze.** After all components and extensions are installed (before the app context
-   is locked), `manager.freeze()` validates every scope and compiles an immutable snapshot:
-   for every known context type, a `dict[name, binding]` with all resolution already done.
-   - Configuration errors from core code and components fail the app setup.
-   - Configuration errors caused by a plugin's binding remove that binding, are returned
-     to the app by `freeze()` and do not stop the app.
+   is locked), `manager.freeze()` checks the registrations:
+   - A required trait that is not registered and a wrong use of `override` are errors.
+     `freeze()` raises `ExpressionsConfigurationError` with every problem found, and the manager
+     stays unfrozen.
+   - For every pair of equally specific expressions with the same name, `freeze()` checks that
+     there is an expression that covers the traits of both. If there is none, it logs a warning
+     and adds it to `manager.warnings`: the combination may be impossible in practice, and
+     `AmbiguousExpressionError` at runtime is the backstop.
    - Registration after freeze is an error.
-3. **Formatting** uses the current snapshot. A context type that was not seen at freeze time
-   (a subclass defined later) is resolved on first use with the same rules and cached.
-4. **Reconfiguration.** In the future, enabling or disabling a plugin at runtime recompiles the
-   snapshot and replaces it atomically. Formatting calls that are already running finish with the
-   old one.
+   - **(planned)** Configuration errors caused by a plugin's registration remove that
+     registration, are returned to the app by `freeze()` and do not stop the app.
+3. **Evaluation** resolves names for the shape of the container on first use and caches the
+   result.
+4. **(planned) Reconfiguration.** Enabling or disabling a plugin at runtime rebuilds the manager
+   state and replaces it atomically. Evaluations that are already running finish with the old one.
 
-### Formatting
+### Documentation UI
+The Telegram component shows expressions in the "Выражения" menu
+(`hubplatform.app.components.telegram.expressions`):
+
+- Registered traits are **filters**. The user selects the traits a text has, and the menu shows
+  the expressions available for an imaginary container with traits of these types, with
+  overrides resolved. Without selected traits, it shows the expressions that work in any text.
+- Categories group the list. Categories without available expressions are hidden.
+- The page of an expression shows its documentation and the traits it requires.
+
+### Formatting (planned)
 ```python
-result = await manager.format(text, ctx, ignore_errors=app_setting)
+result = await manager.format(text, traits, ignore_errors=app_setting)
 result.result    # formatted text
 result.errors    # dict[int, ExpressionsFormatError]; always empty with ignore_errors=False
 
@@ -304,7 +329,7 @@ class ExpressionsFormatResult:
 class ExpressionsFormatError(HubPlatformError):
     span: tuple[int, int]                  # the failed call (may be nested) in the original text
     call: Call | None                      # None for syntax errors
-    context_type: type[ExpressionsContext]
+    shape: frozenset[type[Trait]]          # the shape of the container
     owner: str | None                      # owner of the failed expression, if known
     # the original exception, if any, is stored in __cause__
 
@@ -316,12 +341,12 @@ For a syntax error, `span` is the broken call as determined by the
 
 1. The whole text is parsed first. Parsed texts are cached by their source text.
 2. Calls are evaluated sequentially, in text order.
-3. For each top-level call, the name is resolved in the snapshot for `type(ctx)`. Arguments are
+3. For each top-level call, the name is resolved for the shape of the container. Arguments are
    resolved recursively: nested calls are evaluated and their raw results are passed as arguments.
 4. The expression is called. The result of the top-level call is converted with the renderer
    (or `str()`) and replaces the call.
 
-#### Fragments
+### Fragments
 Some results are not text: an image, a file, a break between messages. An expression returns them
 as a `Fragment` (`hubplatform.expressions.fragments`):
 
@@ -334,14 +359,14 @@ class Image(Fragment):
         return '[image]'
 ```
 
-`manager.evaluate(text, ctx, ignore_errors=...)` returns an `EvaluationResult`:
+`manager.evaluate(text, traits, ignore_errors=...)` returns an `EvaluationResult`:
 
 - `parts` - text and fragments in text order, for example `('Your key: ', Image('key.png'), ' Thanks!')`.
   Neighbouring text is merged into one string and empty strings are dropped.
 - `errors` - errors of failed calls (only with `ignore_errors=True`).
 - `has_fragments`.
 - `text` - the result as text, with fragments replaced by their text fallbacks. Use it where only
-  text can be used: `(await manager.evaluate(text, ctx)).text`.
+  text can be used: `(await manager.evaluate(text, traits)).text`.
 
 Rules:
 
@@ -355,14 +380,16 @@ The platform does not decide how fragments are sent. That is up to the code that
 for example, a marketplace that cannot send text and an image in one message splits the parts into
 several messages, while Telegram can send an image with the text as its caption.
 
-#### Errors
+### Errors (planned)
 Every `$` in the text that is not part of `$$` starts an expression call. Every error belongs to
 exactly one **top-level** call:
 
 - `ExpressionsSyntaxError` - the call cannot be parsed (including `$ `, `$!` and a trailing `$`).
-- `UnknownExpressionError` - the name does not exist in the context.
+- `UnknownExpressionError` - the name is not available for the container.
   An expression can stop existing at any time, for example when the plugin that provided it is
   removed while texts that use it are saved in the configuration, so this is a regular error.
+- `AmbiguousExpressionError` - several expressions with the name are available for the
+  container, and none of them is more specific than all the others.
 - `ExpressionArgumentsError` - the arguments cannot be bound to the expression's signature.
 - `ExpressionExecutionError` - the expression raised an exception.
 - `ExpressionRendererError` - the renderer raised an exception.
@@ -400,12 +427,12 @@ To keep a broken call as-is and continue parsing, the parser determines where th
   If there is no closing `)`, the broken call extends to the end of the text.
 - The source text of a broken call is kept raw: `$$` inside it is not unescaped.
 
-### Template validation
-`manager.validate(text, context_type)` checks a text without evaluating anything and returns all
+### Template validation (planned)
+`manager.validate(text, trait_types)` checks a text without evaluating anything and returns all
 problems at once: syntax errors, unknown names, and arguments that cannot be bound
 (literal arguments only). Problems use the same error types and positions as `format()`.
 It is used when a user edits a text in the UI. Syntax errors block saving. Unknown names are
-warnings, and the user can still save the text. Every text property declares the context type
+warnings, and the user can still save the text. Every text property declares the trait types
 it is formatted with.
 
 Optionally, after freeze, the app can validate all saved texts to find the ones that use names
@@ -414,15 +441,20 @@ that no longer exist (for example, after a plugin was removed).
 ### Example
 A G2G component sends a message when a customer creates a new order.
 
-Scopes:
-- `ExpressionsContext`: `$upper`, `$round`, `$random`, `$time`, ...
-- `GenericOrderContext`: `$username` (the counterparty), `$order_id`, `$order_sum`, ...
-- `G2GOrderContext`: `$order_bonuses` and other G2G-specific expressions.
+Expressions:
+- No requirement: `$upper`, `$round`, `$random`, `$time`, ...
+- `InitiatorTrait`: `$username` (the counterparty), `$user_id`.
+- `OrderTrait`: `$order_id`, `$order_name`, `$order_amount`, ...
+- `G2GOrderTrait`: `$order_bonuses` and other expressions specific to G2G orders.
 
-The handler creates `G2GOrderContext(...)` and calls `manager.format(text, ctx, ...)`.
-Every expression of the three scopes above is available. `$order_bonuses` works here, but
-in a FunPay order context it is an unknown name.
+The handler creates `TraitsContainer(G2GOrderTrait(...), InitiatorTrait(...))` and calls
+`manager.evaluate(text, traits)`. Every expression above is available. `$order_bonuses` works
+here, but for a FunPay order it is an unknown name.
+
+A review handler puts the review and the order it is about into one container:
+`TraitsContainer(FunPayReviewTrait(...), FunPayOrderTrait(...), InitiatorTrait(...))`, so
+`$review_text` and `$order_id` both work.
 
 For FunPay, which reports new orders through system messages, the order handler creates only
-`FunPayOrderContext`. `$username` is therefore the buyer, not the FunPay system account that sent the
-message. The new-message handler must not format texts for these system messages.
+an order container. `$username` is therefore the buyer, not the FunPay system account that sent
+the message. The new-message handler must not evaluate texts for these system messages.

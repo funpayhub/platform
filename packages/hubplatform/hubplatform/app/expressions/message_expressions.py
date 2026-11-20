@@ -5,17 +5,18 @@ __all__ = ['register_message_expressions']
 
 from hubplatform.i18n import I18nString
 from hubplatform.expressions.docs import ExpressionDocs
+from hubplatform.expressions.traits import TraitsContainer
 from hubplatform.expressions.manager import ExpressionsManager
 from hubplatform.expressions.definition import expression
 
-from .contexts import GeneralMessageContext
+from .traits import MessageTrait
 from ...expressions.manager.category import ExpressionsCategoryInfo
 
 
 CATEGORY = ('general', 'message')
 
 _manager = ExpressionsManager({})
-_manager.add_context(GeneralMessageContext, 'general_message')
+_manager.add_trait(MessageTrait, 'message')
 _manager.add_category(
     CATEGORY,
     ExpressionsCategoryInfo(
@@ -31,8 +32,9 @@ _manager.add_category(
 )
 
 
-@_manager.register(context_type=GeneralMessageContext, call_key='message_id', category=CATEGORY)
+@_manager.register(call_key='message_id', category=CATEGORY)
 @expression(
+    requires=MessageTrait,
     docs=ExpressionDocs(
         name=I18nString(
             'hubplatform.expressions.general:message.message_id:name',
@@ -42,14 +44,15 @@ _manager.add_category(
             'hubplatform.expressions.general:message.message_id:description',
             'Идентификатор сообщения на маркетплейсе. Пример: $message_id',
         ),
-    )
+    ),
 )
-async def message_id(ctx: GeneralMessageContext) -> str:
-    return ctx.message_id
+async def message_id(traits: TraitsContainer) -> str:
+    return traits[MessageTrait].message_id
 
 
-@_manager.register(context_type=GeneralMessageContext, call_key='message_text', category=CATEGORY)
+@_manager.register(call_key='message_text', category=CATEGORY)
 @expression(
+    requires=MessageTrait,
     docs=ExpressionDocs(
         name=I18nString(
             'hubplatform.expressions.general:message.message_text:name',
@@ -59,10 +62,10 @@ async def message_id(ctx: GeneralMessageContext) -> str:
             'hubplatform.expressions.general:message.message_text:description',
             'Текст сообщения пользователя. Пример: Вы написали: $message_text',
         ),
-    )
+    ),
 )
-async def message_text(ctx: GeneralMessageContext) -> str:
-    return ctx.message_text
+async def message_text(traits: TraitsContainer) -> str:
+    return traits[MessageTrait].message_text
 
 
 def register_message_expressions(manager: ExpressionsManager) -> None:

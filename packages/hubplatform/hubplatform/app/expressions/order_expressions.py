@@ -5,17 +5,18 @@ __all__ = ['register_order_expressions']
 
 from hubplatform.i18n import I18nString
 from hubplatform.expressions.docs import ExpressionDocs
+from hubplatform.expressions.traits import TraitsContainer
 from hubplatform.expressions.manager import ExpressionsManager
 from hubplatform.expressions.definition import expression
 
-from .contexts import GeneralOrderContext
+from .traits import OrderTrait
 from ...expressions.manager.category import ExpressionsCategoryInfo
 
 
 CATEGORY = ('general', 'order')
 
 _manager = ExpressionsManager({})
-_manager.add_context(GeneralOrderContext, 'general_order')
+_manager.add_trait(OrderTrait, 'order')
 _manager.add_category(
     CATEGORY,
     ExpressionsCategoryInfo(
@@ -31,8 +32,9 @@ _manager.add_category(
 )
 
 
-@_manager.register(context_type=GeneralOrderContext, call_key='order_id', category=CATEGORY)
+@_manager.register(call_key='order_id', category=CATEGORY)
 @expression(
+    requires=OrderTrait,
     docs=ExpressionDocs(
         name=I18nString(
             'hubplatform.expressions.general:order.order_id:name',
@@ -42,14 +44,15 @@ _manager.add_category(
             'hubplatform.expressions.general:order.order_id:description',
             'Идентификатор заказа на маркетплейсе. Пример: Ваш заказ №$order_id',
         ),
-    )
+    ),
 )
-async def order_id(ctx: GeneralOrderContext) -> str:
-    return ctx.order_id
+async def order_id(traits: TraitsContainer) -> str:
+    return traits[OrderTrait].order_id
 
 
-@_manager.register(context_type=GeneralOrderContext, call_key='order_name', category=CATEGORY)
+@_manager.register(call_key='order_name', category=CATEGORY)
 @expression(
+    requires=OrderTrait,
     docs=ExpressionDocs(
         name=I18nString(
             'hubplatform.expressions.general:order.order_name:name',
@@ -59,14 +62,15 @@ async def order_id(ctx: GeneralOrderContext) -> str:
             'hubplatform.expressions.general:order.order_name:description',
             'Название заказа: то, что купил пользователь. Пример: Вы купили $order_name',
         ),
-    )
+    ),
 )
-async def order_name(ctx: GeneralOrderContext) -> str:
-    return ctx.order_name
+async def order_name(traits: TraitsContainer) -> str:
+    return traits[OrderTrait].order_name
 
 
-@_manager.register(context_type=GeneralOrderContext, call_key='order_amount', category=CATEGORY)
+@_manager.register(call_key='order_amount', category=CATEGORY)
 @expression(
+    requires=OrderTrait,
     docs=ExpressionDocs(
         name=I18nString(
             'hubplatform.expressions.general:order.order_amount:name',
@@ -76,10 +80,10 @@ async def order_name(ctx: GeneralOrderContext) -> str:
             'hubplatform.expressions.general:order.order_amount:description',
             'Количество единиц товара в заказе. Пример: Количество: $order_amount',
         ),
-    )
+    ),
 )
-async def order_amount(ctx: GeneralOrderContext) -> int:
-    return ctx.order_amount
+async def order_amount(traits: TraitsContainer) -> int:
+    return traits[OrderTrait].order_amount
 
 
 def register_order_expressions(manager: ExpressionsManager) -> None:

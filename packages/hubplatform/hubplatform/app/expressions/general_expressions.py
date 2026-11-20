@@ -10,9 +10,9 @@ from collections.abc import Mapping
 
 from hubplatform.i18n import I18nString
 from hubplatform.expressions.docs import ArgDocs, ExpressionDocs
+from hubplatform.expressions.traits import TraitsContainer
 from hubplatform.expressions.manager import ExpressionsManager
 from hubplatform.expressions.definition import expression
-from hubplatform.expressions.call_context import ExpressionContext
 from hubplatform.expressions.manager.category import ExpressionsCategoryInfo
 
 
@@ -44,7 +44,7 @@ _manager.add_category(
 )
 
 
-@_manager.register(context_type=ExpressionContext, call_key='time', category=CATEGORY)
+@_manager.register(call_key='time', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -96,7 +96,7 @@ _manager.add_category(
         },
     )
 )
-async def time(ctx: ExpressionContext, mode: str) -> str:
+async def time(traits: TraitsContainer, mode: str) -> str:
     if not isinstance(mode, str):
         raise TypeError(f'mode must be a string, not {type(mode).__name__}.')
 
@@ -111,7 +111,7 @@ async def time(ctx: ExpressionContext, mode: str) -> str:
     return datetime.now().strftime(template)
 
 
-@_manager.register(context_type=ExpressionContext, call_key='choice', category=CATEGORY)
+@_manager.register(call_key='choice', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -142,7 +142,7 @@ async def time(ctx: ExpressionContext, mode: str) -> str:
         },
     )
 )
-async def choice(ctx: ExpressionContext, *variants: Any) -> Any:
+async def choice(traits: TraitsContainer, *variants: Any) -> Any:
     if not variants:
         raise ValueError('At least one variant is required.')
     return random_module.choice(variants)

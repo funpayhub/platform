@@ -5,17 +5,18 @@ __all__ = ['register_review_expressions']
 
 from hubplatform.i18n import I18nString
 from hubplatform.expressions.docs import ExpressionDocs
+from hubplatform.expressions.traits import TraitsContainer
 from hubplatform.expressions.manager import ExpressionsManager
 from hubplatform.expressions.definition import expression
 
-from .contexts import GeneralReviewContext
+from .traits import ReviewTrait
 from ...expressions.manager.category import ExpressionsCategoryInfo
 
 
 CATEGORY = ('general', 'review')
 
 _manager = ExpressionsManager({})
-_manager.add_context(GeneralReviewContext, 'general_review')
+_manager.add_trait(ReviewTrait, 'review')
 _manager.add_category(
     CATEGORY,
     ExpressionsCategoryInfo(
@@ -31,26 +32,9 @@ _manager.add_category(
 )
 
 
-@_manager.register(context_type=GeneralReviewContext, call_key='order_id', category=CATEGORY)
+@_manager.register(call_key='review_rating', category=CATEGORY)
 @expression(
-    docs=ExpressionDocs(
-        name=I18nString(
-            'hubplatform.expressions.general:review.order_id:name',
-            'ID заказа',
-        ),
-        overview=I18nString(
-            'hubplatform.expressions.general:review.order_id:description',
-            'Идентификатор заказа, к которому относится отзыв. '
-            'Пример: Спасибо за отзыв о заказе №$order_id!',
-        ),
-    )
-)
-async def order_id(ctx: GeneralReviewContext) -> str:
-    return ctx.order_id
-
-
-@_manager.register(context_type=GeneralReviewContext, call_key='review_rating', category=CATEGORY)
-@expression(
+    requires=ReviewTrait,
     docs=ExpressionDocs(
         name=I18nString(
             'hubplatform.expressions.general:review.review_rating:name',
@@ -61,14 +45,15 @@ async def order_id(ctx: GeneralReviewContext) -> str:
             'Оценка, которую пользователь поставил в отзыве. '
             'Пример: Спасибо за оценку $review_rating!',
         ),
-    )
+    ),
 )
-async def review_rating(ctx: GeneralReviewContext) -> int:
-    return ctx.review_rating
+async def review_rating(traits: TraitsContainer) -> int:
+    return traits[ReviewTrait].review_rating
 
 
-@_manager.register(context_type=GeneralReviewContext, call_key='review_text', category=CATEGORY)
+@_manager.register(call_key='review_text', category=CATEGORY)
 @expression(
+    requires=ReviewTrait,
     docs=ExpressionDocs(
         name=I18nString(
             'hubplatform.expressions.general:review.review_text:name',
@@ -78,10 +63,10 @@ async def review_rating(ctx: GeneralReviewContext) -> int:
             'hubplatform.expressions.general:review.review_text:description',
             'Текст отзыва пользователя. Пример: Вы написали: $review_text',
         ),
-    )
+    ),
 )
-async def review_text(ctx: GeneralReviewContext) -> str:
-    return ctx.review_text
+async def review_text(traits: TraitsContainer) -> str:
+    return traits[ReviewTrait].review_text
 
 
 def register_review_expressions(manager: ExpressionsManager) -> None:

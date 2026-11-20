@@ -8,9 +8,9 @@ from collections.abc import Mapping
 
 from hubplatform.i18n import I18nString
 from hubplatform.expressions.docs import ArgDocs, ExpressionDocs
+from hubplatform.expressions.traits import TraitsContainer
 from hubplatform.expressions.manager import ExpressionsManager
 from hubplatform.expressions.definition import expression
-from hubplatform.expressions.call_context import ExpressionContext
 from hubplatform.expressions.manager.category import ExpressionsCategoryInfo
 
 
@@ -41,7 +41,7 @@ def _require_text(value: object) -> str:
     raise TypeError(f'text must be a string or a number, not {type(value).__name__}.')
 
 
-@_manager.register(context_type=ExpressionContext, call_key='upper', category=CATEGORY)
+@_manager.register(call_key='upper', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -71,11 +71,11 @@ def _require_text(value: object) -> str:
         },
     )
 )
-async def upper(ctx: ExpressionContext, text: Any) -> str:
+async def upper(traits: TraitsContainer, text: Any) -> str:
     return _require_text(text).upper()
 
 
-@_manager.register(context_type=ExpressionContext, call_key='lower', category=CATEGORY)
+@_manager.register(call_key='lower', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -105,11 +105,11 @@ async def upper(ctx: ExpressionContext, text: Any) -> str:
         },
     )
 )
-async def lower(ctx: ExpressionContext, text: Any) -> str:
+async def lower(traits: TraitsContainer, text: Any) -> str:
     return _require_text(text).lower()
 
 
-@_manager.register(context_type=ExpressionContext, call_key='capitalize', category=CATEGORY)
+@_manager.register(call_key='capitalize', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -140,12 +140,12 @@ async def lower(ctx: ExpressionContext, text: Any) -> str:
         },
     )
 )
-async def capitalize(ctx: ExpressionContext, text: Any) -> str:
+async def capitalize(traits: TraitsContainer, text: Any) -> str:
     value = _require_text(text)
     return value[:1].upper() + value[1:]
 
 
-@_manager.register(context_type=ExpressionContext, call_key='trim', category=CATEGORY)
+@_manager.register(call_key='trim', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -176,11 +176,11 @@ async def capitalize(ctx: ExpressionContext, text: Any) -> str:
         },
     )
 )
-async def trim(ctx: ExpressionContext, text: Any) -> str:
+async def trim(traits: TraitsContainer, text: Any) -> str:
     return _require_text(text).strip()
 
 
-@_manager.register(context_type=ExpressionContext, call_key='length', category=CATEGORY)
+@_manager.register(call_key='length', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -211,7 +211,7 @@ async def trim(ctx: ExpressionContext, text: Any) -> str:
         },
     )
 )
-async def length(ctx: ExpressionContext, text: Any) -> int:
+async def length(traits: TraitsContainer, text: Any) -> int:
     if isinstance(text, (tuple, list, Mapping)):
         return len(text)
     return len(_require_text(text))

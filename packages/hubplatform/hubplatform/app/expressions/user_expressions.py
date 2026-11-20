@@ -5,17 +5,18 @@ __all__ = ['register_user_expressions']
 
 from hubplatform.i18n import I18nString
 from hubplatform.expressions.docs import ExpressionDocs
+from hubplatform.expressions.traits import TraitsContainer
 from hubplatform.expressions.manager import ExpressionsManager
 from hubplatform.expressions.definition import expression
 
-from .contexts import GeneralActionContext
+from .traits import InitiatorTrait
 from ...expressions.manager.category import ExpressionsCategoryInfo
 
 
 CATEGORY = ('general', 'user')
 
 _manager = ExpressionsManager({})
-_manager.add_context(GeneralActionContext, 'general_action')
+_manager.add_trait(InitiatorTrait, 'initiator')
 _manager.add_category(
     CATEGORY,
     ExpressionsCategoryInfo(
@@ -31,8 +32,9 @@ _manager.add_category(
 )
 
 
-@_manager.register(context_type=GeneralActionContext, call_key='username', category=CATEGORY)
+@_manager.register(call_key='username', category=CATEGORY)
 @expression(
+    requires=InitiatorTrait,
     docs=ExpressionDocs(
         name=I18nString(
             'hubplatform.expressions.general:user.username:name',
@@ -43,14 +45,15 @@ _manager.add_category(
             'Имя пользователя на маркетплейсе, который совершил действие. '
             'Пример: Здравствуйте, $username!',
         ),
-    )
+    ),
 )
-async def username(ctx: GeneralActionContext) -> str:
-    return ctx.initiator_username
+async def username(traits: TraitsContainer) -> str:
+    return traits[InitiatorTrait].initiator_username
 
 
-@_manager.register(context_type=GeneralActionContext, call_key='user_id', category=CATEGORY)
+@_manager.register(call_key='user_id', category=CATEGORY)
 @expression(
+    requires=InitiatorTrait,
     docs=ExpressionDocs(
         name=I18nString(
             'hubplatform.expressions.general:user.user_id:name',
@@ -61,10 +64,10 @@ async def username(ctx: GeneralActionContext) -> str:
             'Идентификатор на маркетплейсе пользователя, который совершил действие. '
             'Пример: $user_id',
         ),
-    )
+    ),
 )
-async def user_id(ctx: GeneralActionContext) -> str:
-    return ctx.initiator_id
+async def user_id(traits: TraitsContainer) -> str:
+    return traits[InitiatorTrait].initiator_id
 
 
 def register_user_expressions(manager: ExpressionsManager) -> None:

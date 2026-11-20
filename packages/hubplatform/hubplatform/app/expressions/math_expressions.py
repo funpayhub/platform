@@ -10,9 +10,9 @@ from collections.abc import Iterator
 
 from hubplatform.i18n import I18nString
 from hubplatform.expressions.docs import ArgDocs, ExpressionDocs
+from hubplatform.expressions.traits import TraitsContainer
 from hubplatform.expressions.manager import ExpressionsManager
 from hubplatform.expressions.definition import expression
-from hubplatform.expressions.call_context import ExpressionContext
 from hubplatform.expressions.manager.category import ExpressionsCategoryInfo
 
 
@@ -106,7 +106,7 @@ def _div(a: Number, b: Number) -> Number:
         return _from_decimal(_to_decimal(a) / _to_decimal(b))
 
 
-@_manager.register(context_type=ExpressionContext, call_key='random', category=CATEGORY)
+@_manager.register(call_key='random', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -152,7 +152,7 @@ def _div(a: Number, b: Number) -> Number:
         },
     )
 )
-async def random(ctx: ExpressionContext, min: Number, max: Number) -> Number:
+async def random(traits: TraitsContainer, min: Number, max: Number) -> Number:
     min, max = _require_number(min, 'min'), _require_number(max, 'max')
     if min > max:
         min, max = max, min
@@ -162,7 +162,7 @@ async def random(ctx: ExpressionContext, min: Number, max: Number) -> Number:
     return random_module.uniform(min, max)
 
 
-@_manager.register(context_type=ExpressionContext, call_key='sum', category=CATEGORY)
+@_manager.register(call_key='sum', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -194,14 +194,14 @@ async def random(ctx: ExpressionContext, min: Number, max: Number) -> Number:
         },
     )
 )
-async def sum_numbers(ctx: ExpressionContext, *args: object) -> Number:
+async def sum_numbers(traits: TraitsContainer, *args: object) -> Number:
     result: Number = 0
     for number in _flatten_numbers(args):
         result = _add(result, number)
     return result
 
 
-@_manager.register(context_type=ExpressionContext, call_key='min', category=CATEGORY)
+@_manager.register(call_key='min', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -233,14 +233,14 @@ async def sum_numbers(ctx: ExpressionContext, *args: object) -> Number:
         },
     )
 )
-async def min_number(ctx: ExpressionContext, *args: object) -> Number:
+async def min_number(traits: TraitsContainer, *args: object) -> Number:
     numbers = list(_flatten_numbers(args))
     if not numbers:
         raise ValueError('At least one number is required.')
     return min(numbers)
 
 
-@_manager.register(context_type=ExpressionContext, call_key='max', category=CATEGORY)
+@_manager.register(call_key='max', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -272,14 +272,14 @@ async def min_number(ctx: ExpressionContext, *args: object) -> Number:
         },
     )
 )
-async def max_number(ctx: ExpressionContext, *args: object) -> Number:
+async def max_number(traits: TraitsContainer, *args: object) -> Number:
     numbers = list(_flatten_numbers(args))
     if not numbers:
         raise ValueError('At least one number is required.')
     return max(numbers)
 
 
-@_manager.register(context_type=ExpressionContext, call_key='round', category=CATEGORY)
+@_manager.register(call_key='round', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -328,7 +328,7 @@ async def max_number(ctx: ExpressionContext, *args: object) -> Number:
         },
     )
 )
-async def round_number(ctx: ExpressionContext, number: Number, digits: int = 0) -> Number:
+async def round_number(traits: TraitsContainer, number: Number, digits: int = 0) -> Number:
     number = _require_number(number, 'number')
     if isinstance(digits, bool) or not isinstance(digits, int):
         raise TypeError(f'digits must be an integer, not {type(digits).__name__}.')
@@ -347,7 +347,7 @@ async def round_number(ctx: ExpressionContext, number: Number, digits: int = 0) 
     return int(rounded)
 
 
-@_manager.register(context_type=ExpressionContext, call_key='sub', category=CATEGORY)
+@_manager.register(call_key='sub', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -392,11 +392,11 @@ async def round_number(ctx: ExpressionContext, number: Number, digits: int = 0) 
         },
     )
 )
-async def sub(ctx: ExpressionContext, a: Number, b: Number) -> Number:
+async def sub(traits: TraitsContainer, a: Number, b: Number) -> Number:
     return _sub(_require_number(a, 'a'), _require_number(b, 'b'))
 
 
-@_manager.register(context_type=ExpressionContext, call_key='mul', category=CATEGORY)
+@_manager.register(call_key='mul', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -428,14 +428,14 @@ async def sub(ctx: ExpressionContext, a: Number, b: Number) -> Number:
         },
     )
 )
-async def mul(ctx: ExpressionContext, *args: object) -> Number:
+async def mul(traits: TraitsContainer, *args: object) -> Number:
     result: Number = 1
     for number in _flatten_numbers(args):
         result = _mul(result, number)
     return result
 
 
-@_manager.register(context_type=ExpressionContext, call_key='div', category=CATEGORY)
+@_manager.register(call_key='div', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -481,11 +481,11 @@ async def mul(ctx: ExpressionContext, *args: object) -> Number:
         },
     )
 )
-async def div(ctx: ExpressionContext, a: Number, b: Number) -> Number:
+async def div(traits: TraitsContainer, a: Number, b: Number) -> Number:
     return _div(_require_number(a, 'a'), _require_number(b, 'b'))
 
 
-@_manager.register(context_type=ExpressionContext, call_key='percent', category=CATEGORY)
+@_manager.register(call_key='percent', category=CATEGORY)
 @expression(
     docs=ExpressionDocs(
         name=I18nString(
@@ -531,7 +531,7 @@ async def div(ctx: ExpressionContext, a: Number, b: Number) -> Number:
         },
     )
 )
-async def percent(ctx: ExpressionContext, value: Number, percent: Number) -> Number:
+async def percent(traits: TraitsContainer, value: Number, percent: Number) -> Number:
     return _div(_mul(_require_number(value, 'value'), _require_number(percent, 'percent')), 100)
 
 

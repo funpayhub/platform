@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Literal, Annotated
-from collections.abc import Mapping, Iterable
+from collections.abc import Mapping, Iterable, Sequence
 
 from eventry.asyncio.config import FromContext
 
@@ -15,12 +15,12 @@ from hubplatform.telegram.ui import (
     KeyboardBlockSpec,
 )
 from hubplatform.expressions.docs import ArgDocs
+from hubplatform.expressions.traits import Trait
 from hubplatform.expressions.manager import (
     ExpressionsScope,
     ExpressionEnvelope,
     ExpressionsManager,
 )
-from hubplatform.expressions.call_context import ExpressionContext
 from hubplatform.expressions.manager.category import CategoryPath, ExpressionsCategoryNode
 from hubplatform.app.components.telegram.menu_ids import MenuIDs
 from hubplatform.app.components.telegram.ui.callbacks import OpenMenu
@@ -30,27 +30,41 @@ from hubplatform.app.components.telegram.ui.finalizers import StripAndNavigation
 expressions_ui_registry = UIRegistry()
 
 CATEGORY_EMOJI = '📁'
-SCOPE_EMOJI = '📍'
+CONTEXT_EMOJI = '📍'
+TRAIT_ON_EMOJI = '✅'
+TRAIT_OFF_EMOJI = '▫️'
 
 MENU_TITLE = I18nString('telegram-ui-expressions-menu_title', 'Выражения')
 MENU_DESCRIPTION = I18nString(
     'telegram-ui-expressions-desc',
     'Выражения позволяют автоматически подставлять нужные данные в тексты, которые '
-    'отправляются пользователям: в сообщения, ответы на заказы, ответы на отзывы и т.д.',
+    'отправляются пользователям, например в сообщения и ответы на заказы и отзывы',
+)
+TRAITS_HINT = I18nString(
+    'telegram-ui-expressions-traits_hint',
+    'Отметьте, какие данные есть в тексте, и в списке останутся только подходящие выражения',
 )
 CONTEXT_LABEL = I18nString('telegram-ui-expressions-context_label', 'Контекст')
+ANY_TEXT = I18nString('telegram-ui-expressions-any_text', 'Любой текст')
+ANY_TEXT_DESCRIPTION = I18nString(
+    'telegram-ui-expressions-any_text_desc', 'Показаны выражения, которые работают в любом тексте'
+)
+SELECTED_TRAITS_DESCRIPTION = I18nString(
+    'telegram-ui-expressions-selected_traits_desc',
+    'Показаны выражения, которые работают в тексте с этими данными',
+)
 CATEGORY_LABEL = I18nString('telegram-ui-expressions-category_label', 'Категория')
 UNCATEGORIZED_BUTTON = I18nString('telegram-ui-expressions-uncategorized_btn', 'Без категории')
 SHOW_ALL_BUTTON = I18nString('telegram-ui-expressions-show_all_btn', 'Показать все')
-NO_EXPRESSIONS = I18nString('telegram-ui-expressions-no_expressions', 'Здесь нет выражений.')
-SCOPE_NOT_FOUND = I18nString(
-    'telegram-ui-expressions-scope_not_found', 'Это место больше не существует.'
-)
+NO_EXPRESSIONS = I18nString('telegram-ui-expressions-no_expressions', 'Здесь нет выражений')
 EXPRESSION_NOT_FOUND = I18nString(
-    'telegram-ui-expressions-expression_not_found', 'Это выражение больше не существует.'
+    'telegram-ui-expressions-expression_not_found', 'Это выражение больше не существует'
 )
 EXPRESSION_TITLE = I18nString('telegram-ui-expressions-expression_title', 'Выражение')
-DEFINED_IN = I18nString('telegram-ui-expressions-defined_in', 'Определено в')
+REQUIRES = I18nString('telegram-ui-expressions-requires', 'Требует')
+AVAILABLE_EVERYWHERE = I18nString(
+    'telegram-ui-expressions-available_everywhere', 'Доступно в любом тексте'
+)
 COPY_BUTTON = I18nString('telegram-ui-expressions-copy_btn', 'Копировать')
 PARAMETERS = I18nString('telegram-ui-expressions-parameters', 'Параметры')
 
@@ -86,29 +100,38 @@ POSSIBLE_VALUES_TABLE_DESC = I18nString(
 )
 
 
+type _View = Literal['browse', 'all', 'uncategorized']
+
+
 class ExpressionsListMenuContext(MenuContext):
-    scope_id: str | None = None
-    """ID of the context the expressions are shown for. `None` is the root context."""
+    traits: tuple[str, ...] = ()
+    """IDs of the selected traits. The menu shows the expressions available for a container
+    with traits of these types. Unknown IDs (for example, of a removed plugin) are ignored."""
 
     category: tuple[str, ...] = ()
-    """Path of the category to open. The empty path is the top level of the scope."""
+    """Path of the category to open. The empty path is the top level."""
 
-    view: Literal['browse', 'all', 'uncategorized'] = 'browse'
-    """`browse` shows subscopes, subcategories and the expressions of the category,
+    view: _View = 'browse'
+    """`browse` shows the trait filters, subcategories and the expressions of the category,
     `all` shows every expression of the category and its subcategories as a flat list,
     `uncategorized` shows expressions without a category."""
 
 
 class ExpressionDocsMenuContext(MenuContext):
-    scope_id: str | None = None
+    traits: tuple[str, ...] = ()
+    """IDs of the traits selected in the list the expression was opened from."""
+
     call_key: str
 
 
-def _resolve_scope(manager: ExpressionsManager, scope_id: str | None) -> ExpressionsScope | None:
-    try:
-        return manager.get(ExpressionContext) if scope_id is None else manager.get_by_id(scope_id)
-    except KeyError, ValueError:
-        return None
+def _selected_traits(manager: ExpressionsManager, ids: Iterable[str]) -> tuple[str, ...]:
+    """Known trait IDs from ``ids``, without duplicates, in the order traits were registered."""
+    wanted = set(ids)
+    return tuple(i for i in manager.traits if i in wanted)
+
+
+def _trait_types(manager: ExpressionsManager, ids: Iterable[str]) -> list[type[Trait]]:
+    return [manager.traits[i] for i in ids]
 
 
 def _category_name(node: ExpressionsCategoryNode) -> str:
@@ -134,6 +157,25 @@ def _category_info_block(node: ExpressionsCategoryNode) -> I18nMultiString:
     )
 
 
+def _context_info_block(trait_types: Sequence[type[Trait]]) -> I18nMultiString:
+    if not trait_types:
+        return _info_block(CONTEXT_EMOJI, CONTEXT_LABEL, ANY_TEXT, ANY_TEXT_DESCRIPTION)
+    names = I18nMultiString(*(i.name for i in trait_types), separator=' + ')
+    return _info_block(CONTEXT_EMOJI, CONTEXT_LABEL, names, SELECTED_TRAITS_DESCRIPTION)
+
+
+def _requirement_text(envelope: ExpressionEnvelope) -> I18nMultiString:
+    if envelope.requirement.is_empty:
+        return I18nMultiString(AVAILABLE_EVERYWHERE)
+    names = I18nMultiString(*(i.name for i in envelope.requirement.traits), separator=' + ')
+    return I18nMultiString(REQUIRES, ': ', names)
+
+
+def _added(scope: ExpressionsScope, base: ExpressionsScope) -> int:
+    """How many expressions ``scope`` has that ``base`` does not have or resolves differently."""
+    return sum(1 for k, v in scope.expressions.items() if base.expressions.get(k) is not v)
+
+
 _ByCategory = Mapping[CategoryPath | None, Mapping[str, ExpressionEnvelope]]
 
 
@@ -150,14 +192,46 @@ def _by_call_key(envelopes: Iterable[ExpressionEnvelope]) -> list[ExpressionEnve
 
 
 def _open_list(
-    scope_id: str | None,
+    traits: tuple[str, ...],
     category: CategoryPath = (),
-    view: Literal['browse', 'all', 'uncategorized'] = 'browse',
+    view: _View = 'browse',
+    move_to_history: bool = True,
 ) -> OpenMenu:
     return OpenMenu(
         menu_id=MenuIDs.expressions.expressions_list_menu,
-        context=ExpressionsListMenuContext(scope_id=scope_id, category=category, view=view).dump(),
+        context=ExpressionsListMenuContext(traits=traits, category=category, view=view).dump(),
+        move_to_history=move_to_history,
     )
+
+
+def _add_trait_toggles(
+    menu_spec: MenuSpec,
+    manager: ExpressionsManager,
+    selected: tuple[str, ...],
+    scope: ExpressionsScope,
+) -> None:
+    """Adds a button for every registered trait that turns it on or off in the filter."""
+    for trait_id, trait_type in manager.traits.items():
+        is_selected = trait_id in selected
+        toggled = _selected_traits(
+            manager,
+            [i for i in selected if i != trait_id] if is_selected else [*selected, trait_id],
+        )
+        added = 0
+        if not is_selected:
+            added = _added(manager.get_scope(_trait_types(manager, toggled)), scope)
+
+        menu_spec.header_keyboard.append(
+            KeyboardBlockSpec.callback_button(
+                block_id=f'toggle_trait:{trait_id}',
+                text=I18nMultiString(
+                    f'{TRAIT_ON_EMOJI if is_selected else TRAIT_OFF_EMOJI} ',
+                    trait_type.name,
+                    f' (+{added})' if added else '',
+                ),
+                callback_data=_open_list(toggled, move_to_history=False),
+            )
+        )
 
 
 @expressions_ui_registry.add_menu_builder(
@@ -170,28 +244,19 @@ async def build_expressions_list_menu(
 ) -> MenuBuildingSpec:
     menu_spec = MenuSpec(header_text=I18nMultiString('<h2>', MENU_TITLE, '</h2>'))
 
-    scope = _resolve_scope(expr, ctx.context.scope_id)
-    if scope is None:
-        menu_spec.body_text = SCOPE_NOT_FOUND
-        return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
-
-    by_category = scope.scope_expressions_by_category
+    selected = _selected_traits(expr, ctx.context.traits)
+    trait_types = _trait_types(expr, selected)
+    scope = expr.get_scope(trait_types)
+    by_category = scope.expressions_by_category
     category = ctx.context.category
     view = ctx.context.view
-    scope_id = ctx.context.scope_id
 
     try:
         node: ExpressionsCategoryNode | None = expr.get_category(category)
     except KeyError:
         node = None
 
-    scope_chain = reversed(list(scope.chain_to_root))
-    menu_spec.header_text += _info_block(
-        SCOPE_EMOJI,
-        CONTEXT_LABEL,
-        I18nMultiString(*(i.context_type.name for i in scope_chain), separator=' › '),
-        scope.context_type.description,
-    )
+    menu_spec.header_text += _context_info_block(trait_types)
     if node is not None and category:
         menu_spec.header_text += _category_info_block(node)
 
@@ -209,19 +274,10 @@ async def build_expressions_list_menu(
 
     if view == 'browse':
         if not category:
-            for subscope in scope.populated_subscopes:
-                own = len(subscope.scope_expressions)
-                menu_spec.header_keyboard.append(
-                    KeyboardBlockSpec.callback_button(
-                        block_id=f'open_scope:{subscope.id}',
-                        text=I18nMultiString(
-                            f'{SCOPE_EMOJI} ',
-                            subscope.context_type.name,
-                            f' ({own})' if own else '',
-                        ),
-                        callback_data=_open_list(subscope.id),
-                    )
-                )
+            menu_spec.body_text += I18nMultiString(
+                '<p>', MENU_DESCRIPTION, '</p><p><i>', TRAITS_HINT, '</i></p>'
+            )
+            _add_trait_toggles(menu_spec, expr, selected, scope)
 
         for chain in chains:
             name = I18nMultiString(*(_category_name(i) for i in chain), separator=' › ')
@@ -231,7 +287,7 @@ async def build_expressions_list_menu(
                     text=I18nMultiString(
                         f'{CATEGORY_EMOJI} ', name, f' ({len(_subtree(chain[0], by_category))})'
                     ),
-                    callback_data=_open_list(scope_id, chain[-1].path),
+                    callback_data=_open_list(selected, chain[-1].path),
                 )
             )
 
@@ -242,7 +298,7 @@ async def build_expressions_list_menu(
                     text=I18nMultiString(
                         f'{CATEGORY_EMOJI} ', UNCATEGORIZED_BUTTON, f' ({len(uncategorized)})'
                     ),
-                    callback_data=_open_list(scope_id, view='uncategorized'),
+                    callback_data=_open_list(selected, view='uncategorized'),
                 )
             )
 
@@ -251,13 +307,10 @@ async def build_expressions_list_menu(
                 KeyboardBlockSpec.callback_button(
                     block_id='show_all',
                     text=I18nMultiString(SHOW_ALL_BUTTON, f' ({len(subtree)})'),
-                    callback_data=_open_list(scope_id, category, view='all'),
+                    callback_data=_open_list(selected, category, view='all'),
                     style='success',
                 )
             )
-
-        if not category and scope.is_root:
-            menu_spec.body_text += I18nMultiString('<p>', MENU_DESCRIPTION, '</p>')
 
     for envelope in shown:
         menu_spec.main_keyboard.append(
@@ -267,13 +320,13 @@ async def build_expressions_list_menu(
                 callback_data=OpenMenu(
                     menu_id=MenuIDs.expressions.expression_docs_menu,
                     context=ExpressionDocsMenuContext(
-                        scope_id=scope_id, call_key=envelope.call_key
+                        traits=selected, call_key=envelope.call_key
                     ).dump(),
                 ),
             )
         )
 
-    if not shown and not menu_spec.header_keyboard:
+    if not shown and not chains:
         menu_spec.body_text += I18nMultiString('<p>', NO_EXPRESSIONS, '</p>')
 
     return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
@@ -296,19 +349,15 @@ class ExpressionDocsMenuBuilder:
             )
         )
 
-        scope = _resolve_scope(expr, ctx.context.scope_id)
-        envelope = scope.available_expressions.get(call_key) if scope is not None else None
-        if scope is None or envelope is None:
+        trait_types = _trait_types(expr, _selected_traits(expr, ctx.context.traits))
+        envelope = expr.get_scope(trait_types).expressions.get(call_key)
+        if envelope is None:
             menu_spec.body_text = EXPRESSION_NOT_FOUND
             return MenuBuildingSpec(menu=menu_spec, finalizer=StripAndNavigationFinalizer())
 
         if envelope.category is not None:
             menu_spec.header_text += _category_info_block(expr.get_category(envelope.category))
-
-        defined_in = next(i for i in scope.chain_to_root if call_key in i.scope_expressions)
-        menu_spec.header_text += I18nMultiString(
-            '<p><i>', DEFINED_IN, ': ', defined_in.context_type.name, '</i></p>'
-        )
+        menu_spec.header_text += I18nMultiString('<p><i>', _requirement_text(envelope), '</i></p>')
 
         docs = envelope.expression.docs
         menu_spec.body_text = docs.overview
