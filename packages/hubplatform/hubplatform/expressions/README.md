@@ -220,8 +220,9 @@ async def order_id(ctx: GenericOrderContext) -> str:
   and to refer to an expression from code. They never appear in templates.
 - `category` is a documentation field only (`math`, `string`, `order`, ...). It groups expressions
   in the documentation UI and never affects resolution.
-- `renderer` is an optional function that converts the raw result of a top-level call into a string.
-  Without it, `str()` is used. Results of nested calls are passed to the outer expression as-is.
+- `renderer` is an optional function that converts the raw result of a top-level call into a string
+  or a [fragment](#fragments). Without it, a fragment is kept and any other value is converted with
+  `str()`. Results of nested calls are passed to the outer expression as-is.
 - The owner of a definition (a component name or a plugin ID) is recorded automatically and used in
   error messages and to isolate plugin errors.
 - The same definition can be bound under several names (aliases).
@@ -319,6 +320,40 @@ For a syntax error, `span` is the broken call as determined by the
    resolved recursively: nested calls are evaluated and their raw results are passed as arguments.
 4. The expression is called. The result of the top-level call is converted with the renderer
    (or `str()`) and replaces the call.
+
+#### Fragments
+Some results are not text: an image, a file, a break between messages. An expression returns them
+as a `Fragment` (`hubplatform.expressions.fragments`):
+
+```python
+@dataclass(frozen=True)
+class Image(Fragment):
+    path: str
+
+    def text_fallback(self) -> str:   # used where only text is possible; '' by default
+        return '[image]'
+```
+
+`manager.evaluate(text, ctx, ignore_errors=...)` returns an `EvaluationResult`:
+
+- `parts` - text and fragments in text order, for example `('Your key: ', Image('key.png'), ' Thanks!')`.
+  Neighbouring text is merged into one string and empty strings are dropped.
+- `errors` - errors of failed calls (only with `ignore_errors=True`).
+- `has_fragments`.
+- `text` - the result as text, with fragments replaced by their text fallbacks. Use it where only
+  text can be used: `(await manager.evaluate(text, ctx)).text`.
+
+Rules:
+
+- A `Fragment` returned by a top-level call is kept as an object. If the expression has a renderer,
+  the renderer decides: it must return a string or a `Fragment`.
+- A `Fragment` returned by a nested call is passed to the outer expression as-is, like any other value.
+- Every top-level call is executed exactly once, even if it has a renderer, so expressions with side
+  effects (for example, taking goods from a source) are safe.
+
+The platform does not decide how fragments are sent. That is up to the code that sends the result:
+for example, a marketplace that cannot send text and an image in one message splits the parts into
+several messages, while Telegram can send an image with the text as its caption.
 
 #### Errors
 Every `$` in the text that is not part of `$$` starts an expression call. Every error belongs to

@@ -1,16 +1,25 @@
 from __future__ import annotations
 
 
-__all__ = ['ExpressionDefinition', 'Expression', 'expression', 'extract_expression_definition']
+__all__ = [
+    'ExpressionDefinition',
+    'ExpressionCallResult',
+    'ExpressionRenderer',
+    'Expression',
+    'expression',
+    'extract_expression_definition',
+]
 
 import inspect
+import functools
 from typing import Any, Protocol, Sequence, ParamSpec, runtime_checkable
 from dataclasses import field, dataclass
-from collections.abc import Mapping, Callable
+from collections.abc import Mapping, Callable, Awaitable
 
 from eventry.asyncio.callable_wrappers import CallableWrapper
 
 from .docs import ExpressionDocs
+from .fragments import Fragment, EvaluatedPart
 from .call_context import ExpressionContext
 
 
@@ -25,7 +34,7 @@ class ExpressionProto(Protocol[_P]):
 
 @runtime_checkable
 class ExpressionWithRendererProto(ExpressionProto[_P], Protocol[_P]):
-    async def render(self, _c: Any, _v: Any, /, *_a: _P.args, **_kw: _P.kwargs) -> str:
+    async def render(self, _c: Any, _v: Any, /, *_a: _P.args, **_kw: _P.kwargs) -> str | Fragment:
         pass
 
 
@@ -38,7 +47,7 @@ class ExpressionDefinition:
     docs: ExpressionDocs
     _wrapped: CallableWrapper[str] = field(init=False)
     _wrapped_init: CallableWrapper[None] | None = field(init=False, default=None)
-    _wrapped_renderer: CallableWrapper[str] | None = field(init=False, default=None)
+    _wrapped_renderer: CallableWrapper[str | Fragment] | None = field(init=False, default=None)
     _is_class: bool = field(init=False)
 
     def __post_init__(self) -> None:
@@ -62,8 +71,8 @@ class ExpressionDefinition:
         kwargs: Mapping[str, Any],
         context: ExpressionContext,
         di: Mapping[str, Any],
-        render: bool = False,
-    ) -> Any:
+    ) -> ExpressionCallResult:
+        """Calls the expression once and returns its raw result."""
         instance: Any = None
         if self._is_class and self._wrapped_init is not None:
             instance = object.__new__(self.call)  # type: ignore[arg-type]
@@ -71,19 +80,67 @@ class ExpressionDefinition:
                 args=[instance, *args], kwargs=kwargs
             )
             self.call.__init__(*call_args, **call_kwargs)  # type: ignore[misc]
-            result = await self._wrapped(args=[instance, context], data=di, to_thread=False)
+            value = await self._wrapped(args=[instance, context], data=di, to_thread=False)
         else:
-            result = await self._wrapped(
+            value = await self._wrapped(
                 args=[context, *args], data={**kwargs, **di}, to_thread=False
             )
-        if not render:
-            return result
 
+        renderer: ExpressionRenderer | None = None
         if self._wrapped_renderer is not None:
-            return await self._wrapped_renderer(
-                args=[instance, context, result], data=di, to_thread=False
+            renderer = functools.partial(self._call_renderer, self._wrapped_renderer, instance)
+        return ExpressionCallResult(value=value, context=context, renderer=renderer)
+
+    @staticmethod
+    async def _call_renderer(
+        wrapped_renderer: CallableWrapper[str | Fragment],
+        instance: Any,
+        context: ExpressionContext,
+        value: Any,
+        di: Mapping[str, Any],
+    ) -> Any:
+        return await wrapped_renderer(args=[instance, context, value], data=di, to_thread=False)
+
+
+type ExpressionRenderer = Callable[[ExpressionContext, Any, Mapping[str, Any]], Awaitable[Any]]
+"""
+Renders the value of a call: ``renderer(context, value, di)``.
+Must return a string or a ``Fragment``.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class ExpressionCallResult:
+    """Raw result of one expression call, with the renderer of the expression that made it."""
+
+    value: Any
+    """The value returned by the expression."""
+
+    context: ExpressionContext
+    """The context the expression was called with. The value is rendered with it too."""
+
+    renderer: ExpressionRenderer | None = None
+    """The renderer of the expression, ``None`` if it has no renderer."""
+
+    async def render(self, di: Mapping[str, Any]) -> EvaluatedPart:
+        """Converts the value into a part of the evaluated string.
+
+        - With a renderer, its result is used. It must be a string or a ``Fragment``.
+        - Without a renderer, a ``Fragment`` is kept as-is and any other value is converted
+          with ``str()``.
+        """
+        if self.renderer is None:
+            if isinstance(self.value, Fragment):
+                return self.value
+            return str(self.value)
+
+        rendered = await self.renderer(self.context, self.value, di)
+        if not isinstance(rendered, (str, Fragment)):
+            raise TypeError(
+                'Expression renderer must return a string or a `Fragment`, '
+                f'not {type(rendered).__name__}.'
             )
-        return str(result)
+        return rendered
 
 
 def expression[T: Expression](*, docs: ExpressionDocs) -> Callable[[T], T]:

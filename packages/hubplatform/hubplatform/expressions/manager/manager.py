@@ -3,11 +3,11 @@ from __future__ import annotations
 
 __all__ = [
     'ExpressionsManager',
-    'FormattingResult',
+    'EvaluationResult',
 ]
 
 from typing import Any, Literal, TypeAlias, overload
-from dataclasses import field, dataclass
+from dataclasses import dataclass
 from types import MappingProxyType
 from itertools import chain
 from collections.abc import Mapping, Callable, Sequence
@@ -21,7 +21,13 @@ from .category import (
     normalize_category_path,
 )
 from .envelope import ExpressionEnvelope
-from ..definition import Expression, ExpressionDefinition, extract_expression_definition
+from ..fragments import Fragment, EvaluatedPart, fragment_to_text
+from ..definition import (
+    Expression,
+    ExpressionCallResult,
+    ExpressionDefinition,
+    extract_expression_definition,
+)
 from ..exceptions import ExpressionError, ExpressionExecutionError
 from ..call_context import ExpressionContext
 
@@ -30,13 +36,48 @@ _ContextTree: TypeAlias = dict[type[ExpressionContext], '_ContextTree']
 
 
 @dataclass(frozen=True)
-class FormattingResult:
-    result_text: str
+class EvaluationResult:
+    parts: Sequence[EvaluatedPart]
+    """
+    Text and fragments in text order. Neighbouring text is merged into one string
+    and empty strings are dropped, so two strings never follow each other.
+    Always stored as a tuple, whatever sequence is passed.
+    """
     decoded: StringWithCalls
-    errors: list[ExpressionError] = field(default_factory=list)
+    errors: Sequence[ExpressionError] = ()
+    """Errors of failed calls (only with ``ignore_errors=True``). Always stored as a tuple."""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, 'errors', tuple(self.errors))
+
+        parts: list[EvaluatedPart] = []
+        for part in self.parts:
+            if isinstance(part, Fragment):
+                parts.append(part)
+            elif not isinstance(part, str):
+                raise TypeError(
+                    f'Evaluation result parts must be strings or fragments, '
+                    f'not {type(part).__name__}.'
+                )
+            elif not part:
+                continue
+            elif parts and isinstance(parts[-1], str):
+                parts[-1] += part
+            else:
+                parts.append(part)
+        object.__setattr__(self, 'parts', tuple(parts))
+
+    @property
+    def has_fragments(self) -> bool:
+        return any(isinstance(i, Fragment) for i in self.parts)
+
+    @property
+    def text(self) -> str:
+        """The result as text: fragments are replaced with their text fallbacks."""
+        return ''.join(fragment_to_text(i) for i in self.parts)
 
     def __str__(self) -> str:
-        return self.result_text
+        return self.text
 
 
 class ExpressionsManager:
@@ -179,26 +220,33 @@ class ExpressionsManager:
         self._categories_tree = self._build_categories_tree()
         self._frozen = True
 
-    async def format_string(
+    async def evaluate(
         self,
         string: str,
         context: ExpressionContext,
         ignore_errors: bool = False,
-    ) -> FormattingResult:
-        decoded = call_decoder.extract_calls(string)
-        if not decoded.call_spans:
-            return FormattingResult(decoded=decoded, result_text=string, errors=[])
+    ) -> EvaluationResult:
+        """Evaluates ``string`` and returns it as a sequence of text and fragments.
 
-        result = []
+        Each top-level call is executed once. Its result is rendered with the expression's renderer
+        (or ``str()``); a ``Fragment`` returned by the expression or by its renderer is kept as an
+        object. The code that sends the result decides how to send each fragment. Where only text
+        can be used, take ``result.text``: it replaces fragments with their text fallbacks.
+
+        With ``ignore_errors=True``, a failed call is dropped from the result and its error is
+        added to ``errors``. Otherwise the first error is raised.
+        """
+        decoded = call_decoder.extract_calls(string)
+        parts: list[EvaluatedPart] = []
         errors: list[ExpressionError] = []
 
         for i in decoded.decoded:
             if isinstance(i, str):
-                result.append(i)
+                parts.append(i)
                 continue
 
             try:
-                result.append(await self.execute_call(i, context, render=True))
+                part = await self._evaluate_call(i, context)
             except Exception as err:
                 if not isinstance(err, ExpressionExecutionError):
                     new_e = ExpressionExecutionError(expression_id=i.name)
@@ -208,22 +256,22 @@ class ExpressionsManager:
                     errors.append(err)
                     continue
                 raise err
+            parts.append(part)
 
-        return FormattingResult(
-            result_text=''.join(result),
-            errors=errors,
-            decoded=decoded,
-        )
+        return EvaluationResult(parts=parts, errors=errors, decoded=decoded)
 
-    @overload
-    async def execute_call(self, call: Call, ctx: ExpressionContext, render: Literal[True]) -> str:
-        pass
+    async def _evaluate_call(self, call: Call, ctx: ExpressionContext) -> EvaluatedPart:
+        """Executes ``call`` once and renders its result into text or a fragment."""
+        result = await self.execute_call(call, ctx)
+        try:
+            return await result.render(self._context)
+        except Exception as e:
+            raise ExpressionExecutionError(
+                expression_id=call.name,
+                message=f'An error occurred while rendering the result of {call.name!r}.',
+            ) from e
 
-    @overload
-    async def execute_call(self, call: Call, ctx: ExpressionContext, render: bool = False) -> Any:
-        pass
-
-    async def execute_call(self, call: Call, ctx: ExpressionContext, render: bool = False) -> Any:
+    async def execute_call(self, call: Call, ctx: ExpressionContext) -> ExpressionCallResult:
         scope = self.get(type(ctx))
         expr = scope.available_expressions.get(call.name)
         if expr is None:
@@ -236,7 +284,7 @@ class ExpressionsManager:
         kwargs = {key: await self.resolve_value(value, ctx) for key, value in call.kwargs.items()}
 
         try:
-            return await expr.expression.execute(args, kwargs, ctx, self._context, render=render)
+            return await expr.expression.execute(args, kwargs, ctx, self._context)
         except Exception as e:
             raise ExpressionExecutionError(
                 expression_id=call.name,
@@ -245,7 +293,7 @@ class ExpressionsManager:
 
     async def resolve_value(self, value: Any, context: ExpressionContext) -> Any:
         if isinstance(value, Call):
-            return await self.execute_call(value, context, render=False)
+            return (await self.execute_call(value, context)).value
 
         if isinstance(value, tuple):
             return tuple([await self.resolve_value(item, context) for item in value])
@@ -259,13 +307,11 @@ class ExpressionsManager:
 
     def _check_not_frozen(self) -> None:
         if self._frozen:
-            raise RuntimeError(
-                'This operation available only when expressions manager is not frozen.'
-            )
+            raise RuntimeError('Operation available only when expressions manager isn\'t frozen.')
 
     def _check_frozen(self) -> None:
         if not self._frozen:
-            raise RuntimeError('This operation available only when expressions manager is frozen.')
+            raise RuntimeError('Operation available only when expressions manager is frozen.')
 
     def _build_context_tree(self) -> _ContextTree:
         result: _ContextTree = {ExpressionContext: {}}
